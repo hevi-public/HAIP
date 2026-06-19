@@ -113,9 +113,14 @@ class GenerationSteps(
 ```
 
 Post `Map`s (not typed DTOs) from steps so the glue compiles before the controllers/DTOs exist — that
-keeps Phase B genuinely RED (404) rather than red-because-it-won't-compile. Make every omitted JSON
-field map to a nullable Kotlin property: a non-null `Boolean` primitive rejects an absent field with a
-400 ("Cannot map null into type boolean").
+keeps Phase B genuinely RED (404) rather than red-because-it-won't-compile.
+
+**Spring Boot 4 defaults to Jackson 3** (`tools.jackson`, not `com.fasterxml`). For request DTOs to be
+idiomatic Kotlin — Kotlin defaults applied to omitted fields, null-safety enforced — add the **Jackson
+3** Kotlin module: `implementation("tools.jackson.module:jackson-module-kotlin")` (BOM-managed). The
+old `com.fasterxml.jackson.module:jackson-module-kotlin` is the Jackson 2 module and is dead weight
+under Spring Boot 4. Without the right module, an omitted non-null `Boolean` field 400s with "Cannot
+map null into type boolean" (the symptom that reveals the wrong/missing module).
 
 Inject `TestRestTemplate` directly (it's auto-configured under `@SpringBootTest(RANDOM_PORT)`). Wrap
 raw HTTP calls in a small `support/HttpClient.kt` so a future Playwright swap touches one file.

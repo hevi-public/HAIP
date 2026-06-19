@@ -17,8 +17,9 @@ data class GenerateRequest(
     val personaIds: List<String> = emptyList(),
     val text: String = "",
     val scope: String? = null,
-    // nullable so an omitted field deserializes cleanly (a non-null Boolean primitive rejects absent/null)
-    val includeSiblings: Boolean? = null,
+    // non-null with a default — works because the Jackson 3 Kotlin module applies Kotlin defaults to
+    // omitted fields (without that module this would 400 on "Cannot map null into type boolean").
+    val includeSiblings: Boolean = false,
     val triggerMode: String? = null,
     val parentId: String? = null,
 )

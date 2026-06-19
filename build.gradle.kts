@@ -43,7 +43,10 @@ dependencies {
 
     // --- kotlin ---
     implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")  // JSON <-> Kotlin data classes
+    // Spring Boot 4 defaults to Jackson 3 (tools.jackson). Use the Jackson 3 Kotlin module — the old
+    // com.fasterxml jackson-module-kotlin is for Jackson 2 and would be dead weight (its absence is why
+    // omitted JSON fields didn't pick up Kotlin defaults).
+    implementation("tools.jackson.module:jackson-module-kotlin")
 
     // --- test: tiers 0-2 + Cucumber acceptance over HTTP ---
     testImplementation("org.springframework.boot:spring-boot-starter-test")
