@@ -1,0 +1,11 @@
+.git
+.gradle
+build
+data
+*.db
+# docs/designs aren't needed to build
+HAIP_design
+plan_docs
+.claude/plans
+.idea
+.vscode

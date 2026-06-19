@@ -1,0 +1,8 @@
+@import com.aiforum.dto.ReplyView
+@param replies: List<ReplyView>
+
+<div class="reply-list">
+    @for(reply in replies)
+        @template.fragments.replyNode(reply = reply)
+    @endfor
+</div>

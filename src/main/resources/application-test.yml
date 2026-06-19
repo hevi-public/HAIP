@@ -1,0 +1,12 @@
+# Test profile: separate DB, single connection (SQLite serializes writes), backups OFF.
+# These are asserted by ProfileGuard and by the config_guardrails.feature rail scenarios.
+spring:
+  datasource:
+    url: jdbc:sqlite:build/aiforum-test.db?journal_mode=WAL&busy_timeout=5000&foreign_keys=on
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 1
+
+aiforum:
+  backups:
+    enabled: false

@@ -1,0 +1,20 @@
+@import com.aiforum.dto.ReplyView
+@param reply: ReplyView
+
+<article class="reply"
+         data-reply-id="${reply.id}"
+         data-author="${reply.authorId}"
+         data-state="${reply.state.name.lowercase()}"
+         data-failure-category="${reply.failureCategory?.name ?: ""}"
+         data-retryable="${reply.retryable.toString()}"
+         data-retry-after="${reply.retryAfterSeconds?.toString() ?: ""}"
+         data-vote-count="${reply.voteCount.toString()}"
+         data-depth="${reply.depth.toString()}">
+    @if(reply.reason != null)
+        <div class="reason">${reply.reason}</div>
+    @endif
+    <div class="body">${reply.body}</div>
+    @for(child in reply.children)
+        @template.fragments.replyNode(reply = child)
+    @endfor
+</article>
