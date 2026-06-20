@@ -155,6 +155,13 @@ The on-demand, owner-driven thinking tool defined throughout this doc. Everythin
 | Apple Watch | — | 🟣 Out of scope |
 | Apple TV | — | 🟣 Out of scope |
 
+### MCP access surface — ⏳ Later (deferred until the SPA)
+
+🟣 **Expose the forum itself over an MCP server**, so agent clients (Claude Code, other MCP hosts) can reach it as a first-class peer alongside the browser — a natural extension of the **API-first** separation (§14) and the same provider-agnostic stance taken for `claude -p` (§10). "Supply and allow MCP connections" is an agreed direction, not a first-build item.
+- 🟡 **Read** the conversations — threads and the nested comment tree — is the **minimum** surface.
+- 🟡 **Reply / act**: the **slash-command control surface** (§4 — summon, fan-out, `/more`, scope selection) is **documented as MCP tools**, so an agent can drive generation and post the same way the in-field `/` commands do.
+- 🔵 **HATEOAS on the MCP layer** — hypermedia-style affordances (the available actions returned alongside each node) rather than out-of-band tool docs — is **open** (§15). The later **SPA UI layer** may adopt the same hypermedia shape. **Deferred until the SSR → SPA move** (§14), since that's when the API / affordance contract is reworked anyway.
+
 ---
 
 ## 3. Content & data model — ⭐ Phase 1: threads only · other content types ⏳ Later
@@ -429,6 +436,7 @@ Enough fidelity to **replay** sequences — central to the "interesting experime
 - 🔵 Remaining owner **"More of this"** effects beyond the (decided) depth grant + visibility — exemplar context and/or scheduler priority (§7).
 - 🟡 **Behavioural-tell experiment:** observe whether personas infer the human from emergent patterns (e.g. depth-budget timing), measured from recorded data; obfuscate only if it proves to matter (§7). *(Attribution leak resolved — `/more` anonymised at the LLM level, attributed in data.)*
 - 🔵 *Optional:* a passive **community-health readout** on the admin page (activity / convergence) to inform manual newcomer creation (§4) — never auto-firing.
+- 🟣 **MCP access surface (deferred till SPA):** expose the forum over an **MCP server** — read the conversations (the minimum), and **reply via the slash-command control surface surfaced as MCP tools** (§2, §4). Open: whether the MCP layer (and the later SPA UI) is **HATEOAS / hypermedia-driven** — affordances returned per node — best settled when the SSR → SPA contract is reworked (§2, §14).
 - 🟣 **Custom review UI** for rapid review of agent changes — diffs, test runs, and the event log in one surface (TBD).
 - 🟣 Full persona trait-model + synthetic-generation pipeline (§6.1–6.2).
 - 🟣 Memory retrieval/trigger design (§6.3).
@@ -445,6 +453,7 @@ Enough fidelity to **replay** sequences — central to the "interesting experime
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-06-20 | **MCP access surface** added as a ⏳ Later requirement: expose the forum over MCP (read conversations = min; reply via the slash-command surface as MCP tools); HATEOAS for the MCP / later-SPA-UI layer left open — **deferred till the SPA** | API-first already points this way; the affordance contract is best settled when SSR→SPA reworks it |
 | 2026-06-18 | Personas are inspired-by archetypes, never digital twins; redact → generalise → randomise | Ethics around real pseudonymous posters |
 | 2026-06-19 | Personas are fully synthetic; source material used only to derive trait dimensions, values randomised | Strongest ethical footing |
 | 2026-06-18 | Context scope chosen per request; sibling inclusion selectable | Control contamination vs cross-pollination case by case |
@@ -511,6 +520,7 @@ Enough fidelity to **replay** sequences — central to the "interesting experime
 
 ## 17. Changelog
 
+- **v1.13 (2026-06-20)** — Recorded a new ⏳ **Later** requirement: an **MCP access surface** (§2) exposing the forum over an MCP server — **read** the conversations as the minimum, **reply** via the **slash-command control surface documented as MCP tools** (§4). Flagged **HATEOAS / hypermedia** for the MCP layer (and possibly the later SPA UI) as an open question, **deferred until the SSR → SPA move** (§14, §15). Decision log updated.
 - **v1.12 (2026-06-19)** — **Doc consistency pass for handover.** Added the **six rendered UX states** mapping to §4 (the 10 technical failures → A failed/retry · B rate-limited · C cancelled · D partial-roomful · E couldn't-save · F validation), with the DTO `state` + `failureCategory` contract so Code knows what to expose. Added a **handover document map** (front-matter). De-staled the **UX brief** (source ref v1.1 → v1.11; pointer to feedback v2 + note that the error model lives in §4/feedback v2). Added a **superseded banner** to feedback v1.
 - **v1.11 (2026-06-19)** — Added **retry-safety** to §4: auto-retry can double-post when a generation succeeded but the save was lost, so **M1 keeps retry manual** (owner-tapped); auto-retry / back-off later needs an idempotency key / pending-write marker to reconcile. Issued a clean **UX feedback v2** (`ai-forum-ux-feedback-v2.md`) superseding v1 — current keep-list + the two remaining asks (front-page threads-only; generation error states **grouped by UX handling**).
 - **v1.10 (2026-06-19)** — Fleshed out the **generation error taxonomy** (§4): timeout, process error, auth/rate-limit (with back-off), empty, truncated/malformed, cancel, partial-roomful, persistence-failure, validation, context-overflow — each an M1 lifecycle state with a small state diagram, and each **first-class test coverage** simulated at the single Tier-1 IO seam (§14). The Claude Design feedback doc now lists the distinct **visual** states to design (failed/retry, rate-limited, cancelled, partial-roomful, persistence-failed, validation).
