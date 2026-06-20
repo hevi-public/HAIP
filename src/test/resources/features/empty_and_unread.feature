@@ -1,4 +1,3 @@
-@wip
 Feature: Empty states & unread markers
   PENDING the implementing team. The front page shows a fresh-forum empty state when there are no
   threads, and a thread-level "N new" badge for unread replies (M1 ships thread-level only) (§2).
