@@ -29,6 +29,37 @@ object Html {
     fun countAttr(html: String, name: String, value: String): Int =
         Regex("$name=\"${Regex.escape(value)}\"").findAll(html).count()
 
+    /** The data-reply-id of the first <article> whose data-author == [author], or null. */
+    fun replyIdWithAuthor(html: String, author: String): String? {
+        val tag = Regex("<article\\b[^>]*data-author=\"${Regex.escape(author)}\"[^>]*>").find(html)?.value ?: return null
+        return Regex("data-reply-id=\"([^\"]+)\"").find(tag)?.groupValues?.get(1)
+    }
+
+    /**
+     * True if the <article> with data-reply-id=[childId] is nested INSIDE the one with
+     * data-reply-id=[parentId] — genuine DOM containment, not merely both present on the page (which is
+     * what the flat-rendering bug produced). Articles nest, so we balance <article>/</article> from the
+     * parent's opening tag to find its matching close and look for the child only within that span.
+     */
+    fun isNestedUnder(html: String, childId: String, parentId: String): Boolean {
+        val open = Regex("<article\\b[^>]*data-reply-id=\"${Regex.escape(parentId)}\"[^>]*>").find(html) ?: return false
+        val token = Regex("<article\\b|</article>")
+        var i = open.range.last + 1   // start scanning after the parent's opening tag (parent = depth 1)
+        var depth = 1
+        while (true) {
+            val m = token.find(html, i) ?: return false
+            if (m.value == "</article>") {
+                depth--
+                if (depth == 0) {     // parent's matching close — child must lie in the span before it
+                    return html.substring(open.range.last + 1, m.range.first).contains("data-reply-id=\"$childId\"")
+                }
+            } else {
+                depth++
+            }
+            i = m.range.last + 1
+        }
+    }
+
     /** The data-scope value on the composer element whose data-target-id == [targetId], or null. */
     fun composerScope(html: String, targetId: String): String? = composerAttr(html, targetId, "data-scope")
 

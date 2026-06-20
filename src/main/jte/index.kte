@@ -4,6 +4,14 @@
 @template.layout(title = "AI Forum", activeNav = "threads", content = @`
     <div data-page="home">
         <h1 class="home__title">Threads</h1>
+        <%-- Start a thread: a plain form POST (form-urlencoded) to /threads → PRG redirect onto the new
+             thread page, where the bottom composer asks the room. Title-only here; the question + room
+             are posed from inside the thread. --%>
+        <form class="new-thread" data-new-thread method="post" action="/threads">
+            <input class="new-thread__title" type="text" name="title" required
+                   placeholder="Start a new thread… give it a title">
+            <button class="btn" type="submit">Create ▸</button>
+        </form>
         @if(threads.isEmpty())
             <div data-empty-state="no-threads">No threads yet — start one!</div>
         @else

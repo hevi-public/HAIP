@@ -15,6 +15,10 @@ class ScenarioWorld {
     var lastBody: String? = null
     var composerTargetId: String? = null
 
+    /** The raw fragment a /generate POST returned (the htmx-swap payload), before any settle polling —
+     *  so a scenario can assert on the swap structure the browser actually receives. */
+    var lastFragment: String? = null
+
     /** alias (e.g. persona name or "sol's reply") -> reply id, for cross-step references. */
     val replyIds = mutableMapOf<String, String>()
     var lastReplyId: String? = null

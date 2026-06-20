@@ -47,7 +47,7 @@ open class ProcessLlmClient(
         // Feed the prompt on stdin (the CLI reads it there in -p mode) then close. A broken pipe means
         // the process already died; the parser surfaces that from the exit code, so we don't fail here.
         try {
-            process.outputStream.use { it.write(renderPrompt(request.context).toByteArray()) }
+            process.outputStream.use { it.write(renderPrompt(request.context, request.persona.name).toByteArray()) }
         } catch (_: IOException) {
             // process exited before consuming stdin — classification below handles it
         }
@@ -104,13 +104,17 @@ open class ProcessLlmClient(
         }
     }
 
-    private fun renderPrompt(context: PromptContext): String {
+    private fun renderPrompt(context: PromptContext, personaName: String): String {
         val transcript = context.comments.joinToString("\n\n") { "${it.authorId}: ${it.body}" }
+        // Name the persona explicitly and point it at the most recent message: without this the model
+        // sees its own past lines labelled "$name:" amid the transcript and gets meta about who it is
+        // ("the framing got flipped"). The system prompt carries the character; this carries the task.
         return if (transcript.isBlank()) {
-            "Open the discussion with a first reply, in character."
+            "You are opening a new thread in the forum. Post the first message as $personaName, in character."
         } else {
-            "$transcript\n\n---\nWrite your next reply to this discussion, in character. " +
-                "Respond with the reply text only."
+            "The forum discussion so far (each line is \"author: message\"):\n\n$transcript\n\n---\n" +
+                "Write ${personaName}'s next reply, responding to the most recent message above. " +
+                "Reply with the message text only, in character as $personaName."
         }
     }
 

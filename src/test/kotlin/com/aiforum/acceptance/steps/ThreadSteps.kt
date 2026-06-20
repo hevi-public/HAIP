@@ -29,6 +29,18 @@ class ThreadSteps(
         }
     }
 
+    @When("the owner starts a thread titled {string} from the browser")
+    fun startThreadFromBrowser(title: String) {
+        // The home page's form posts form-urlencoded (the browser default), then PRG-redirects onto the
+        // thread. We locate the freshly-created thread on the home page by title — robust whether or not
+        // the HTTP client auto-follows the redirect.
+        http.postForm("/threads", mapOf("title" to title))
+        val home = http.get("/").body ?: ""
+        world.threadId = Regex("""data-thread-id="([^"]+)"\s+data-thread-title="${Regex.escape(title)}"""")
+            .find(home)?.groupValues?.get(1)
+        assertTrue(world.threadId != null, "expected thread \"$title\" on the home page after create:\n$home")
+    }
+
     @Then("the thread exists with title {string}")
     fun threadExistsWithTitle(title: String) {
         val resp = http.get("/threads/${world.threadId}")

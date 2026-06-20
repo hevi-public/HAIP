@@ -38,6 +38,20 @@ class PersonaSteps(
         world.lastBody = resp.body
     }
 
+    @When("the owner opens the members list")
+    fun openMembersList() {
+        val resp = http.get("/personas")
+        world.lastStatus = resp.statusCode.value()
+        world.lastBody = resp.body
+    }
+
+    @Then("the members page offers a name and descriptor field")
+    fun membersPageOffersCreateForm() {
+        val body = world.lastBody ?: ""
+        assertTrue(Html.contains(body, "name=\"name\""), "expected a name=\"name\" field in:\n$body")
+        assertTrue(Html.contains(body, "name=\"descriptor\""), "expected a name=\"descriptor\" field in:\n$body")
+    }
+
     @Then("the persona {string} exists")
     fun personaExists(name: String) {
         val resp = http.get("/personas/$name")
