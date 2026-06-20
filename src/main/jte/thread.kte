@@ -1,0 +1,13 @@
+@import com.aiforum.dto.ReplyView
+@param threadId: String
+@param title: String
+@param replies: List<ReplyView>
+@param waitingOnRoom: Boolean
+
+<div class="thread" data-thread-id="${threadId}" data-thread-title="${title}">
+    <h1>${title}</h1>
+    @if(waitingOnRoom)
+        <div data-empty-state="waiting">Waiting on the room…</div>
+    @endif
+    @template.fragments.replyList(replies = replies)
+</div>
