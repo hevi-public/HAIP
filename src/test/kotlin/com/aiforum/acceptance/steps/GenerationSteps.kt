@@ -5,6 +5,7 @@ import com.aiforum.acceptance.config.ScriptableLlmClient
 import com.aiforum.acceptance.config.ScriptableLlmClient.Behavior
 import com.aiforum.acceptance.support.HttpClient
 import com.aiforum.acceptance.support.ScenarioWorld
+import com.aiforum.llm.LlmException
 import io.cucumber.java.en.Given
 import io.cucumber.java.en.When
 import org.springframework.http.ResponseEntity
@@ -20,6 +21,9 @@ class GenerationSteps(
 ) {
     @Given("the LLM will fail with a {failureMode}")
     fun llmWillFail(mode: FailureMode) = llm.enqueue(Behavior.Fail(mode.makeException))
+
+    @Given("the generation will be cancelled")
+    fun generationCancelled() = llm.enqueue(Behavior.Fail { LlmException.Cancelled() })
 
     @When("the owner summons {string}")
     fun summon(persona: String) {
