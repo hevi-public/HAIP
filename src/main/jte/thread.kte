@@ -15,6 +15,15 @@
             <div data-empty-state="waiting">Waiting on the room…</div>
         @endif
         @template.fragments.replyList(replies = replies, threadId = threadId, personas = personas)
+        <%-- Auto-grow: drives bounded autonomous growth (§4) down every branch that still has depth
+             budget. Appends the newly-grown nodes to the reply list (same pattern as the bottom
+             composer). The endpoint is synchronous; no poll needed. --%>
+        <div class="thread__controls">
+            <button type="button" class="btn btn--ghost"
+                    hx-post="/threads/${threadId}/auto-grow"
+                    hx-target=".reply-list"
+                    hx-swap="beforeend">Auto-grow</button>
+        </div>
         @template.fragments.composer(placement = "bottom", targetId = threadId, parentId = null, scope = "WHOLE_THREAD", threadId = threadId, personas = personas)
     </div>
 `)

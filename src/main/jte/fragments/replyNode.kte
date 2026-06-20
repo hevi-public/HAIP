@@ -51,6 +51,17 @@
         </div>
     @endif
     @template.fragments.voteArea(reply = reply)
+    <%-- /more — owner directive that re-grants depth budget (§7). Appears on POSTED nodes whose branch
+         has stalled (depthBudget == 0). The response is a new system directive node appended inside
+         this article; children stay in the DOM via beforeend. --%>
+    @if(reply.state == GenerationState.POSTED && reply.depthBudget == 0)
+        <div class="reply__actions">
+            <button type="button" class="btn btn--ghost"
+                    hx-post="/replies/${reply.id}/more"
+                    hx-target="closest article"
+                    hx-swap="beforeend">/more</button>
+        </div>
+    @endif
     <%-- Retry is the dead-end escape for a FAILED/CANCELLED draft (reply.retryable, §4) — the settled
          counterpart to the DRAFTING Cancel above. The endpoint re-renders this node alone via
          fragments/replyNode, so outerHTML swapping the closest <article> replaces just this node in
