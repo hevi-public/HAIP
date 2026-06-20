@@ -10,4 +10,5 @@
         <div data-empty-state="waiting">Waiting on the room…</div>
     @endif
     @template.fragments.replyList(replies = replies)
+    <div data-composer="bottom" data-target-id="${threadId}" data-scope="WHOLE_THREAD"></div>
 </div>

@@ -1,4 +1,3 @@
-@wip
 Feature: Composer & reply targeting
   PENDING the implementing team. The inline composer opens at the clicked node and defaults to
   this-branch scope; the persistent bottom composer always targets level 0 and defaults to whole-thread;

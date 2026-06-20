@@ -14,6 +14,7 @@
         <div class="reason">${reply.reason}</div>
     @endif
     <div class="body">${reply.body}</div>
+    <div data-composer="inline" data-target-id="${reply.id}" data-scope="BRANCH_ONLY"></div>
     @for(child in reply.children)
         @template.fragments.replyNode(reply = child)
     @endfor

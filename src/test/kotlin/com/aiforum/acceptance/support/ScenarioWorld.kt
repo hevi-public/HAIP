@@ -13,6 +13,7 @@ class ScenarioWorld {
     var threadId: String? = null
     var lastStatus: Int? = null
     var lastBody: String? = null
+    var composerTargetId: String? = null
 
     /** alias (e.g. persona name or "sol's reply") -> reply id, for cross-step references. */
     val replyIds = mutableMapOf<String, String>()

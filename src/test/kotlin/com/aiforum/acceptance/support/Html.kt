@@ -24,4 +24,11 @@ object Html {
     /** Count of elements carrying data-[name]="[value]". */
     fun countAttr(html: String, name: String, value: String): Int =
         Regex("$name=\"${Regex.escape(value)}\"").findAll(html).count()
+
+    /** The data-scope value on the composer element whose data-target-id == [targetId], or null. */
+    fun composerScope(html: String, targetId: String): String? {
+        val tag = Regex("<[^>]*data-target-id=\"${Regex.escape(targetId)}\"[^>]*>")
+            .find(html)?.value ?: return null
+        return Regex("""data-scope="([^"]*)"""").find(tag)?.groupValues?.get(1)
+    }
 }
