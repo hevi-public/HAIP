@@ -33,6 +33,12 @@ dependencies {
     implementation("gg.jte:jte-spring-boot-starter-4:$jteVersion")
     implementation("gg.jte:jte-kotlin:$jteVersion")
 
+    // htmx via webjar — hermetic + version-pinned like the rest of the build (no CDN at page load).
+    // webjars-locator-lite (version managed by the Spring Boot BOM) lets us serve it version-agnostically
+    // at /webjars/htmx.org/dist/htmx.min.js, so an htmx bump doesn't churn the <script src> in layout.kte.
+    implementation("org.webjars.npm:htmx.org:2.0.6")
+    implementation("org.webjars:webjars-locator-lite")
+
     // --- persistence: spring-jdbc + SQLite + Flyway (NOT Hibernate) ---
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.xerial:sqlite-jdbc:3.53.2.0")

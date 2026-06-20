@@ -17,3 +17,9 @@ Feature: Composer & reply targeting
     When the owner uses the bottom composer
     Then the reply targets the post at level 0
     And the composer scope defaults to "WHOLE_THREAD"
+
+  Scenario: The composer is wired to submit a summon via htmx
+    When the owner uses the bottom composer
+    Then the composer posts to the generation endpoint
+    And the composer offers a text field and a persona picker
+    And the composer summons on submit

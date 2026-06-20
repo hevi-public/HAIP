@@ -26,9 +26,14 @@ object Html {
         Regex("$name=\"${Regex.escape(value)}\"").findAll(html).count()
 
     /** The data-scope value on the composer element whose data-target-id == [targetId], or null. */
-    fun composerScope(html: String, targetId: String): String? {
+    fun composerScope(html: String, targetId: String): String? = composerAttr(html, targetId, "data-scope")
+
+    /** The value of an arbitrary [attr] on the composer element whose data-target-id == [targetId], or
+     *  null. Reads from the single opening tag carrying data-target-id, so it sees the hx-* wiring and
+     *  data-* hooks that live together on the composer <form>. */
+    fun composerAttr(html: String, targetId: String, attr: String): String? {
         val tag = Regex("<[^>]*data-target-id=\"${Regex.escape(targetId)}\"[^>]*>")
             .find(html)?.value ?: return null
-        return Regex("""data-scope="([^"]*)"""").find(tag)?.groupValues?.get(1)
+        return Regex("${Regex.escape(attr)}=\"([^\"]*)\"").find(tag)?.groupValues?.get(1)
     }
 }

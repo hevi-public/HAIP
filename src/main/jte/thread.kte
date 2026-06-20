@@ -1,14 +1,18 @@
 @import com.aiforum.dto.ReplyView
+@import com.aiforum.web.PersonaView
 @param threadId: String
 @param title: String
 @param replies: List<ReplyView>
 @param waitingOnRoom: Boolean
+@param personas: List<PersonaView>
 
-<div class="thread" data-thread-id="${threadId}" data-thread-title="${title}">
-    <h1>${title}</h1>
-    @if(waitingOnRoom)
-        <div data-empty-state="waiting">Waiting on the room…</div>
-    @endif
-    @template.fragments.replyList(replies = replies)
-    <div data-composer="bottom" data-target-id="${threadId}" data-scope="WHOLE_THREAD"></div>
-</div>
+@template.layout(title = title, content = @`
+    <div class="thread" data-thread-id="${threadId}" data-thread-title="${title}">
+        <h1>${title}</h1>
+        @if(waitingOnRoom)
+            <div data-empty-state="waiting">Waiting on the room…</div>
+        @endif
+        @template.fragments.replyList(replies = replies, threadId = threadId, personas = personas)
+        @template.fragments.composer(placement = "bottom", targetId = threadId, parentId = null, scope = "WHOLE_THREAD", threadId = threadId, personas = personas)
+    </div>
+`)
