@@ -1,9 +1,19 @@
 @import com.aiforum.dto.ReplyView
+@import com.aiforum.dto.GenerationState
+@import com.aiforum.dto.FailureCategory
 @import com.aiforum.web.PersonaView
 @param reply: ReplyView
 @param threadId: String? = null
 @param personas: List<PersonaView> = emptyList()
 
+<%-- Indentation comes from DOM nesting (children render inside this <article>); state styling is
+     driven off data-state / data-failure-category in app.css. All data-* hooks stay on this one
+     opening tag — the acceptance probe reads them by regex (see Html.replyAttr). --%>
+!{ val badge = when (reply.failureCategory) {
+       FailureCategory.RATE_LIMITED -> "usage limit"
+       FailureCategory.COULDNT_SAVE -> "unsaved"
+       else -> reply.state.name.lowercase()
+   } }
 <article class="reply"
          data-reply-id="${reply.id}"
          data-author="${reply.authorId}"
@@ -13,14 +23,28 @@
          data-retry-after="${reply.retryAfterSeconds?.toString() ?: ""}"
          data-vote-count="${reply.voteCount.toString()}"
          data-depth="${reply.depth.toString()}">
+    <header class="reply__head">
+        <span class="monogram" aria-hidden="true">${reply.authorId.take(2).uppercase()}</span>
+        <span class="reply__author">${reply.authorId}</span>
+        @if(reply.state != GenerationState.POSTED)
+            <span class="reply__badge reply__badge--${reply.state.name.lowercase()}">${badge}</span>
+        @endif
+    </header>
     @if(reply.reason != null)
         <div class="reason">${reply.reason}</div>
     @endif
     <div class="body">${reply.body}</div>
+    @if(reply.voteCount > 0)
+        <span class="reply__vote">▲ ${reply.voteCount}</span>
+    @endif
     <%-- Inline composer only when the thread context is known (full page / generate / auto-grow);
-         fragments rendered without it (e.g. retry) re-render the node without a composer. --%>
+         fragments rendered without it (e.g. retry) re-render the node without a composer. It is a
+         collapsed disclosure so only one reply box opens at a time (§4). --%>
     @if(threadId != null)
-        @template.fragments.composer(placement = "inline", targetId = reply.id, parentId = reply.id, scope = "BRANCH_ONLY", threadId = threadId, personas = personas)
+        <details class="reply__compose">
+            <summary>Reply</summary>
+            @template.fragments.composer(placement = "inline", targetId = reply.id, parentId = reply.id, scope = "BRANCH_ONLY", threadId = threadId, personas = personas)
+        </details>
     @endif
     @for(child in reply.children)
         @template.fragments.replyNode(reply = child, threadId = threadId, personas = personas)

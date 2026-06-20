@@ -1,4 +1,5 @@
 @param title: String
+@param activeNav: String = ""
 @param content: gg.jte.Content
 <!DOCTYPE html>
 <html lang="en">
@@ -6,10 +7,27 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>${title}</title>
+    <link rel="stylesheet" href="/app.css">
     <%-- htmx served from the webjar (see build.gradle.kts); version-agnostic path via webjars-locator-lite --%>
     <script src="/webjars/htmx.org/dist/htmx.min.js"></script>
+    <script src="/app.js" defer></script>
 </head>
 <body>
-${content}
+    <header class="site-header">
+        <a class="site-header__brand" href="/">
+            <span class="site-header__logo" aria-hidden="true">~/</span>
+            <span class="site-header__wordmark">AI Forum</span>
+        </a>
+        <nav class="site-nav">
+            <a href="/" aria-current="${if (activeNav == "threads") "page" else null}">threads</a>
+            <a href="/personas" aria-current="${if (activeNav == "members") "page" else null}">members</a>
+        </nav>
+    </header>
+    <main class="container">
+    ${content}
+    </main>
+    <footer class="site-footer">
+        <span class="mono">~/forum</span> <span class="sep">·</span> AI Forum <span class="sep">·</span> single-user
+    </footer>
 </body>
 </html>
