@@ -104,6 +104,7 @@ src/main/kotlin/com/aiforum/
   web/        controllers (generation, owner controls, diagnostics)
   config/     ClockConfig, ProfileGuard
 src/main/jte/ layout.kte (page shell + htmx) · fragments/ (composer, replyNode, replyList) — stable data-* hooks
+src/main/resources/static/ app.css + app.js — hand-written styling layer (sage HUP aesthetic, htmx-aware auto-grow)
 src/test/kotlin/com/aiforum/
   acceptance/ Cucumber↔Spring wiring, scriptable LlmClient fake, steps, hooks, support
   tier0/      pure-function tests

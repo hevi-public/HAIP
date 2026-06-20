@@ -180,6 +180,31 @@ A fragment whose composer must keep working *after* a swap needs whatever its co
 those through `fragments/replyList` → `fragments/replyNode` as **nullable-default** params so a render
 path that lacks them (e.g. retry) still compiles and just omits the composer.
 
+## Static assets & styling (`static/`, `app.css`)
+
+The visual layer is hand-written CSS + a little vanilla JS served as **static resources** — no build
+step, no framework. Spring Boot serves `src/main/resources/static/**` at the web root with zero config:
+
+- `src/main/resources/static/app.css` → `/app.css`; `app.js` → `/app.js`.
+- `layout.kte` links them in `<head>` (`<link rel="stylesheet" href="/app.css">`,
+  `<script src="/app.js" defer>`); every full page inherits them through the shell.
+- `app.js` re-binds on `htmx:afterSwap` so behaviour (composer auto-grow) survives htmx swaps.
+
+**Style with `class=`, never with `data-*`.** The probe (`Html.kt`) reads attributes by **regex off the
+single opening tag** and substring-matches text, so when styling templates:
+
+- *Safe:* add `class=`, add child elements/wrappers, change visible chrome text, wrap a title in `<a>`.
+- *Unsafe:* move/rename a `data-*` attribute, split the composer `<form>` (its `data-*` + `hx-*` must
+  stay on **one** opening tag), or drop a field the steps assert (`name="text"`, `name="personaIds"`,
+  `value="SUMMON"`).
+- Drive state/error/empty visuals off the **existing** hooks — `article.reply[data-state="failed"]`,
+  `[data-failure-category="RATE_LIMITED"]`, `[data-empty-state="waiting"]` — so the six error states
+  need no new markup.
+
+**Design source of truth:** the six full-screen comps in `HAIP_design/*.dc.html` (the sage `#b3bca3`
+HUP-lineage system, Verdana prose + mono chrome) — **not** the `Style Tile`'s olive exploration. The
+palette/type/spacing tokens live as CSS custom properties at the top of `app.css`.
+
 ## The data-* semantic-hook convention
 
 Acceptance assertions must target stable, behavioural attributes — not CSS classes, which churn with
@@ -193,7 +218,7 @@ styling. Standardize on:
 | `data-retryable` | `true` / `false` |
 | `data-retry-after` | seconds, present only for rate-limit |
 | `data-vote-count` | the firewalled `+1` tally (visible to owner) |
-| `data-scope` | `branch-only` / `whole-thread` on the composer |
+| `data-scope` | `BRANCH_ONLY` / `WHOLE_THREAD` on the composer (the `ScopeMode` enum name) |
 
 This keeps the same `.feature` files re-pointable at a Playwright layer later — the hooks survive a
 visual redesign.

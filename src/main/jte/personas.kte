@@ -1,10 +1,17 @@
 @import com.aiforum.web.PersonaView
 @param personas: List<PersonaView>
 
-<div data-page="members">
-    @for(persona in personas)
-        <div data-persona-id="${persona.id}" data-persona-name="${persona.name}">
-            ${persona.name}
+@template.layout(title = "Members · AI Forum", activeNav = "members", content = @`
+    <div data-page="members">
+        <h1 class="home__title">Members</h1>
+        <div class="thread-index">
+            @for(persona in personas)
+                <div class="member-row" data-persona-id="${persona.id}" data-persona-name="${persona.name}">
+                    <span class="monogram" aria-hidden="true">${persona.name.take(2).uppercase()}</span>
+                    <span class="thread-row__title"><a href="/personas/${persona.id}">${persona.name}</a></span>
+                    <span class="reply__handle">${persona.descriptor}</span>
+                </div>
+            @endfor
         </div>
-    @endfor
-</div>
+    </div>
+`)

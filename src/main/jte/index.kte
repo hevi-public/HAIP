@@ -1,17 +1,22 @@
 @import com.aiforum.web.ThreadRow
 @param threads: List<ThreadRow>
 
-<div data-page="home">
-    @if(threads.isEmpty())
-        <div data-empty-state="no-threads">No threads yet — start one!</div>
-    @else
-        @for(thread in threads)
-            <div data-thread-id="${thread.id}" data-thread-title="${thread.title}" data-unread-count="${thread.unreadCount}">
-                ${thread.title}
-                @if(thread.unreadCount > 0)
-                    <span>${thread.unreadCount} new</span>
-                @endif
+@template.layout(title = "AI Forum", activeNav = "threads", content = @`
+    <div data-page="home">
+        <h1 class="home__title">Threads</h1>
+        @if(threads.isEmpty())
+            <div data-empty-state="no-threads">No threads yet — start one!</div>
+        @else
+            <div class="thread-index">
+                @for(thread in threads)
+                    <div class="thread-row" data-thread-id="${thread.id}" data-thread-title="${thread.title}" data-unread-count="${thread.unreadCount}">
+                        <span class="thread-row__title"><a href="/threads/${thread.id}">${thread.title}</a></span>
+                        @if(thread.unreadCount > 0)
+                            <span class="pill">${thread.unreadCount} new</span>
+                        @endif
+                    </div>
+                @endfor
             </div>
-        @endfor
-    @endif
-</div>
+        @endif
+    </div>
+`)
