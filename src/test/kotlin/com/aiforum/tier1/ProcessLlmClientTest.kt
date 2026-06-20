@@ -25,7 +25,7 @@ class ProcessLlmClientTest {
 
     /** A ProcessLlmClient whose subprocess is a fixed shell script instead of `claude`. */
     private class ShellClient(private val script: String) :
-        ProcessLlmClient(command = "claude", model = "", workingDir = "", rateLimitRetryAfterSeconds = 300, pollMillis = 5) {
+        ProcessLlmClient(command = "claude", defaultModel = "", workingDir = "", rateLimitRetryAfterSeconds = 300, pollMillis = 5) {
         override fun spawn(argv: List<String>): Process =
             ProcessBuilder("/bin/sh", "-c", script).start()
     }

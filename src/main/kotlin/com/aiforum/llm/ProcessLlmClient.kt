@@ -26,11 +26,20 @@ import java.util.concurrent.TimeUnit
 @Profile("!test")
 open class ProcessLlmClient(
     @Value("\${aiforum.llm.command:claude}") private val command: String,
-    @Value("\${aiforum.llm.model:}") private val model: String,
+    // `defaultModel` (not `model`) because the model will become persona-specific later — this is the
+    // fallback used when the persona doesn't pin one. Blank => the CLI's own default model.
+    @Value("\${aiforum.llm.default-model:}") private val defaultModel: String,
     @Value("\${aiforum.llm.working-dir:}") private val workingDir: String,
     @Value("\${aiforum.llm.rate-limit-retry-after-seconds:300}") private val rateLimitRetryAfterSeconds: Long,
     @Value("\${aiforum.llm.poll-millis:100}") private val pollMillis: Long,
 ) : LlmClient {
+
+    private companion object {
+        /** Grace after destroyForcibly() to reap the process, so we never return with a SIGKILL in flight. */
+        const val KILL_GRACE_MILLIS = 500L
+        /** Once the process has exited, its pipes are at EOF; this bounds the reader join so no path can hang. */
+        const val STREAM_GRACE_MILLIS = 2_000L
+    }
 
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
         val process = spawn(buildArgs(request.context.personaSystemPrompt))
@@ -48,29 +57,36 @@ open class ProcessLlmClient(
         val stdout = drain(process.inputStream)
         val stderr = drain(process.errorStream)
 
-        val deadlineNanos = System.nanoTime() + request.timeout.toNanos()
+        // Termination is bounded and runaway-proof — important because this runs on a remote box where a
+        // hung subprocess can't be killed by hand. Each iteration blocks at most `pollMs` in waitFor, and
+        // there is no exit other than: the process finishing, the token tripping, or the monotonic
+        // deadline firing. The elapsed check uses nanoTime subtraction (wraparound-safe) and the poll
+        // interval is floored at 1ms so a misconfigured 0 can't turn this into a busy-spin.
+        val pollMs = pollMillis.coerceAtLeast(1)
+        val timeoutNanos = request.timeout.toNanos().coerceAtLeast(0)
+        val start = System.nanoTime()
         try {
             while (true) {
                 if (cancellation.isCancelled) {
-                    process.destroyForcibly()
+                    kill(process)
                     throw LlmException.Cancelled()
                 }
-                if (process.waitFor(pollMillis, TimeUnit.MILLISECONDS)) break
-                if (System.nanoTime() >= deadlineNanos) {
-                    process.destroyForcibly()
+                if (process.waitFor(pollMs, TimeUnit.MILLISECONDS)) break
+                if (System.nanoTime() - start >= timeoutNanos) {
+                    kill(process)
                     throw LlmException.Timeout()
                 }
             }
         } catch (_: InterruptedException) {
-            process.destroyForcibly()
+            kill(process)
             Thread.currentThread().interrupt()
             throw LlmException.Cancelled()
         }
 
-        stderr.get() // let the reader finish so the pipe closes cleanly; stderr isn't part of the mapping
+        await(stderr) // let the reader finish so the pipe closes cleanly; stderr isn't part of the mapping
         return LlmResponseParser.parse(
             process.exitValue(),
-            stdout.get(),
+            await(stdout),
             Duration.ofSeconds(rateLimitRetryAfterSeconds),
         )
     }
@@ -80,8 +96,8 @@ open class ProcessLlmClient(
         add("-p")
         add("--output-format"); add("json")
         add("--system-prompt"); add(systemPrompt)
-        if (model.isNotBlank()) {
-            add("--model"); add(model)
+        if (defaultModel.isNotBlank()) {
+            add("--model"); add(defaultModel)
         }
     }
 
@@ -105,7 +121,23 @@ open class ProcessLlmClient(
         return ProcessBuilder(argv).directory(File(dir)).start()
     }
 
+    /** Force-kill and best-effort reap within a short grace, so a runaway child can't outlive the call. */
+    private fun kill(process: Process) {
+        process.destroyForcibly()
+        runCatching { process.waitFor(KILL_GRACE_MILLIS, TimeUnit.MILLISECONDS) }
+    }
+
     private fun drain(stream: InputStream): FutureTask<String> =
         FutureTask { stream.use { it.readBytes().decodeToString() } }
             .also { Thread(it).apply { isDaemon = true }.start() }
+
+    /** Bounded join on a drain task: the process has already exited, so this returns promptly; the grace
+     *  is a backstop that turns a stuck reader into empty output rather than a hang. */
+    private fun await(task: FutureTask<String>): String =
+        try {
+            task.get(STREAM_GRACE_MILLIS, TimeUnit.MILLISECONDS)
+        } catch (_: Exception) {
+            task.cancel(true)
+            ""
+        }
 }
