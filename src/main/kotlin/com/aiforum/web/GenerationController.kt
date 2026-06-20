@@ -41,7 +41,10 @@ class GenerationController(private val generation: GenerationService) {
             return "fragments/replyList"
         }
         val scope = req.scope?.let { runCatching { ScopeMode.valueOf(it) }.getOrNull() } ?: ScopeMode.WHOLE_THREAD
-        model.addAttribute("replies", generation.generate(threadId, req.parentId, req.personaIds, req.text, scope))
+        model.addAttribute(
+            "replies",
+            generation.generate(threadId, req.parentId, req.personaIds, req.text, scope, req.includeSiblings),
+        )
         return "fragments/replyList"
     }
 
