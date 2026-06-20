@@ -2,6 +2,7 @@ package com.aiforum.web
 
 import com.aiforum.dto.GenerationState
 import com.aiforum.repo.CommentRepository
+import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.ThreadRepository
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -26,6 +27,7 @@ data class CreateThreadRequest(
 class ThreadController(
     private val threads: ThreadRepository,
     private val comments: CommentRepository,
+    private val personas: PersonaRepository,
 ) {
 
     @PostMapping("/threads")
@@ -47,6 +49,7 @@ class ThreadController(
         model.addAttribute("title", title)
         model.addAttribute("replies", replies)
         model.addAttribute("waitingOnRoom", replies.none { it.state == GenerationState.POSTED })
+        model.addAttribute("personas", personas.findAll().map { PersonaView(it.id, it.name, it.descriptor) })
         return "thread"
     }
 }

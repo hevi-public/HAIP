@@ -1,0 +1,28 @@
+@import com.aiforum.web.PersonaView
+@param threadId: String
+@param targetId: String
+@param parentId: String?
+@param scope: String
+@param placement: String
+@param personas: List<PersonaView>
+
+<%-- The data-* targeting hooks and the hx-* wiring live on the SAME opening tag: the acceptance
+     probe (Html.composerScope/composerAttr) reads attributes from the single tag carrying
+     data-target-id, so the composer is one <form>, not a wrapper div around a form (§4). --%>
+<form data-composer="${placement}" data-target-id="${targetId}" data-scope="${scope}"
+      hx-post="/threads/${threadId}/generate"
+      hx-target="${if (placement == "bottom") ".reply-list" else "closest article"}"
+      hx-swap="beforeend">
+    @if(parentId != null)
+        <input type="hidden" name="parentId" value="${parentId}">
+    @endif
+    <input type="hidden" name="scope" value="${scope}">
+    <input type="hidden" name="triggerMode" value="SUMMON">
+    <textarea name="text" placeholder="Ask the room…"></textarea>
+    <select name="personaIds">
+        @for(p in personas)
+            <option value="${p.id}">${p.name}</option>
+        @endfor
+    </select>
+    <button type="submit">Send</button>
+</form>

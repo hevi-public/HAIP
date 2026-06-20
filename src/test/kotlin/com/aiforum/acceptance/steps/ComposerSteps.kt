@@ -6,6 +6,7 @@ import com.aiforum.acceptance.support.ScenarioWorld
 import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 
 /**
@@ -59,5 +60,46 @@ class ComposerSteps(
             Html.composerScope(world.lastBody ?: "", targetId),
             "expected composer targeting $targetId to have data-scope=\"$scope\"",
         )
+    }
+
+    @Then("the composer posts to the generation endpoint")
+    fun composerPostsToGenerationEndpoint() {
+        val targetId = world.composerTargetId ?: error("no composer target remembered")
+        assertEquals(
+            "/threads/${world.threadId}/generate",
+            Html.composerAttr(world.lastBody ?: "", targetId, "hx-post"),
+            "expected composer targeting $targetId to hx-post the generation endpoint",
+        )
+    }
+
+    @Then("the composer offers a text field and a persona picker")
+    fun composerOffersFields() {
+        val body = world.lastBody ?: ""
+        assertTrue(Html.contains(body, "name=\"text\""), "expected a name=\"text\" field in:\n$body")
+        assertTrue(Html.contains(body, "name=\"personaIds\""), "expected a name=\"personaIds\" picker in:\n$body")
+    }
+
+    @Then("the composer summons on submit")
+    fun composerSummonsOnSubmit() {
+        val body = world.lastBody ?: ""
+        assertTrue(Html.contains(body, "value=\"SUMMON\""), "expected a SUMMON trigger-mode field in:\n$body")
+    }
+
+    @When("the owner submits the bottom composer with text {string} selecting {string}")
+    fun submitBottomComposer(text: String, persona: String) {
+        // The browser's path: an htmx form POST (application/x-www-form-urlencoded), not the JSON the
+        // API/acceptance summon uses. Same endpoint, same returned reply-node fragment.
+        val resp = http.postForm(
+            "/threads/${world.threadId}/generate",
+            mapOf(
+                "personaIds" to persona,
+                "text" to text,
+                "scope" to "WHOLE_THREAD",
+                "triggerMode" to "SUMMON",
+            ),
+        )
+        world.lastStatus = resp.statusCode.value()
+        world.lastBody = resp.body
+        assertNotNull(world.lastBody, "expected a rendered fragment from the form submit")
     }
 }

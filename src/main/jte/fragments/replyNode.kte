@@ -1,5 +1,8 @@
 @import com.aiforum.dto.ReplyView
+@import com.aiforum.web.PersonaView
 @param reply: ReplyView
+@param threadId: String? = null
+@param personas: List<PersonaView> = emptyList()
 
 <article class="reply"
          data-reply-id="${reply.id}"
@@ -14,8 +17,12 @@
         <div class="reason">${reply.reason}</div>
     @endif
     <div class="body">${reply.body}</div>
-    <div data-composer="inline" data-target-id="${reply.id}" data-scope="BRANCH_ONLY"></div>
+    <%-- Inline composer only when the thread context is known (full page / generate / auto-grow);
+         fragments rendered without it (e.g. retry) re-render the node without a composer. --%>
+    @if(threadId != null)
+        @template.fragments.composer(placement = "inline", targetId = reply.id, parentId = reply.id, scope = "BRANCH_ONLY", threadId = threadId, personas = personas)
+    @endif
     @for(child in reply.children)
-        @template.fragments.replyNode(reply = child)
+        @template.fragments.replyNode(reply = child, threadId = threadId, personas = personas)
     @endfor
 </article>

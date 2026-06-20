@@ -1,8 +1,11 @@
 @import com.aiforum.dto.ReplyView
+@import com.aiforum.web.PersonaView
 @param replies: List<ReplyView>
+@param threadId: String? = null
+@param personas: List<PersonaView> = emptyList()
 
 <div class="reply-list">
     @for(reply in replies)
-        @template.fragments.replyNode(reply = reply)
+        @template.fragments.replyNode(reply = reply, threadId = threadId, personas = personas)
     @endfor
 </div>

@@ -127,6 +127,59 @@ Any template is callable as `@template.<path>.<name>(param = value)`. Keep reusa
 </article>
 ```
 
+## Shared page shell + htmx (`layout.kte`)
+
+Full pages share one document shell instead of each `.kte` re-inlining `<!DOCTYPE html>`. `layout.kte`
+takes the body as a **content block** (`gg.jte.Content`) and renders it inside `<head>`/`<body>`:
+
+```kotlin
+@param title: String
+@param content: gg.jte.Content
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>${title}</title>
+  <script src="/webjars/htmx.org/dist/htmx.min.js"></script>   <%-- htmx, see below --%>
+</head>
+<body>${content}</body>
+</html>
+```
+
+A page wraps its markup by passing an `@`…`` content block:
+
+```kotlin
+@template.layout(title = title, content = @`
+  <div class="thread" data-thread-id="${threadId}">…</div>
+`)
+```
+
+Only **full pages** wrap in the layout. **Fragment** templates (`fragments/replyList`,
+`fragments/composer`, a single re-rendered node) stay bare — htmx swaps them into an already-loaded
+page, so a `<head>` would be wrong.
+
+**htmx is delivered by webjar, not a CDN** (hermetic, offline, version-pinned like everything else):
+`org.webjars.npm:htmx.org` + `org.webjars:webjars-locator-lite` in `build.gradle.kts`; the locator
+serves it version-agnostically at `/webjars/htmx.org/dist/htmx.min.js`, so an htmx bump doesn't churn
+the `<script src>`.
+
+**The encoding gotcha when htmx drives an existing JSON endpoint.** An htmx form POSTs
+`application/x-www-form-urlencoded` by default, but the acceptance suite POSTs JSON to the same
+endpoint — one handler can't bind both. Keep the JSON contract green and add a second handler beside
+it, discriminated by `consumes`, both delegating to one private method:
+
+```kotlin
+@PostMapping("/threads/{id}/generate", consumes = [MediaType.APPLICATION_JSON_VALUE])
+fun json(@PathVariable id: String, @RequestBody req: GenerateRequest, model: Model) = respond(id, req, model)
+
+@PostMapping("/threads/{id}/generate", consumes = [MediaType.APPLICATION_FORM_URLENCODED_VALUE])
+fun form(@PathVariable id: String, req: GenerateRequest, model: Model) = respond(id, req, model)  // model-attribute binding
+```
+
+A fragment whose composer must keep working *after* a swap needs whatever its composer params require
+(here `threadId` + the persona list) added to the model by **every** endpoint that returns it. Thread
+those through `fragments/replyList` → `fragments/replyNode` as **nullable-default** params so a render
+path that lacks them (e.g. retry) still compiles and just omits the composer.
+
 ## The data-* semantic-hook convention
 
 Acceptance assertions must target stable, behavioural attributes — not CSS classes, which churn with

@@ -4,7 +4,9 @@ import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ReplyView
 import com.aiforum.dto.ScopeMode
+import com.aiforum.repo.PersonaRepository
 import com.aiforum.service.GenerationService
+import org.springframework.http.MediaType
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.PathVariable
@@ -30,12 +32,26 @@ data class GenerateRequest(
  * this pinned contract.
  */
 @Controller
-class GenerationController(private val generation: GenerationService) {
+class GenerationController(
+    private val generation: GenerationService,
+    private val personas: PersonaRepository,
+) {
 
-    @PostMapping("/threads/{threadId}/generate")
-    fun generate(@PathVariable threadId: String, @RequestBody req: GenerateRequest, model: Model): String {
+    // Two handlers, one body type each: the browser composer posts application/x-www-form-urlencoded
+    // (htmx default — bound by model attribute), while the acceptance suite and any API client post
+    // JSON (@RequestBody). Both delegate to one [respond] so the behaviour can't drift between them.
+    @PostMapping("/threads/{threadId}/generate", consumes = [MediaType.APPLICATION_JSON_VALUE])
+    fun generateJson(@PathVariable threadId: String, @RequestBody req: GenerateRequest, model: Model): String =
+        respond(threadId, req, model)
+
+    @PostMapping("/threads/{threadId}/generate", consumes = [MediaType.APPLICATION_FORM_URLENCODED_VALUE])
+    fun generateForm(@PathVariable threadId: String, req: GenerateRequest, model: Model): String =
+        respond(threadId, req, model)
+
+    private fun respond(threadId: String, req: GenerateRequest, model: Model): String {
         // Validation BEFORE spending an LLM call (§4): reject empty question / no persona at the
-        // controller tier; no node is created and the LlmClient is never touched.
+        // controller tier; no node is created and the LlmClient is never touched. The error fragment
+        // carries only the system node — no composer under it (threadId/personas left unset).
         validationError(req)?.let {
             model.addAttribute("replies", listOf(it))
             return "fragments/replyList"
@@ -45,8 +61,14 @@ class GenerationController(private val generation: GenerationService) {
             "replies",
             generation.generate(threadId, req.parentId, req.personaIds, req.text, scope, req.includeSiblings),
         )
+        // Hand the fragment what its composers need so freshly-rendered nodes can be replied to.
+        model.addAttribute("threadId", threadId)
+        model.addAttribute("personas", personaViews())
         return "fragments/replyList"
     }
+
+    private fun personaViews(): List<PersonaView> =
+        personas.findAll().map { PersonaView(it.id, it.name, it.descriptor) }
 
     private fun validationError(req: GenerateRequest): ReplyView? {
         val reason = when {
@@ -81,6 +103,8 @@ class GenerationController(private val generation: GenerationService) {
     @PostMapping("/threads/{threadId}/auto-grow")
     fun autoGrow(@PathVariable threadId: String, model: Model): String {
         model.addAttribute("replies", generation.autoGrow(threadId))
+        model.addAttribute("threadId", threadId)
+        model.addAttribute("personas", personaViews())
         return "fragments/replyList"
     }
 }

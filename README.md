@@ -42,6 +42,16 @@ it at a JDK 21:
 ./gradlew acceptance         # Cucumber acceptance suite
 ```
 
+Run the app itself (the `dev` profile, real `claude -p` generation) and drive the htmx UI in a
+browser at **http://localhost:8080**:
+
+```bash
+./gradlew bootRun
+```
+
+The port is Spring's default; nothing pins it, so a Docker deployment remaps the host side
+(`-p 9000:8080`) or sets `SERVER_PORT` without a code change.
+
 **Discovery mode** — let a sea of red run without failing the build (useful while scaffolding):
 
 ```bash
@@ -90,7 +100,7 @@ src/main/kotlin/com/aiforum/
   service/    GenerationService (orchestration)
   web/        controllers (generation, owner controls, diagnostics)
   config/     ClockConfig, ProfileGuard
-src/main/jte/ fragments/ (replyNode, replyList) — emit stable data-* hooks
+src/main/jte/ layout.kte (page shell + htmx) · fragments/ (composer, replyNode, replyList) — stable data-* hooks
 src/test/kotlin/com/aiforum/
   acceptance/ Cucumber↔Spring wiring, scriptable LlmClient fake, steps, hooks, support
   tier0/      pure-function tests
@@ -102,3 +112,7 @@ src/test/resources/features/  *.feature (the spec)
 Project-scoped skills in [`.claude/skills/`](.claude/skills/) encode the trickier wiring and are
 auto-loaded in new sessions: `jte-spring-kotlin`, `cucumber-spring-bdd`, `sqlite-spring-jdbc`,
 `bdd-tiered-testing`.
+
+[`.claude/launch.json`](.claude/launch.json) lets Claude Code's preview/verify harness boot the app
+(`./gradlew bootRun`, port 8080) to exercise the htmx composer in a real browser — the one layer the
+HTTP acceptance suite can't drive. It's committed on purpose so browser verifies are reproducible.
