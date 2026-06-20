@@ -26,6 +26,10 @@ data class GenerateRequest(
     val includeSiblings: Boolean = false,
     val triggerMode: String? = null,
     val parentId: String? = null,
+    // True when this carries the owner's own message (the composer path): persist `text` as the owner's
+    // node before fanning out, so it appears in the tree AND seeds every summoned persona's context. A
+    // bare API summon leaves it false — the personas just weigh in on the existing discussion.
+    val postAsOwner: Boolean = false,
 )
 
 /**
@@ -64,7 +68,7 @@ class GenerationController(
         // GET /replies/{id} and carries a Cancel control; it settles to POSTED|FAILED|CANCELLED later.
         model.addAttribute(
             "replies",
-            generation.startGeneration(threadId, req.parentId, req.personaIds, req.text, scope, req.includeSiblings),
+            generation.startGeneration(threadId, req.parentId, req.personaIds, req.text, scope, req.includeSiblings, req.postAsOwner),
         )
         // Hand the fragment what its composers need so freshly-rendered nodes can be replied to.
         model.addAttribute("threadId", threadId)

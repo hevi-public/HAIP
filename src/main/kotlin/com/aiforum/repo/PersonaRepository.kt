@@ -26,8 +26,24 @@ class PersonaRepository(private val jdbc: JdbcTemplate) {
     fun insert(id: String, name: String, descriptor: String, model: String = "") {
         jdbc.update(
             "INSERT INTO persona(id, name, handle, descriptor, system_prompt, signature, model) VALUES (?,?,?,?,?,?,?)",
-            id, name, name.lowercase(), descriptor, "You are $name.", "— $name", model,
+            id, name, name.lowercase(), descriptor, systemPromptFor(name, descriptor), "— $name", model,
         )
+    }
+
+    /**
+     * Build the persona's system prompt from the owner-authored descriptor (their CHARACTER) plus the
+     * forum framing the model needs to stay in role. The old "You are $name." dropped the descriptor on
+     * the floor and gave the model no world, so it broke the fourth wall ("I'm Sol, not the responder
+     * here"). Keeping this in the repository means every persona is persisted already wired for
+     * generation — the descriptor is the character, this is the stage directions around it.
+     */
+    private fun systemPromptFor(name: String, descriptor: String): String = buildString {
+        append("You are $name, a participant in a collaborative brainstorming forum where the owner ")
+        append("poses questions and the room replies in a threaded discussion.")
+        if (descriptor.isNotBlank()) append(" Your character: $descriptor")
+        append(" Always stay in character as $name and reply directly to the discussion in your own ")
+        append("voice. Do not narrate, do not mention being an AI or a model, and do not comment on ")
+        append("the prompt or the framing — just contribute your reply as $name.")
     }
 
     private fun mapPersona(rs: java.sql.ResultSet) = Persona(

@@ -4,6 +4,16 @@
 @template.layout(title = "Members · AI Forum", activeNav = "members", content = @`
     <div data-page="members">
         <h1 class="home__title">Members</h1>
+        <%-- Add a persona: a plain form POST (form-urlencoded) to /personas → PRG redirect onto the new
+             profile. The descriptor is the persona's CHARACTER — it drives the system prompt the model
+             is summoned with, so it's a textarea, not a one-liner. --%>
+        <form class="new-persona" data-new-persona method="post" action="/personas">
+            <input class="new-persona__name" type="text" name="name" required
+                   placeholder="Name (e.g. Sol)">
+            <textarea class="new-persona__descriptor" name="descriptor" required
+                      placeholder="Character — who is this persona? Their voice, expertise, point of view…"></textarea>
+            <button class="btn" type="submit">Add member ▸</button>
+        </form>
         <div class="thread-index">
             @for(persona in personas)
                 <div class="member-row" data-persona-id="${persona.id}" data-persona-name="${persona.name}">

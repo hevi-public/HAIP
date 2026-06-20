@@ -14,7 +14,12 @@
       data-composer="${placement}" data-target-id="${targetId}" data-scope="${scope}"
       hx-post="/threads/${threadId}/generate"
       hx-target="${if (placement == "bottom") ".reply-list" else "closest article"}"
-      hx-swap="beforeend">
+      hx-swap="beforeend"
+      <%-- Once the post succeeds, clear the editor and collapse it: the owner's message has been swapped
+           in as a real comment box, so the open textarea should get out of the way. reset() empties the
+           textarea for both placements; the inline composer additionally closes its <details> disclosure
+           (a no-op for the persistent bottom composer, which has no enclosing <details>). --%>
+      hx-on::after-request="if(event.detail.successful){this.reset();this.closest('details')?.removeAttribute('open')}">
     <div class="composer__head">
         <span class="composer__tag">${if (placement == "bottom") "↳ level 0" else "↳ inline"}</span>
         <span>${if (placement == "bottom") "New reply to the post" else "Reply in this branch"}</span>
@@ -24,6 +29,10 @@
     @endif
     <input type="hidden" name="scope" value="${scope}">
     <input type="hidden" name="triggerMode" value="SUMMON">
+    <%-- The composer is the owner authoring a message: the server persists `text` as the owner's own
+         node and seeds the room with it (otherwise the owner's words never appear and the personas only
+         ever see a blank transcript, emitting a generic opener). --%>
+    <input type="hidden" name="postAsOwner" value="true">
     <textarea name="text" placeholder="Ask the room…   write a question, pick who answers"></textarea>
     <div class="composer__row">
         <label>who answers</label>

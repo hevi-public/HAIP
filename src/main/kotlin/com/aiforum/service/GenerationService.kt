@@ -43,6 +43,9 @@ class GenerationService(
     private companion object {
         // Runaway backstop for autoGrow; real growth always drains in ≤ DepthBudget.DEFAULT_GRANT rounds.
         const val GROWTH_ROUND_CAP = 100
+        // The author id under which the owner's own composer messages are persisted (matches the seeded
+        // "owner" nodes the firewall/context scenarios use).
+        const val OWNER_AUTHOR = "owner"
     }
 
     /** A resolved unit of work: one persona's reply, with its id minted up front so it is cancellable. */
@@ -66,11 +69,16 @@ class GenerationService(
         threadId: String,
         parentId: String?,
         personaIds: List<String>,
-        @Suppress("UNUSED_PARAMETER") text: String,
+        text: String,
         scope: ScopeMode = ScopeMode.WHOLE_THREAD,
         includeSiblings: Boolean = false,
+        postAsOwner: Boolean = false,
     ): List<ReplyView> {
-        val started = planGeneration(threadId, parentId, personaIds, scope, includeSiblings).map { plan ->
+        // The composer authors the owner's message: persist it as the owner's node first, then summon
+        // BENEATH it, so the personas reply to it and it flows into their context (§4/§5).
+        val target = replyTarget(parentId, postAsOwner)
+        val owner = ownerComment(threadId, target, text, postAsOwner)
+        val started = planGeneration(threadId, owner?.id ?: target, personaIds, scope, includeSiblings).map { plan ->
             val draft = draftView(plan)
             val token = inFlight.register(plan.id, draft)
             Triple(plan, token, draft)
@@ -84,7 +92,11 @@ class GenerationService(
                 }
             }
         }
-        return started.map { it.third }
+        // Return the owner's freshly-posted node with the DRAFTING persona node(s) NESTED inside it, so
+        // the htmx swap appends a subtree that mirrors the tree: each reply sits under the owner message
+        // it answers, not as a flat sibling. A bare summon (no owner node) returns the drafts flat.
+        val drafts = started.map { it.third }
+        return owner?.let { listOf(it.toReplyView(children = drafts)) } ?: drafts
     }
 
     /** Trip the in-flight token for [replyId] and wait (bounded) for the worker to settle it (§4). */
@@ -102,12 +114,17 @@ class GenerationService(
         threadId: String,
         parentId: String?,
         personaIds: List<String>,
-        @Suppress("UNUSED_PARAMETER") text: String,
+        text: String,
         scope: ScopeMode = ScopeMode.WHOLE_THREAD,
         includeSiblings: Boolean = false,
-    ): List<ReplyView> =
-        planGeneration(threadId, parentId, personaIds, scope, includeSiblings)
+        postAsOwner: Boolean = false,
+    ): List<ReplyView> {
+        val target = replyTarget(parentId, postAsOwner)
+        val owner = ownerComment(threadId, target, text, postAsOwner)
+        val replies = planGeneration(threadId, owner?.id ?: target, personaIds, scope, includeSiblings)
             .map { settleOne(it, CancellationToken()) }
+        return owner?.let { listOf(it.toReplyView(children = replies)) } ?: replies
+    }
 
     /**
      * Bounded autonomous growth (§4): repeatedly extend every POSTED leaf that still has depth budget
@@ -158,6 +175,42 @@ class GenerationService(
         }
         comments.update(updated)
         return updated.toReplyView()
+    }
+
+    /**
+     * Persist the owner's composed message as their own POSTED node (§4/§5) and return its id, so the
+     * summon that follows parents under it. This is what makes the owner's words both APPEAR in the tree
+     * and reach every persona's context — without it the room only ever sees a blank transcript and
+     * emits a generic opener. The node GRANTS a fresh depth budget so the branch can auto-grow past it
+     * (mirrors a seeded owner comment / `/more`). Returns null when there is nothing to author (a bare
+     * summon, or an empty message), leaving the summon parented exactly as before.
+     */
+    /**
+     * Where a composer reply actually attaches. When the owner writes into a node's inline composer
+     * (postAsOwner, with a parent), the message continues at the END of that branch — its last node —
+     * not as a fork off the clicked node, so the conversation extends rather than splits. A bare API
+     * summon (no owner authoring) targets exactly the node it named, preserving deliberate branch
+     * targeting and the per-branch context-scoping contract (§5).
+     */
+    private fun replyTarget(parentId: String?, postAsOwner: Boolean): String? =
+        if (postAsOwner && parentId != null) comments.branchTail(parentId) else parentId
+
+    private fun ownerComment(threadId: String, parentId: String?, text: String, postAsOwner: Boolean): Comment? {
+        if (!postAsOwner || text.isBlank()) return null
+        val parent = parentId?.let { comments.findById(it) }
+        val owner = Comment(
+            id = UUID.randomUUID().toString(),
+            threadId = threadId,
+            parentId = parentId,
+            authorId = OWNER_AUTHOR,
+            body = text.trim(),
+            state = GenerationState.POSTED,
+            failureCategory = null,
+            depth = parent?.let { it.depth + 1 } ?: 0,
+            depthBudget = DepthBudget.granted(),
+        )
+        comments.insert(owner)
+        return owner
     }
 
     /** Resolve personas and assemble the (shared) context once, minting a cancellable id per persona. */
