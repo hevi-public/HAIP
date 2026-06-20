@@ -1,0 +1,24 @@
+name: ci
+
+# Local-first: all build logic lives in the Dockerized entrypoint (docker-compose.yml), which runs
+# identically on a developer's machine and here. This workflow is a thin wrapper, so CI == local.
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the Dockerized build (same command as local)
+        run: docker compose run --rm build
+
+      - name: Upload Cucumber report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cucumber-report
+          path: build/reports/cucumber/
+          if-no-files-found: ignore

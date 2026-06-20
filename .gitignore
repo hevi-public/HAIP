@@ -25,3 +25,22 @@ replay_pid*
 
 # Kotlin Gradle plugin data, see https://kotlinlang.org/docs/whatsnew20.html#new-directory-for-kotlin-data-in-gradle-projects
 .kotlin/
+
+# Gradle
+.gradle/
+build/
+# ...but the wrapper jar MUST be committed (overrides the *.jar rule above)
+!gradle/wrapper/gradle-wrapper.jar
+
+# SQLite databases (dev/prod runtime data; test DB lives under build/)
+data/
+*.db
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# macOS
+.DS_Store
+*.thumbnail

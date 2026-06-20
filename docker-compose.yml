@@ -1,0 +1,19 @@
+# The build entrypoint. Run locally with:  docker compose run --rm build
+# Discovery mode (red doesn't break the build):  DISCOVERY_MODE=true docker compose run --rm build
+#
+# The project is bind-mounted so build/reports/ land on the host (for CI artifact upload and local
+# inspection); the gradle cache is a named volume so deps/distribution persist across runs.
+# CI invokes this exact same command, so CI == local.
+services:
+  build:
+    build: .
+    environment:
+      - DISCOVERY_MODE=${DISCOVERY_MODE:-false}
+    # Explicit stage order so the log reads as a pipeline; lowest tier first.
+    command: ["generateJte", "compileKotlin", "tier0", "tier1", "tier2", "acceptance"]
+    volumes:
+      - .:/app
+      - gradle-cache:/root/.gradle
+
+volumes:
+  gradle-cache: {}

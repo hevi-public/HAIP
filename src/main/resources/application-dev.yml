@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:sqlite:data/aiforum-dev.db?journal_mode=WAL&busy_timeout=5000&foreign_keys=on
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 5
+
+aiforum:
+  backups:
+    enabled: true

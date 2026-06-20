@@ -1,0 +1,22 @@
+package com.aiforum.web
+
+import org.springframework.context.annotation.Profile
+import org.springframework.core.env.Environment
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RestController
+
+/**
+ * Test-only diagnostics so the config_guardrails.feature rail scenarios can assert the wiring from the
+ * outside (test → test DB, backups off). Exposed ONLY under the `test` profile.
+ */
+@RestController
+@Profile("test")
+class DiagnosticsController(private val env: Environment) {
+
+    @GetMapping("/__diag")
+    fun diag(): Map<String, Any?> = mapOf(
+        "datasourceUrl" to env.getProperty("spring.datasource.url"),
+        "backupsEnabled" to env.getProperty("aiforum.backups.enabled", Boolean::class.java),
+        "activeProfiles" to env.activeProfiles.toList(),
+    )
+}
