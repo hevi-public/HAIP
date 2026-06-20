@@ -90,10 +90,13 @@ class GenerationController(
         )
     }
 
+    // Render the single re-generated node (not the list wrapper): the browser Retry button outerHTML-
+    // swaps the closest <article>, which needs a lone <article> root — replyList would nest a stray
+    // <div class="reply-list"> inside the parent. threadId is left unset, so no composer is re-rendered.
     @PostMapping("/replies/{id}/retry")
     fun retry(@PathVariable id: String, model: Model): String {
-        model.addAttribute("replies", listOf(generation.retry(id)))
-        return "fragments/replyList"
+        model.addAttribute("reply", generation.retry(id))
+        return "fragments/replyNode"
     }
 
     /**
