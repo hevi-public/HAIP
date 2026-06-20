@@ -97,7 +97,7 @@ class GenerationService(
         val persona = personas.find(existing.authorId) ?: error("unknown persona ${existing.authorId}")
         val ctx = ContextAssembler.assemble(persona.systemPrompt, comments.threadComments(existing.threadId))
         val updated = try {
-            val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name), timeout), CancellationToken())
+            val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name, persona.model), timeout), CancellationToken())
             existing.copy(body = resp.text, state = GenerationState.POSTED, failureCategory = null, reason = null, retryAfterSeconds = null)
         } catch (e: Throwable) {
             val o = GenerationStateMachine.classify(e)
@@ -119,7 +119,7 @@ class GenerationService(
         val ctx = ContextAssembler.assemble(persona.systemPrompt, contextComments)
         val id = UUID.randomUUID().toString()
         val comment = try {
-            val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name), timeout), CancellationToken())
+            val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name, persona.model), timeout), CancellationToken())
             Comment(id, threadId, parentId, personaId, resp.text, GenerationState.POSTED, null, depth, depthBudget = budget)
         } catch (e: Throwable) {
             val o = GenerationStateMachine.classify(e)

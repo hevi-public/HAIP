@@ -30,11 +30,50 @@ class ProcessLlmClientTest {
             ProcessBuilder("/bin/sh", "-c", script).start()
     }
 
-    private fun request(timeout: Duration) = LlmRequest(
+    /**
+     * Captures the argv that would be handed to `claude` (so we can assert model selection) while still
+     * returning a well-formed success so generate() completes. The configured `defaultModel` is the
+     * fallback when the persona doesn't pin one.
+     */
+    private class CapturingClient(defaultModel: String) :
+        ProcessLlmClient(command = "claude", defaultModel = defaultModel, workingDir = "", rateLimitRetryAfterSeconds = 300, pollMillis = 5) {
+        var argv: List<String> = emptyList()
+        override fun spawn(argv: List<String>): Process {
+            this.argv = argv
+            return ProcessBuilder("/bin/sh", "-c", "printf '%s' '{\"is_error\":false,\"subtype\":\"success\",\"result\":\"ok\",\"stop_reason\":\"end_turn\"}'").start()
+        }
+    }
+
+    private fun request(timeout: Duration, personaModel: String = "") = LlmRequest(
         context = PromptContext("you are sol", listOf(ContextComment("sol", "indexes help here"))),
-        persona = PersonaRef("sol", "Sol"),
+        persona = PersonaRef("sol", "Sol", personaModel),
         timeout = timeout,
     )
+
+    /** The flag value that follows `--model` in argv, or null when the flag is absent. */
+    private fun modelArg(argv: List<String>): String? =
+        argv.indexOf("--model").takeIf { it >= 0 }?.let { argv.getOrNull(it + 1) }
+
+    @Test
+    fun `a persona's pinned model is passed as --model and wins over the configured default`() {
+        val client = CapturingClient(defaultModel = "sonnet")
+        client.generate(request(Duration.ofSeconds(10), personaModel = "opus"), CancellationToken())
+        assertEquals("opus", modelArg(client.argv))
+    }
+
+    @Test
+    fun `a persona with no pinned model falls back to the configured default-model`() {
+        val client = CapturingClient(defaultModel = "sonnet")
+        client.generate(request(Duration.ofSeconds(10), personaModel = ""), CancellationToken())
+        assertEquals("sonnet", modelArg(client.argv))
+    }
+
+    @Test
+    fun `with neither a persona model nor a default, no --model flag is sent and the CLI picks its own`() {
+        val client = CapturingClient(defaultModel = "")
+        client.generate(request(Duration.ofSeconds(10), personaModel = ""), CancellationToken())
+        assertEquals(null, modelArg(client.argv))
+    }
 
     @Test
     fun `the rendered prompt is delivered on stdin and the parsed result comes back`() {
