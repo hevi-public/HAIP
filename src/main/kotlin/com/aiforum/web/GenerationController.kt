@@ -4,11 +4,13 @@ import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ReplyView
 import com.aiforum.dto.ScopeMode
+import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
 import com.aiforum.service.GenerationService
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -35,6 +37,7 @@ data class GenerateRequest(
 class GenerationController(
     private val generation: GenerationService,
     private val personas: PersonaRepository,
+    private val comments: CommentRepository,
 ) {
 
     // Two handlers, one body type each: the browser composer posts application/x-www-form-urlencoded
@@ -57,9 +60,11 @@ class GenerationController(
             return "fragments/replyList"
         }
         val scope = req.scope?.let { runCatching { ScopeMode.valueOf(it) }.getOrNull() } ?: ScopeMode.WHOLE_THREAD
+        // Async (§4): start drafting and return the DRAFTING node(s) at once. Each node self-polls
+        // GET /replies/{id} and carries a Cancel control; it settles to POSTED|FAILED|CANCELLED later.
         model.addAttribute(
             "replies",
-            generation.generate(threadId, req.parentId, req.personaIds, req.text, scope, req.includeSiblings),
+            generation.startGeneration(threadId, req.parentId, req.personaIds, req.text, scope, req.includeSiblings),
         )
         // Hand the fragment what its composers need so freshly-rendered nodes can be replied to.
         model.addAttribute("threadId", threadId)
@@ -105,6 +110,47 @@ class GenerationController(
         model.addAttribute("replies", generation.autoGrow(threadId))
         model.addAttribute("threadId", threadId)
         model.addAttribute("personas", personaViews())
+        return "fragments/replyList"
+    }
+
+    /**
+     * Poll a single node (§4). The DRAFTING fragment self-polls every second; once the node settles, the
+     * returned fragment drops the poll trigger so htmx stops. DB-first: a persisted row is the source of
+     * truth, so we only fall back to the transient in-flight view while no row exists yet (this closes
+     * the brief window between the settle write and the worker releasing the cancel latch).
+     */
+    @GetMapping("/replies/{id}")
+    fun poll(@PathVariable id: String, model: Model): String {
+        comments.findById(id)?.let { return renderNode(model, it.toReplyView(), it.threadId) }
+        generation.inFlightView(id)?.let { return renderNode(model, it, threadId = null) }
+        return emptyNode(model)
+    }
+
+    /**
+     * Cancel an in-flight draft (§4): trip the shared token and wait for the worker to settle the node to
+     * CANCELLED, then render the now-persisted row. A no-op (renders the current state) if the node is
+     * unknown or already settled.
+     */
+    @PostMapping("/replies/{id}/cancel")
+    fun cancel(@PathVariable id: String, model: Model): String {
+        generation.cancel(id)
+        val node = comments.findById(id) ?: return emptyNode(model)
+        return renderNode(model, node.toReplyView(), node.threadId)
+    }
+
+    // Single-node fragment for an htmx outerHTML swap. threadId (+ personas) only for a settled node, so
+    // the inline composer renders once it's posted; a drafting node renders without one.
+    private fun renderNode(model: Model, reply: ReplyView, threadId: String?): String {
+        model.addAttribute("reply", reply)
+        if (threadId != null) {
+            model.addAttribute("threadId", threadId)
+            model.addAttribute("personas", personaViews())
+        }
+        return "fragments/replyNode"
+    }
+
+    private fun emptyNode(model: Model): String {
+        model.addAttribute("replies", emptyList<ReplyView>())
         return "fragments/replyList"
     }
 }
