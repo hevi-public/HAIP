@@ -1,5 +1,6 @@
 package com.aiforum.acceptance.steps
 
+import com.aiforum.acceptance.support.GenerationSettle
 import com.aiforum.acceptance.support.Html
 import com.aiforum.acceptance.support.HttpClient
 import com.aiforum.acceptance.support.ScenarioWorld
@@ -9,11 +10,13 @@ import org.junit.jupiter.api.Assertions.assertEquals
 
 /**
  * Trigger modes (§4): sequential fan-out / roomful in M1, where one persona failing does NOT abort the
- * room (partial-roomful). The LLM behaviours are enqueued in persona order by preceding steps.
+ * room (partial-roomful). The LLM behaviours are enqueued in persona order by preceding steps; a single
+ * worker settles the personas in that order, preserving the deque-scripted mapping.
  */
 class TriggerModeSteps(
     private val world: ScenarioWorld,
     private val http: HttpClient,
+    private val settle: GenerationSettle,
 ) {
     @When("the owner fans out to {string}")
     fun fanOut(personasCsv: String) {
@@ -23,7 +26,10 @@ class TriggerModeSteps(
             mapOf("personaIds" to personaIds, "text" to "what do you think?", "triggerMode" to "FANOUT"),
         )
         world.lastStatus = resp.statusCode.value()
-        world.lastBody = resp.body
+        // Async: the POST returns N DRAFTING nodes; settle them all, then reassemble the room so the
+        // posted/failed counts below see every node.
+        val ids = Html.allReplyIds(resp.body ?: "")
+        world.lastBody = settle.awaitAllSettled(ids)
     }
 
     @Then("exactly {int} replies are posted")

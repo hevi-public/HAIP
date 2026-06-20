@@ -1,0 +1,35 @@
+package com.aiforum.acceptance.support
+
+import org.springframework.context.annotation.Profile
+import org.springframework.stereotype.Component
+
+/**
+ * Mirrors the browser's htmx poll for the async summon path (§4): after a generation starts (the POST
+ * returns a DRAFTING fragment), poll `GET /replies/{id}` until the node settles, so step assertions read
+ * the final state and the LlmClient spy has been populated. Bounded, so a genuinely stuck draft fails
+ * loudly with the last (still-drafting) body rather than hanging the suite.
+ */
+@Component
+@Profile("test")
+class GenerationSettle(private val http: HttpClient) {
+
+    /** Poll one node until it is no longer drafting; returns the settled single-node fragment. */
+    fun awaitSettled(id: String): String {
+        val deadline = System.currentTimeMillis() + TIMEOUT_MS
+        var body = ""
+        while (System.currentTimeMillis() < deadline) {
+            body = http.get("/replies/$id").body ?: ""
+            if (!Html.hasAttr(body, "data-state", "drafting")) return body
+            Thread.sleep(POLL_MS)
+        }
+        return body
+    }
+
+    /** Settle every node and concatenate the fragments, so count-based assertions see the whole room. */
+    fun awaitAllSettled(ids: List<String>): String = ids.joinToString("\n") { awaitSettled(it) }
+
+    private companion object {
+        const val TIMEOUT_MS = 5_000L
+        const val POLL_MS = 20L
+    }
+}

@@ -13,6 +13,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.concurrent.ConcurrentLinkedDeque
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * The scriptable Tier-1 IO double (see the cucumber-spring-bdd skill). Steps program it per scenario
@@ -35,8 +36,10 @@ class ScriptableLlmClient : LlmClient {
 
     private val script = ConcurrentLinkedDeque<Behavior>()
 
-    /** The spy: every request handed to the client, in order. */
-    val received = mutableListOf<LlmRequest>()
+    /** The spy: every request handed to the client, in order. CopyOnWriteArrayList because the async
+     *  summon path writes from a worker thread while steps read it from the test thread — COW gives
+     *  safe iteration and visibility without locking the readers. */
+    val received = CopyOnWriteArrayList<LlmRequest>()
 
     fun enqueue(behavior: Behavior) = script.addLast(behavior)
 
@@ -46,7 +49,7 @@ class ScriptableLlmClient : LlmClient {
     }
 
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
-        synchronized(received) { received += request }
+        received += request
         return when (val behavior = script.pollFirst() ?: Behavior.Respond("default reply")) {
             is Behavior.Respond -> LlmResponse(behavior.text)
             is Behavior.Fail -> throw behavior.ex()
