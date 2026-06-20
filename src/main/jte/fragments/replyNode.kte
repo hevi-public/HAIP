@@ -8,13 +8,20 @@
 
 <%-- Indentation comes from DOM nesting (children render inside this <article>); state styling is
      driven off data-state / data-failure-category in app.css. All data-* hooks stay on this one
-     opening tag — the acceptance probe reads them by regex (see Html.replyAttr). --%>
+     opening tag — the acceptance probe reads them by regex (see Html.replyAttr).
+     A DRAFTING node self-polls GET /replies/{id} every second and carries a Cancel control; the
+     hx-* polling attrs are injected (raw, trusted — only the reply id, a UUID) onto the SAME tag so
+     they sit beside the data-* hooks. Once the node settles, the re-rendered fragment omits the
+     trigger, so htmx tears the polling timer down (§4). --%>
 !{ val badge = when (reply.failureCategory) {
        FailureCategory.RATE_LIMITED -> "usage limit"
        FailureCategory.COULDNT_SAVE -> "unsaved"
        else -> reply.state.name.lowercase()
-   } }
-<article class="reply"
+   }
+   val pollAttrs = if (reply.state == GenerationState.DRAFTING)
+       "hx-get=\"/replies/${reply.id}\" hx-trigger=\"every 1s\" hx-target=\"this\" hx-swap=\"outerHTML\""
+   else "" }
+<article class="reply" $unsafe{pollAttrs}
          data-reply-id="${reply.id}"
          data-author="${reply.authorId}"
          data-state="${reply.state.name.lowercase()}"
@@ -34,12 +41,22 @@
         <div class="reason">${reply.reason}</div>
     @endif
     <div class="body">${reply.body}</div>
+    @if(reply.state == GenerationState.DRAFTING)
+        <%-- in-flight affordance: a neutral Cancel that trips the shared CancellationToken (§4); the
+             drafting indicator itself rides on the state badge above. --%>
+        <div class="reply__inflight">
+            <button class="btn btn--ghost reply__cancel" type="button"
+                    hx-post="/replies/${reply.id}/cancel"
+                    hx-target="closest article" hx-swap="outerHTML">Cancel</button>
+        </div>
+    @endif
     @if(reply.voteCount > 0)
         <span class="reply__vote">▲ ${reply.voteCount}</span>
     @endif
-    <%-- Retry is the dead-end escape for a FAILED/CANCELLED draft (reply.retryable, §4). The endpoint
-         re-renders this node alone via fragments/replyNode, so outerHTML swapping the closest <article>
-         replaces just this node in place. No data-* hooks here — they all stay on the opening tag. --%>
+    <%-- Retry is the dead-end escape for a FAILED/CANCELLED draft (reply.retryable, §4) — the settled
+         counterpart to the DRAFTING Cancel above. The endpoint re-renders this node alone via
+         fragments/replyNode, so outerHTML swapping the closest <article> replaces just this node in
+         place. No data-* hooks here — they all stay on the opening tag. --%>
     @if(reply.retryable)
         <div class="reply__actions">
             <button type="button" class="btn btn--ghost"
@@ -48,10 +65,10 @@
                     hx-swap="outerHTML">Retry</button>
         </div>
     @endif
-    <%-- Inline composer only when the thread context is known (full page / generate / auto-grow);
-         fragments rendered without it (e.g. retry) re-render the node without a composer. It is a
-         collapsed disclosure so only one reply box opens at a time (§4). --%>
-    @if(threadId != null)
+    <%-- Inline composer only on a POSTED node whose thread context is known (full page / generate /
+         auto-grow); fragments rendered without it (e.g. retry, drafting, failed) re-render without a
+         composer. It is a collapsed disclosure so only one reply box opens at a time (§4). --%>
+    @if(threadId != null && reply.state == GenerationState.POSTED)
         <details class="reply__compose">
             <summary>Reply</summary>
             @template.fragments.composer(placement = "inline", targetId = reply.id, parentId = reply.id, scope = "BRANCH_ONLY", threadId = threadId, personas = personas)

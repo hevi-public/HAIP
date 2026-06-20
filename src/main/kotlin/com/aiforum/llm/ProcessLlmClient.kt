@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
 @Profile("!test")
 open class ProcessLlmClient(
     @Value("\${aiforum.llm.command:claude}") private val command: String,
-    // `defaultModel` (not `model`) because the model will become persona-specific later — this is the
+    // `defaultModel` (not `model`) because the model is persona-specific (PersonaRef.model) — this is the
     // fallback used when the persona doesn't pin one. Blank => the CLI's own default model.
     @Value("\${aiforum.llm.default-model:}") private val defaultModel: String,
     @Value("\${aiforum.llm.working-dir:}") private val workingDir: String,
@@ -42,7 +42,7 @@ open class ProcessLlmClient(
     }
 
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
-        val process = spawn(buildArgs(request.context.personaSystemPrompt))
+        val process = spawn(buildArgs(request.context.personaSystemPrompt, request.persona.model))
 
         // Feed the prompt on stdin (the CLI reads it there in -p mode) then close. A broken pipe means
         // the process already died; the parser surfaces that from the exit code, so we don't fail here.
@@ -91,13 +91,16 @@ open class ProcessLlmClient(
         )
     }
 
-    private fun buildArgs(systemPrompt: String): List<String> = buildList {
+    private fun buildArgs(systemPrompt: String, personaModel: String): List<String> = buildList {
         add(command)
         add("-p")
         add("--output-format"); add("json")
         add("--system-prompt"); add(systemPrompt)
-        if (defaultModel.isNotBlank()) {
-            add("--model"); add(defaultModel)
+        // The persona's pinned model wins; a blank one falls back to the configured default; both blank
+        // => no --model flag, so the CLI picks its own default.
+        val model = personaModel.ifBlank { defaultModel }
+        if (model.isNotBlank()) {
+            add("--model"); add(model)
         }
     }
 
