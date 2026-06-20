@@ -1,4 +1,3 @@
-@wip
 Feature: New thread creation
   PENDING the implementing team. The owner starts a thread with a title, a question, and a roomful of
   personas; the fresh thread shows the "waiting on the room" empty state (§2). Drafted as the spec.
