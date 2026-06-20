@@ -1,5 +1,6 @@
 package com.aiforum.acceptance.steps
 
+import com.aiforum.acceptance.config.FailingRepositoryToggle
 import com.aiforum.acceptance.config.ScriptableLlmClient
 import com.aiforum.acceptance.config.ScriptableLlmClient.Behavior
 import com.aiforum.acceptance.support.Html
@@ -9,6 +10,7 @@ import com.aiforum.acceptance.support.TestData
 import io.cucumber.java.en.Given
 import io.cucumber.java.en.Then
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 
 /**
@@ -20,6 +22,7 @@ class CommonSteps(
     private val data: TestData,
     private val llm: ScriptableLlmClient,
     private val http: HttpClient,
+    private val failingRepo: FailingRepositoryToggle,
 ) {
     @Given("a thread {string} exists")
     fun threadExists(title: String) {
@@ -41,11 +44,24 @@ class CommonSteps(
     @Given("the LLM will respond with {string}")
     fun llmWillRespond(text: String) = llm.enqueue(Behavior.Respond(text))
 
+    @Given("the next save will fail")
+    fun nextSaveWillFail() {
+        failingRepo.failNextWrite = true
+    }
+
     @Then("the reply is {string}")
     fun replyIs(state: String) {
         assertTrue(
             Html.hasAttr(body(), "data-state", state.lowercase()),
             "expected a reply with data-state=\"$state\" in:\n${body()}",
+        )
+    }
+
+    @Then("the reply is not {string}")
+    fun replyIsNot(state: String) {
+        assertFalse(
+            Html.hasAttr(body(), "data-state", state.lowercase()),
+            "expected NO reply with data-state=\"$state\" in:\n${body()}",
         )
     }
 

@@ -24,3 +24,19 @@ Feature: Generation sad paths
       | empty output  | FAILED_RETRY | true      |
       | malformed     | FAILED_RETRY | true      |
       | rate-limit    | RATE_LIMITED | true      |
+
+  # UX state E (§4): the generation succeeds but the write fails. This is NOT an LlmException, so it
+  # lives outside the outline above — the fault is injected at the repository write seam, and the
+  # drafted text must survive so the owner can retry rather than lose their reply.
+  Scenario: A save failure keeps the drafted reply and offers a working retry
+    Given the LLM will respond with "Indexes help here"
+    And the next save will fail
+    When the owner summons "sol"
+    Then the reply is "failed"
+    And the reply failureCategory is "COULDNT_SAVE"
+    And the reply body contains "Indexes help here"
+    And the reply retryable is "true"
+    Given the LLM will respond with "Indexes help here"
+    When the owner retries the reply
+    Then the reply is "posted"
+    And the reply body contains "Indexes help here"

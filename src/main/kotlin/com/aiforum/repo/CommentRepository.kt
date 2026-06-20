@@ -56,6 +56,13 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
     fun threadComments(threadId: String): List<Comment> =
         jdbc.query("SELECT * FROM comment WHERE thread_id = ? ORDER BY depth, created_at", mapper, threadId)
 
+    /** Direct children of a node (its replies' siblings) — null parent = the thread's top-level nodes. */
+    fun childrenOf(parentId: String?): List<Comment> =
+        if (parentId == null)
+            jdbc.query("SELECT * FROM comment WHERE parent_id IS NULL ORDER BY depth, created_at", mapper)
+        else
+            jdbc.query("SELECT * FROM comment WHERE parent_id = ? ORDER BY depth, created_at", mapper, parentId)
+
     /** Root → node ancestor path (branch-only scope) via recursive CTE. */
     fun ancestorPath(nodeId: String): List<Comment> =
         jdbc.query(

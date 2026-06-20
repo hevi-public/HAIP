@@ -3,6 +3,7 @@ package com.aiforum.service
 import com.aiforum.domain.Comment
 import com.aiforum.domain.context.ContextAssembler
 import com.aiforum.domain.lifecycle.GenerationStateMachine
+import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ReplyView
 import com.aiforum.dto.ScopeMode
@@ -35,12 +36,20 @@ class GenerationService(
         personaIds: List<String>,
         @Suppress("UNUSED_PARAMETER") text: String,
         scope: ScopeMode = ScopeMode.WHOLE_THREAD,
+        includeSiblings: Boolean = false,
     ): List<ReplyView> {
         val baseDepth = parentId?.let { (comments.findById(it)?.depth ?: 0) + 1 } ?: 0
         // The context differentiator (§5): branch-only = root→parent ancestor path (recursive CTE);
-        // whole-thread = the full tree. Siblings are excluded under branch-only.
+        // whole-thread = the full tree. Branch-only excludes siblings unless the owner opts them in,
+        // in which case the reply target's siblings (the other children of its parent) are added.
         val contextComments = if (scope == ScopeMode.BRANCH_ONLY && parentId != null) {
-            comments.ancestorPath(parentId)
+            val path = comments.ancestorPath(parentId)
+            if (includeSiblings) {
+                val parentOfTarget = comments.findById(parentId)?.parentId
+                (path + comments.childrenOf(parentOfTarget)).distinctBy { it.id }
+            } else {
+                path
+            }
         } else {
             comments.threadComments(threadId)
         }
@@ -74,7 +83,25 @@ class GenerationService(
             val o = GenerationStateMachine.classify(e)
             Comment(id, threadId, parentId, personaId, "", o.state, o.failureCategory, depth, o.reason, o.retryAfterSeconds)
         }
+        return persist(comment)
+    }
+
+    /**
+     * Persist the node. If the write fails (UX state E, §4) the generation itself already succeeded, so
+     * the drafted body must NOT be lost: we keep it, surface COULDNT_SAVE, and persist a failure marker
+     * (the write fault is a one-shot transient blip) so the owner can retry from a real row.
+     */
+    private fun persist(comment: Comment): ReplyView = try {
         comments.insert(comment)
-        return comment.toReplyView()
+        comment.toReplyView()
+    } catch (e: Throwable) {
+        val marker = comment.copy(
+            state = GenerationState.FAILED,
+            failureCategory = FailureCategory.COULDNT_SAVE,
+            reason = "couldn't save — draft kept",
+            retryAfterSeconds = null,
+        )
+        comments.insert(marker)
+        marker.toReplyView()
     }
 }

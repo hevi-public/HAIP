@@ -26,3 +26,14 @@ Feature: Per-branch context scoping
     When the owner replies under "A1" with whole-thread scope
     Then the model context includes node "A1"
     And the model context includes node "B"
+
+  # §5: sibling-inclusion is a selectable toggle, orthogonal to branch-vs-thread. Replying under "A"
+  # with branch-only scope normally excludes its sibling "B"; opting siblings in adds "B" while still
+  # staying off the whole thread (the deeper node "A1" remains out of context).
+  Scenario: Branch scope can opt to include siblings
+    Given the LLM will respond with "scoped reply"
+    When the owner replies under "A" with branch-only scope including siblings
+    Then the model context includes node "A"
+    And the model context includes node "R"
+    And the model context includes node "B"
+    And the model context excludes node "A1"

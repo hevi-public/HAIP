@@ -33,13 +33,23 @@ class ContextScopingSteps(
 
     @When("the owner replies under {string} with {word} scope")
     fun replyWithScope(parentLabel: String, scope: String) {
+        postReply(parentLabel, scope.uppercase().replace('-', '_'), includeSiblings = false)
+    }
+
+    @When("the owner replies under {string} with branch-only scope including siblings")
+    fun replyBranchWithSiblings(parentLabel: String) {
+        postReply(parentLabel, "BRANCH_ONLY", includeSiblings = true)
+    }
+
+    private fun postReply(parentLabel: String, scope: String, includeSiblings: Boolean) {
         val parentId = world.replyIds[parentLabel] ?: error("no node $parentLabel")
         http.postJson(
             "/threads/${world.threadId}/generate",
             mapOf(
                 "personaIds" to listOf("sol"),
                 "text" to "what do you think?",
-                "scope" to scope.uppercase().replace('-', '_'),
+                "scope" to scope,
+                "includeSiblings" to includeSiblings,
                 "parentId" to parentId,
                 "triggerMode" to "SUMMON",
             ),
