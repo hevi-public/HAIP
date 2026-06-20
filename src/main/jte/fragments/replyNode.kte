@@ -53,6 +53,18 @@
     @if(reply.voteCount > 0)
         <span class="reply__vote">▲ ${reply.voteCount}</span>
     @endif
+    <%-- Retry is the dead-end escape for a FAILED/CANCELLED draft (reply.retryable, §4) — the settled
+         counterpart to the DRAFTING Cancel above. The endpoint re-renders this node alone via
+         fragments/replyNode, so outerHTML swapping the closest <article> replaces just this node in
+         place. No data-* hooks here — they all stay on the opening tag. --%>
+    @if(reply.retryable)
+        <div class="reply__actions">
+            <button type="button" class="btn btn--ghost"
+                    hx-post="/replies/${reply.id}/retry"
+                    hx-target="closest article"
+                    hx-swap="outerHTML">Retry</button>
+        </div>
+    @endif
     <%-- Inline composer only on a POSTED node whose thread context is known (full page / generate /
          auto-grow); fragments rendered without it (e.g. retry, drafting, failed) re-render without a
          composer. It is a collapsed disclosure so only one reply box opens at a time (§4). --%>
