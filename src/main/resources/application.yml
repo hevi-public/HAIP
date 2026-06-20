@@ -17,3 +17,11 @@ gg:
 aiforum:
   backups:
     enabled: true
+  # ProcessLlmClient (dev/prod only; the test profile swaps in a scriptable fake). Defaults shown.
+  llm:
+    command: claude            # the CLI binary on PATH
+    default-model: ""          # fallback model when a persona doesn't pin one (persona-specific models
+                               # are planned); blank => the CLI's default model. e.g. "opus" to pin one.
+    working-dir: ""            # blank => system temp, so the project CLAUDE.md doesn't leak into personas
+    rate-limit-retry-after-seconds: 300
+    poll-millis: 100           # how often the wait loop checks the deadline and cancellation token
