@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
 
-data class PersonaView(val id: String, val name: String, val descriptor: String, val slug: String)
+data class PersonaView(val id: String, val name: String, val descriptor: String, val slug: String, val model: String = "")
 
 @Controller
 class PersonaController(private val personas: PersonaRepository) {
@@ -17,7 +17,7 @@ class PersonaController(private val personas: PersonaRepository) {
     @GetMapping("/personas/{slug}")
     fun profile(@PathVariable slug: String, model: Model): String {
         val persona = personas.findBySlug(slug) ?: return "redirect:/personas"
-        model.addAttribute("persona", PersonaView(persona.id, persona.name, persona.descriptor, persona.slug))
+        model.addAttribute("persona", PersonaView(persona.id, persona.name, persona.descriptor, persona.slug, persona.model))
         return "persona"
     }
 
