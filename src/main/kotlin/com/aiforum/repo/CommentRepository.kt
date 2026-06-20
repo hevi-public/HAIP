@@ -29,16 +29,17 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
             reason = rs.getString("reason"),
             retryAfterSeconds = rs.getObject("retry_after_seconds") as? Long
                 ?: rs.getString("retry_after_seconds")?.toLongOrNull(),
+            depthBudget = rs.getInt("depth_budget"),
         )
     }
 
     fun insert(c: Comment) {
         jdbc.update(
             """INSERT INTO comment(id, thread_id, parent_id, author_id, body, state, failure_category,
-                                   reason, retry_after_seconds, depth, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                                   reason, retry_after_seconds, depth, depth_budget, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             c.id, c.threadId, c.parentId, c.authorId, c.body, c.state.name, c.failureCategory?.name,
-            c.reason, c.retryAfterSeconds, c.depth, clock.instant().toString(),
+            c.reason, c.retryAfterSeconds, c.depth, c.depthBudget, clock.instant().toString(),
         )
     }
 
@@ -74,4 +75,32 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
                SELECT cm.* FROM comment cm JOIN ancestors an ON cm.id = an.id ORDER BY cm.depth""",
             mapper, nodeId,
         )
+
+    /**
+     * The autonomous-growth frontier (§4): POSTED leaf nodes that still have depth budget. A node can
+     * sprout an auto-reply only if it has no children yet and budget > 0, so exhausted branches and
+     * non-leaf nodes are excluded. FAILED/DRAFTING nodes are never grown under.
+     */
+    fun growableLeaves(threadId: String): List<Comment> =
+        jdbc.query(
+            """SELECT * FROM comment c
+               WHERE c.thread_id = ?
+                 AND c.state = 'POSTED'
+                 AND c.depth_budget > 0
+                 AND NOT EXISTS (SELECT 1 FROM comment k WHERE k.parent_id = c.id)
+               ORDER BY c.depth, c.created_at""",
+            mapper, threadId,
+        )
+
+    /** Number of descendants under [nodeId] (excluding the node itself) via recursive CTE. */
+    fun descendantCount(nodeId: String): Int =
+        jdbc.queryForObject(
+            """WITH RECURSIVE sub(id) AS (
+                   SELECT id FROM comment WHERE id = ?
+                   UNION ALL
+                   SELECT c.id FROM comment c JOIN sub s ON c.parent_id = s.id
+               )
+               SELECT COUNT(*) - 1 FROM sub""",
+            Int::class.java, nodeId,
+        ) ?: 0
 }

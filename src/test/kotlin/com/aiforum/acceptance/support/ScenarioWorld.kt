@@ -19,6 +19,9 @@ class ScenarioWorld {
     val replyIds = mutableMapOf<String, String>()
     var lastReplyId: String? = null
 
+    /** alias -> integer snapshot (e.g. a branch's descendant count before autonomous growth). */
+    val counts = mutableMapOf<String, Int>()
+
     fun rememberReply(alias: String, id: String) {
         replyIds[alias] = id
         lastReplyId = id
