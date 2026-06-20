@@ -1,0 +1,7 @@
+@import com.aiforum.web.PersonaView
+@param persona: PersonaView
+
+<div data-persona-id="${persona.id}" data-persona-name="${persona.name}" data-persona-descriptor="${persona.descriptor}">
+    <h1>${persona.name}</h1>
+    <p>${persona.descriptor}</p>
+</div>
