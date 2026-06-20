@@ -8,21 +8,22 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
 
-data class PersonaView(val id: String, val name: String, val descriptor: String)
+data class PersonaView(val id: String, val name: String, val descriptor: String, val slug: String)
 
 @Controller
 class PersonaController(private val personas: PersonaRepository) {
 
-    @GetMapping("/personas/{id}")
-    fun profile(@PathVariable id: String, model: Model): String {
-        val persona = personas.find(id) ?: return "redirect:/personas"
-        model.addAttribute("persona", PersonaView(persona.id, persona.name, persona.descriptor))
+    // Profile URLs use the slug (V5) so multi-word names ("Ada Lovelace") work without %20 noise.
+    @GetMapping("/personas/{slug}")
+    fun profile(@PathVariable slug: String, model: Model): String {
+        val persona = personas.findBySlug(slug) ?: return "redirect:/personas"
+        model.addAttribute("persona", PersonaView(persona.id, persona.name, persona.descriptor, persona.slug))
         return "persona"
     }
 
     @GetMapping("/personas")
     fun list(model: Model): String {
-        model.addAttribute("personas", personas.findAll().map { PersonaView(it.id, it.name, it.descriptor) })
+        model.addAttribute("personas", personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug) })
         return "personas"
     }
 
@@ -30,11 +31,10 @@ class PersonaController(private val personas: PersonaRepository) {
     fun create(
         @RequestParam name: String,
         @RequestParam descriptor: String,
-        // Optional model pin; absent/blank => the aiforum.llm.default-model fallback. The admin form
-        // doesn't surface this field yet (deferred composer polish), so it defaults to blank.
         @RequestParam(defaultValue = "") model: String,
     ): String {
         personas.insert(name, name, descriptor, model)
-        return "redirect:/personas/$name"
+        val slug = PersonaRepository.slugFor(name)
+        return "redirect:/personas/$slug"
     }
 }

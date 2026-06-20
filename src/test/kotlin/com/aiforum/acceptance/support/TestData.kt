@@ -1,5 +1,6 @@
 package com.aiforum.acceptance.support
 
+import com.aiforum.repo.PersonaRepository
 import org.springframework.context.annotation.Profile
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
@@ -18,8 +19,8 @@ class TestData(private val jdbc: JdbcTemplate, private val clock: Clock) {
 
     fun insertPersona(id: String, name: String, systemPrompt: String = "You are $name.") {
         jdbc.update(
-            "INSERT INTO persona(id, name, handle, descriptor, system_prompt, signature) VALUES (?,?,?,?,?,?)",
-            id, name, name.lowercase(), "$name descriptor", systemPrompt, "— $name",
+            "INSERT INTO persona(id, name, handle, descriptor, system_prompt, signature, slug) VALUES (?,?,?,?,?,?,?)",
+            id, name, name.lowercase(), "$name descriptor", systemPrompt, "— $name", PersonaRepository.slugFor(name),
         )
     }
 

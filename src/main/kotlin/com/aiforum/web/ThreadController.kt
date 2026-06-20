@@ -74,7 +74,7 @@ class ThreadController(
         // (depth, created_at), so siblings stay chronological.
         model.addAttribute("replies", assembleTree(all))
         model.addAttribute("waitingOnRoom", all.none { it.state == GenerationState.POSTED })
-        model.addAttribute("personas", personas.findAll().map { PersonaView(it.id, it.name, it.descriptor) })
+        model.addAttribute("personas", personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug) })
         return "thread"
     }
 
