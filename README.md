@@ -76,24 +76,27 @@ backups — and those guardrails are themselves asserted by a rail scenario.
 
 ## Acceptance coverage
 
-**Green (executable now):**
+Every `.feature` scenario now passes under the suite's `not @wip` filter — the executable spec is
+fully green, with nothing left tagged `@wip`:
+
 - Generation lifecycle (summon → posted)
 - All sad paths + working retry — timeout, process error, empty, malformed, rate-limit
 - The `+1` firewall — owner votes are recorded and shown, never reach the model (spy-asserted)
 - Composer validation (rejected before any LLM call)
+- Composer reply targeting + htmx submit — inline composer targets the clicked node (defaults to branch scope), the bottom composer targets level 0, summon posts over htmx
 - Config guardrails (test → test DB, backups off)
 - Per-branch context scoping (branch-only vs whole-thread, via recursive CTE)
 - Sequential fan-out / partial-roomful (one persona fails, the room still posts)
-
-**`@wip` — written as the spec, pending implementation** (filtered out of the build; the team removes
-`@wip` and makes them pass behind the frozen contract): depth-budget autonomy, composer reply
-targeting, new-thread creation, personas/admin, empty-state & unread badges.
+- Depth-budget autonomy — `/more` grants depth budget, an owner reply re-grants it, autonomous growth stalls when the budget is exhausted
+- New-thread creation (owner starts a thread and asks the room)
+- Personas & admin (view a persona profile, admin adds a persona)
+- Empty-state & unread badges (fresh-forum empty state, thread unread count)
 
 ## Project layout
 
 ```
 src/main/kotlin/com/aiforum/
-  llm/        LlmClient seam (interface, ProcessLlmClient stub, PromptContext, exceptions)
+  llm/        LlmClient seam (interface, ProcessLlmClient wrapping real `claude -p`, PromptContext, exceptions)
   domain/     Comment, lifecycle/GenerationStateMachine, context/ContextAssembler (Tier 0)
   dto/        ReplyView + enums (the frozen view-contract)
   repo/       JdbcTemplate repositories (recursive CTEs)
