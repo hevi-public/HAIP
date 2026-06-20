@@ -150,7 +150,7 @@ class GenerationService(
         val persona = personas.find(existing.authorId) ?: error("unknown persona ${existing.authorId}")
         val ctx = ContextAssembler.assemble(persona.systemPrompt, comments.threadComments(existing.threadId))
         val updated = try {
-            val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name), timeout), CancellationToken())
+            val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name, persona.model), timeout), CancellationToken())
             existing.copy(body = resp.text, state = GenerationState.POSTED, failureCategory = null, reason = null, retryAfterSeconds = null)
         } catch (e: Throwable) {
             val o = GenerationStateMachine.classify(e)
@@ -207,7 +207,7 @@ class GenerationService(
     /** Run one persona's reply against the seam with [token], classify any failure, and persist it. */
     private fun settleOne(plan: GenPlan, token: CancellationToken): ReplyView {
         val comment = try {
-            val resp = llm.generate(LlmRequest(plan.context, PersonaRef(plan.persona.id, plan.persona.name), timeout), token)
+            val resp = llm.generate(LlmRequest(plan.context, PersonaRef(plan.persona.id, plan.persona.name, plan.persona.model), timeout), token)
             Comment(plan.id, plan.threadId, plan.parentId, plan.persona.id, resp.text, GenerationState.POSTED, null, plan.depth, depthBudget = plan.budget)
         } catch (e: Throwable) {
             val o = GenerationStateMachine.classify(e)

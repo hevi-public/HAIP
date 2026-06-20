@@ -21,7 +21,9 @@ data class LlmRequest(
 
 data class LlmResponse(val text: String)
 
-data class PersonaRef(val id: String, val name: String)
+// `model` pins the LLM this persona generates with; blank => the ProcessLlmClient's default-model
+// fallback. Default "" so test fixtures that don't care about model selection stay terse.
+data class PersonaRef(val id: String, val name: String, val model: String = "")
 
 /**
  * The sanitised context handed to the model. The owner's `+1` vote and the owner's human identity are

@@ -27,8 +27,14 @@ class PersonaController(private val personas: PersonaRepository) {
     }
 
     @PostMapping("/personas")
-    fun create(@RequestParam name: String, @RequestParam descriptor: String): String {
-        personas.insert(name, name, descriptor)
+    fun create(
+        @RequestParam name: String,
+        @RequestParam descriptor: String,
+        // Optional model pin; absent/blank => the aiforum.llm.default-model fallback. The admin form
+        // doesn't surface this field yet (deferred composer polish), so it defaults to blank.
+        @RequestParam(defaultValue = "") model: String,
+    ): String {
+        personas.insert(name, name, descriptor, model)
         return "redirect:/personas/$name"
     }
 }
