@@ -65,6 +65,35 @@ class GenerationService {
 If you see `Instant.now()`, `Math.random()`, `new`/direct construction of an IO type, or a static
 file/network read mid-stack, that's a yellow flag — route it through an injected dependency.
 
+## Testing the production adapter — the real code that IS the seam
+
+Everything above tests code *above* the seam against the fake. But the `@Profile("!test")` adapter
+(the real `LlmClient` — `ProcessLlmClient`; later the Docker-jail client) is real code too, and it
+must be tested *without* invoking the external dependency (no real `claude`, no network, no quota in
+CI). Split it in two so the un-fakeable part shrinks to almost nothing:
+
+1. **Pure result→domain classification → Tier 0.** All the "what does this output *mean*" logic moves
+   into a pure function fed a captured `(exitCode, stdout)` (or HTTP status/body) pair — no IO — so the
+   whole failure taxonomy is unit-tested against canned fixtures. `LlmResponseParser` is exactly this:
+   the real success envelope plus every error envelope, as strings.
+2. **The irreducible IO behind one overridable sub-seam → Tier 1.** What's left (spawn / exec / socket,
+   the timeout deadline, cancellation kill) hides behind a single `protected open` method a test
+   subclass replaces with a *controlled stand-in*. For a process adapter that stand-in is a `/bin/sh`
+   script, so timeout/cancel/exit-code/stdin are exercised deterministically against a real subprocess:
+
+```kotlin
+// production: open class + open spawn(); test subclass swaps in a scripted /bin/sh process
+private class ShellClient(script: String) : ProcessLlmClient(/* config */) {
+    override fun spawn(argv: List<String>) = ProcessBuilder("/bin/sh", "-c", script).start()
+}
+// "sleep 5" + a 150ms request timeout proves Timeout; "exit 7" proves ProcessError(7); a script that
+// echoes stdin proves the prompt was delivered — all without the real binary.
+```
+
+Keep the loop runaway-proof while you're here (it runs on a remote box with no manual kill): a
+monotonic deadline, a floored poll interval, force-kill + reap, bounded stream joins. See
+[[haip-stack-gotchas]] for the `claude -p` envelope shape these tests pin.
+
 ## Error scenarios are first-class
 
 Every failure mode in the generation lifecycle (§4) gets explicit coverage: timeout, process error,
