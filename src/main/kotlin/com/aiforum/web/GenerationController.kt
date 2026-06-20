@@ -97,11 +97,14 @@ class GenerationController(
 
     // Re-generate a FAILED/CANCELLED draft, then render the single node via the shared [renderNode]: the
     // browser Retry button outerHTML-swaps the closest <article>, which needs a lone <article> root —
-    // replyList would nest a stray <div class="reply-list"> inside the parent. threadId is left unset so
-    // the re-rendered node carries no composer (the original retry contract; a refresh restores it).
+    // replyList would nest a stray <div class="reply-list"> inside the parent. Pass the thread id (like
+    // poll/cancel) so a node that retries to POSTED re-renders WITH its inline composer; a re-failed node
+    // stays composer-less via the template's POSTED guard and just offers Retry again.
     @PostMapping("/replies/{id}/retry")
-    fun retry(@PathVariable id: String, model: Model): String =
-        renderNode(model, generation.retry(id), threadId = null)
+    fun retry(@PathVariable id: String, model: Model): String {
+        val reply = generation.retry(id)
+        return renderNode(model, reply, comments.findById(id)?.threadId)
+    }
 
     /**
      * Drive bounded autonomous growth (§4): the room auto-replies down each branch that still has depth
