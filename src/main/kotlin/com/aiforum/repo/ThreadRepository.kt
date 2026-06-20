@@ -22,4 +22,10 @@ class ThreadRepository(private val jdbc: JdbcTemplate, private val clock: Clock)
             { rs, _ -> Thread(rs.getString("id"), rs.getString("title")) },
             id,
         ).firstOrNull()
+
+    fun findAll(): List<Thread> =
+        jdbc.query(
+            "SELECT id, title FROM thread ORDER BY created_at DESC",
+            { rs, _ -> Thread(rs.getString("id"), rs.getString("title")) },
+        )
 }

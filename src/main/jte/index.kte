@@ -1,0 +1,17 @@
+@import com.aiforum.web.ThreadRow
+@param threads: List<ThreadRow>
+
+<div data-page="home">
+    @if(threads.isEmpty())
+        <div data-empty-state="no-threads">No threads yet — start one!</div>
+    @else
+        @for(thread in threads)
+            <div data-thread-id="${thread.id}" data-thread-title="${thread.title}" data-unread-count="${thread.unreadCount}">
+                ${thread.title}
+                @if(thread.unreadCount > 0)
+                    <span>${thread.unreadCount} new</span>
+                @endif
+            </div>
+        @endfor
+    @endif
+</div>
