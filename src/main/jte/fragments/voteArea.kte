@@ -1,0 +1,18 @@
+@import com.aiforum.dto.ReplyView
+@import com.aiforum.dto.GenerationState
+@param reply: ReplyView
+<%-- The owner's +1 control (§7): firewalled from the model, shown only to the owner. The outer div
+     is the htmx swap target when a +1 is cast — it replaces just this area, leaving children intact. --%>
+<div class="reply__vote-area"
+     data-reply-id="${reply.id}"
+     data-vote-count="${reply.voteCount}">
+    @if(reply.voteCount > 0)
+        <span class="reply__vote">▲ ${reply.voteCount}</span>
+    @endif
+    @if(reply.state == GenerationState.POSTED)
+        <button type="button" class="btn btn--ghost reply__vote-btn"
+                hx-post="/replies/${reply.id}/plus-one"
+                hx-target="closest .reply__vote-area"
+                hx-swap="outerHTML">+1</button>
+    @endif
+</div>

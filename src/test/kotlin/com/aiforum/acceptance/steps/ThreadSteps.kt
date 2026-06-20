@@ -52,6 +52,13 @@ class ThreadSteps(
         )
     }
 
+    @When("the owner views the thread page")
+    fun viewThreadPage() {
+        val resp = http.get("/threads/${world.threadId}")
+        world.lastStatus = resp.statusCode.value()
+        world.lastBody = resp.body
+    }
+
     @Then("the thread shows the waiting-on-the-room empty state")
     fun threadShowsWaitingState() {
         assertTrue(

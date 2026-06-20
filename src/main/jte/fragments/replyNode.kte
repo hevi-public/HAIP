@@ -50,9 +50,7 @@
                     hx-target="closest article" hx-swap="outerHTML">Cancel</button>
         </div>
     @endif
-    @if(reply.voteCount > 0)
-        <span class="reply__vote">▲ ${reply.voteCount}</span>
-    @endif
+    @template.fragments.voteArea(reply = reply)
     <%-- Retry is the dead-end escape for a FAILED/CANCELLED draft (reply.retryable, §4) — the settled
          counterpart to the DRAFTING Cancel above. The endpoint re-renders this node alone via
          fragments/replyNode, so outerHTML swapping the closest <article> replaces just this node in

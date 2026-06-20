@@ -6,6 +6,7 @@ import com.aiforum.dto.ReplyView
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.ThreadRepository
+import com.aiforum.repo.VoteRepository
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -31,6 +32,7 @@ class ThreadController(
     private val threads: ThreadRepository,
     private val comments: CommentRepository,
     private val personas: PersonaRepository,
+    private val votes: VoteRepository,
 ) {
 
     // Two bindings, one creation path: the browser's new-thread form posts form-urlencoded and wants a
@@ -78,9 +80,13 @@ class ThreadController(
 
     /** Build the top-level reply views with their descendants nested, from the flat thread list. */
     private fun assembleTree(all: List<Comment>): List<ReplyView> {
+        val voteCounts = votes.countAll()
         val childrenByParent = all.groupBy { it.parentId }
         fun build(comment: Comment): ReplyView =
-            comment.toReplyView(children = childrenByParent[comment.id].orEmpty().map(::build))
+            comment.toReplyView(
+                voteCount = voteCounts[comment.id] ?: 0,
+                children = childrenByParent[comment.id].orEmpty().map(::build),
+            )
         return childrenByParent[null].orEmpty().map(::build)
     }
 }

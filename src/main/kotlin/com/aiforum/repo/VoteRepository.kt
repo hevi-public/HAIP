@@ -16,4 +16,9 @@ class VoteRepository(private val jdbc: JdbcTemplate) {
 
     fun count(nodeId: String): Int =
         jdbc.queryForObject("SELECT COUNT(*) FROM vote WHERE node_id = ?", Int::class.java, nodeId) ?: 0
+
+    fun countAll(): Map<String, Int> =
+        jdbc.query("SELECT node_id, COUNT(*) AS cnt FROM vote GROUP BY node_id") { rs, _ ->
+            rs.getString("node_id") to rs.getInt("cnt")
+        }.toMap()
 }

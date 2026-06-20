@@ -7,6 +7,7 @@ import com.aiforum.acceptance.support.ScenarioWorld
 import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 
 /**
@@ -30,6 +31,19 @@ class OwnerControlSteps(
     fun seesVoteCount(count: Int, persona: String) {
         val id = world.replyIds["$persona's reply"]!!
         assertEquals(count.toString(), Html.replyAttr(world.lastBody ?: "", id, "data-vote-count"))
+    }
+
+    @Then("the +1 button is present on {string}'s reply")
+    fun plusOneButtonPresent(persona: String) {
+        val id = world.replyIds["$persona's reply"] ?: error("no remembered reply for $persona")
+        assertNotNull(
+            Html.replyAttr(world.lastBody ?: "", id, "data-reply-id"),
+            "expected reply node for $persona in page",
+        )
+        assertTrue(
+            (world.lastBody ?: "").contains("hx-post=\"/replies/$id/plus-one\""),
+            "expected +1 button (hx-post=/replies/$id/plus-one) in page:\n${world.lastBody}",
+        )
     }
 
     @Then("the model's context included {string}'s words {string}")
