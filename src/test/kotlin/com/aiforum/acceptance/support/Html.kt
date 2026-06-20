@@ -19,9 +19,9 @@ object Html {
     fun hasAttr(html: String, name: String, value: String): Boolean =
         Regex("$name=\"${Regex.escape(value)}\"").containsMatchIn(html)
 
-    /** Every data-reply-id in document order — one for a summon, several for a fan-out. */
+    /** Every distinct data-reply-id in document order — one for a summon, several for a fan-out. */
     fun allReplyIds(html: String): List<String> =
-        Regex("data-reply-id=\"([^\"]+)\"").findAll(html).map { it.groupValues[1] }.toList()
+        Regex("data-reply-id=\"([^\"]+)\"").findAll(html).map { it.groupValues[1] }.distinct().toList()
 
     fun contains(html: String, needle: String): Boolean = html.contains(needle, ignoreCase = true)
 

@@ -26,8 +26,8 @@ class OwnerControlsController(
     fun plusOne(@PathVariable id: String, model: Model): String {
         votes.add(id, voterId = "owner")
         val comment = comments.findById(id) ?: error("no reply $id")
-        model.addAttribute("replies", listOf(comment.toReplyView(voteCount = votes.count(id))))
-        return "fragments/replyList"
+        model.addAttribute("reply", comment.toReplyView(voteCount = votes.count(id)))
+        return "fragments/voteArea"
     }
 
     /**
