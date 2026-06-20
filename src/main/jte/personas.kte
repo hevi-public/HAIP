@@ -1,0 +1,10 @@
+@import com.aiforum.web.PersonaView
+@param personas: List<PersonaView>
+
+<div data-page="members">
+    @for(persona in personas)
+        <div data-persona-id="${persona.id}" data-persona-name="${persona.name}">
+            ${persona.name}
+        </div>
+    @endfor
+</div>

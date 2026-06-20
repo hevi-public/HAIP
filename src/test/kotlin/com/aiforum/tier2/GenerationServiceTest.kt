@@ -32,7 +32,7 @@ class GenerationServiceTest {
     }
 
     private val personas = object : PersonaRepository(JdbcTemplate()) {
-        override fun find(id: String) = Persona(id, id, "You are $id.")
+        override fun find(id: String) = Persona(id, id, "", "You are $id.")
     }
 
     /** A repository whose first write throws (a one-shot transient blip), the rest delegate to memory. */

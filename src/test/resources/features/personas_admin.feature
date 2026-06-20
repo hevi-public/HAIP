@@ -1,4 +1,3 @@
-@wip
 Feature: Personas & admin
   PENDING the implementing team. The owner can view a persona profile and add/edit personas via the
   admin form, which persists the persona card (§6). Drafted as the spec.
