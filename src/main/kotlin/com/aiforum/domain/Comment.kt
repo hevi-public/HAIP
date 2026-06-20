@@ -16,6 +16,9 @@ data class Comment(
     val depth: Int,
     val reason: String? = null,
     val retryAfterSeconds: Long? = null,
+    // Per-branch autonomous-growth fuel (§4). Last field with a default so the positional constructions
+    // in GenerationService keep compiling; budget-setting call sites pass it by name.
+    val depthBudget: Int = 0,
 ) {
     fun toReplyView(voteCount: Int = 0, children: List<ReplyView> = emptyList()) = ReplyView(
         id = id,

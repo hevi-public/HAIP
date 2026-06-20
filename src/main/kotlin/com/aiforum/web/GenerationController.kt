@@ -73,4 +73,14 @@ class GenerationController(private val generation: GenerationService) {
         model.addAttribute("replies", listOf(generation.retry(id)))
         return "fragments/replyList"
     }
+
+    /**
+     * Drive bounded autonomous growth (§4): the room auto-replies down each branch that still has depth
+     * budget, then stalls. Returns the freshly-grown nodes as the reply-list fragment.
+     */
+    @PostMapping("/threads/{threadId}/auto-grow")
+    fun autoGrow(@PathVariable threadId: String, model: Model): String {
+        model.addAttribute("replies", generation.autoGrow(threadId))
+        return "fragments/replyList"
+    }
 }

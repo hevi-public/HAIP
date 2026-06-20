@@ -1,8 +1,6 @@
-@wip
 Feature: Depth-budget autonomy
-  PENDING the implementing team (behind the frozen contract). A thread auto-grows ~3–4 reply levels
-  past the owner's last comment, then stalls; an owner comment or /more re-grants budget; the budget is
-  per-branch (§4/§7). Drafted as the executable spec — remove @wip as it's implemented.
+  A thread auto-grows ~3–4 reply levels past the owner's last comment, then stalls; an owner comment or
+  /more re-grants budget; the budget is per-branch (§4/§7).
 
   Background:
     Given a thread "Scaling SQLite" exists

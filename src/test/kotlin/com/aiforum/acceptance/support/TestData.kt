@@ -37,12 +37,13 @@ class TestData(private val jdbc: JdbcTemplate, private val clock: Clock) {
         parentId: String? = null,
         state: String = "POSTED",
         depth: Int = if (parentId == null) 0 else 1,
+        depthBudget: Int = 0,
     ): String {
         val id = newId()
         jdbc.update(
-            """INSERT INTO comment(id, thread_id, parent_id, author_id, body, state, depth, created_at)
-               VALUES (?,?,?,?,?,?,?,?)""",
-            id, threadId, parentId, authorId, body, state, depth, clock.instant().toString(),
+            """INSERT INTO comment(id, thread_id, parent_id, author_id, body, state, depth, depth_budget, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            id, threadId, parentId, authorId, body, state, depth, depthBudget, clock.instant().toString(),
         )
         return id
     }
