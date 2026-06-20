@@ -1,5 +1,6 @@
 package com.aiforum.acceptance.steps
 
+import com.aiforum.acceptance.support.GenerationSettle
 import com.aiforum.acceptance.support.Html
 import com.aiforum.acceptance.support.HttpClient
 import com.aiforum.acceptance.support.ScenarioWorld
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 class ComposerSteps(
     private val world: ScenarioWorld,
     private val http: HttpClient,
+    private val settle: GenerationSettle,
 ) {
     @When("the owner opens the inline composer on {string}'s reply")
     fun openInlineComposer(persona: String) {
@@ -99,7 +101,10 @@ class ComposerSteps(
             ),
         )
         world.lastStatus = resp.statusCode.value()
-        world.lastBody = resp.body
-        assertNotNull(world.lastBody, "expected a rendered fragment from the form submit")
+        assertNotNull(resp.body, "expected a rendered fragment from the form submit")
+        // Async: the form POST returns a DRAFTING node; settle it so the assertions see POSTED.
+        val id = Html.allReplyIds(resp.body ?: "").firstOrNull() ?: error("form submit returned no draft node")
+        world.lastReplyId = id
+        world.lastBody = settle.awaitSettled(id)
     }
 }

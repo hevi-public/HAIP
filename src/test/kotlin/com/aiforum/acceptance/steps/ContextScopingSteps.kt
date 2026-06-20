@@ -1,6 +1,8 @@
 package com.aiforum.acceptance.steps
 
 import com.aiforum.acceptance.config.ScriptableLlmClient
+import com.aiforum.acceptance.support.GenerationSettle
+import com.aiforum.acceptance.support.Html
 import com.aiforum.acceptance.support.HttpClient
 import com.aiforum.acceptance.support.ScenarioWorld
 import com.aiforum.acceptance.support.TestData
@@ -19,6 +21,7 @@ class ContextScopingSteps(
     private val data: TestData,
     private val llm: ScriptableLlmClient,
     private val http: HttpClient,
+    private val settle: GenerationSettle,
 ) {
     @Given("a root comment {string} by {string}")
     fun rootComment(label: String, author: String) {
@@ -43,7 +46,7 @@ class ContextScopingSteps(
 
     private fun postReply(parentLabel: String, scope: String, includeSiblings: Boolean) {
         val parentId = world.replyIds[parentLabel] ?: error("no node $parentLabel")
-        http.postJson(
+        val resp = http.postJson(
             "/threads/${world.threadId}/generate",
             mapOf(
                 "personaIds" to listOf("sol"),
@@ -54,6 +57,9 @@ class ContextScopingSteps(
                 "triggerMode" to "SUMMON",
             ),
         )
+        // Async: wait for the worker to call the seam (and settle) so the spy assertions below see the
+        // exact PromptContext it was handed.
+        Html.allReplyIds(resp.body ?: "").firstOrNull()?.let { settle.awaitSettled(it) }
     }
 
     @Then("the model context includes node {string}")

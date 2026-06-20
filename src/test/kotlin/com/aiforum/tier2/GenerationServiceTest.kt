@@ -6,12 +6,15 @@ import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ScopeMode
 import com.aiforum.llm.CancellationToken
 import com.aiforum.llm.LlmClient
+import com.aiforum.llm.LlmException
 import com.aiforum.llm.LlmRequest
 import com.aiforum.llm.LlmResponse
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
 import com.aiforum.service.GenerationService
+import com.aiforum.service.InFlightGenerations
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -62,5 +65,42 @@ class GenerationServiceTest {
         assertEquals("Indexes help here", view.body, "the drafted text must survive the save failure")
         assertTrue(view.retryable)
         assertEquals(1, comments.saved.size, "the failure marker is persisted so retry has a real row")
+    }
+
+    /** An LlmClient that blocks until its token is tripped, then reports cancellation (mirrors the
+     *  acceptance HangUntilCancelled behaviour) — lets us drive the real async cancel path. */
+    private val hangingLlm = object : LlmClient {
+        override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
+            while (!cancellation.isCancelled) Thread.sleep(5)
+            throw LlmException.Cancelled()
+        }
+    }
+
+    /** An in-memory repository that just records writes, so we can assert on what was persisted. */
+    private class RecordingComments : CommentRepository(JdbcTemplate(), Clock.systemUTC()) {
+        val saved = mutableListOf<Comment>()
+        override fun insert(c: Comment) { saved += c }
+        override fun findById(id: String): Comment? = saved.lastOrNull { it.id == id }
+        override fun threadComments(threadId: String): List<Comment> = emptyList()
+        override fun ancestorPath(nodeId: String): List<Comment> = emptyList()
+    }
+
+    @Test
+    fun `startGeneration drafts immediately and a cancel trips the in-flight token to CANCELLED`() {
+        val comments = RecordingComments()
+        val registry = InFlightGenerations()
+        val service = GenerationService(hangingLlm, comments, personas, registry)
+
+        val draft = service.startGeneration("t1", null, listOf("sol"), "q?", ScopeMode.WHOLE_THREAD).single()
+        assertEquals(GenerationState.DRAFTING, draft.state, "the summon returns a DRAFTING node at once")
+        assertEquals(0, comments.saved.size, "a draft is not persisted until it settles")
+
+        service.cancel(draft.id) // trips the shared token and waits for the worker to settle the node
+
+        val settled = comments.findById(draft.id)!!
+        assertEquals(GenerationState.CANCELLED, settled.state)
+        assertEquals(FailureCategory.CANCELLED, settled.failureCategory)
+        assertEquals(1, comments.saved.size, "the cancelled node is persisted exactly once")
+        assertNull(service.inFlightView(draft.id), "the in-flight entry is evicted once settled")
     }
 }
