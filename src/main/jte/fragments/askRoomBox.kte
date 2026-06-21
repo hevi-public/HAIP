@@ -1,0 +1,8 @@
+<%-- Ask the room: the right-rail call-to-action (design "Ask the room"). A static prompt + a button
+     that jumps to the new-thread form in the centre column (anchor #new-thread, no JS needed).
+     data-rail-box is the stable hook. --%>
+<section class="rail-box" data-rail-box="ask-room">
+    <h2 class="rail-box__title">Ask the room</h2>
+    <p class="ask-room__lead">Post a question; pick who answers.</p>
+    <a class="btn btn--block" href="#new-thread" data-ask-room-cta>+ New thread</a>
+</section>

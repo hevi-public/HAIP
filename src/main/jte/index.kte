@@ -32,7 +32,7 @@
              thread page, where the bottom composer asks the room. Split into title + body (the opening
              post's content, §2); the room is summoned from inside the thread. Body is optional. Sits
              below the list so the thread index is the first thing the page presents. --%>
-        <form class="new-thread" data-new-thread method="post" action="/threads">
+        <form class="new-thread" id="new-thread" data-new-thread method="post" action="/threads">
             <span class="new-thread__label">Start a new thread</span>
             <input class="new-thread__title" type="text" name="title" required
                    placeholder="Title — what's the thread about?">
@@ -47,6 +47,7 @@
            below the main column on narrow screens — see .home:has(.home__rail-right). --%>
       <aside class="home__rail-right" data-home-rail-right>
           @template.fragments.activeThreadsBox(threads = activeThreads)
+          @template.fragments.askRoomBox()
       </aside>
     </div>
 `)
