@@ -21,7 +21,12 @@
         <div class="thread__controls">
             <button type="button" class="btn btn--ghost"
                     hx-post="/threads/${threadId}/auto-grow"
+                    hx-disabled-elt="this"
+                    hx-indicator=".auto-grow-spinner"
                     hx-on::after-request="if(event.detail.successful){window.location.reload()}">Auto-grow</button>
+            <span class="htmx-indicator auto-grow-spinner" aria-live="polite">
+                <span class="spinner" aria-hidden="true"></span>Growing…
+            </span>
         </div>
         @template.fragments.composer(placement = "bottom", targetId = threadId, parentId = null, scope = "WHOLE_THREAD", threadId = threadId, personas = personas)
     </div>
