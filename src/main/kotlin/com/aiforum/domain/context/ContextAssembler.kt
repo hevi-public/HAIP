@@ -11,7 +11,7 @@ import com.aiforum.llm.PromptContext
  * to prove no vote signal leaks. Pure Tier-0.
  */
 object ContextAssembler {
-    fun assemble(personaSystemPrompt: String, comments: List<Comment>): PromptContext =
+    fun assemble(personaSystemPrompt: String, comments: List<Comment>, targetId: String? = null): PromptContext =
         PromptContext(
             personaSystemPrompt = personaSystemPrompt,
             comments = comments.map {
@@ -23,5 +23,6 @@ object ContextAssembler {
                     depth = it.depth,
                 )
             },
+            targetId = targetId,
         )
 }

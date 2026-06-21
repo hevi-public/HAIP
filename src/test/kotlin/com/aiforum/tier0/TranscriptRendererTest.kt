@@ -36,6 +36,39 @@ class TranscriptRendererTest {
     }
 
     @Test
+    fun `the reply target is marked so the model answers it instead of the last line`() {
+        // Whole-thread scope hands over the full tree; the node the owner is replying to ("b") is NOT the
+        // last line ("e" sorts after it). The "← reply to this" marker names it unambiguously.
+        val transcript = TranscriptRenderer.render(
+            listOf(
+                c("a", "alice", "ship friday?", parentId = null, depth = 0),
+                c("b", "owner", "what about CI?", parentId = "a", depth = 1),
+                c("e", "dave", "friday's fine", parentId = "a", depth = 1),
+            ),
+            targetId = "b",
+        )
+        assertEquals(
+            """
+            [#1] alice: ship friday?
+              [#2 ↳ replying to #1] owner: what about CI? ← reply to this
+              [#3 ↳ replying to #1] dave: friday's fine
+            """.trimIndent(),
+            transcript,
+        )
+    }
+
+    @Test
+    fun `refOf resolves the target's transcript ref and is null when the target is out of scope`() {
+        val comments = listOf(
+            c("a", "alice", "root", parentId = null, depth = 0),
+            c("b", "bob", "kid", parentId = "a", depth = 1),
+        )
+        assertEquals(2, TranscriptRenderer.refOf(comments, "b"))
+        assertEquals(null, TranscriptRenderer.refOf(comments, "missing"))
+        assertEquals(null, TranscriptRenderer.refOf(comments, null))
+    }
+
+    @Test
     fun `a branch-only ancestor path with absolute depth is normalised to start at column zero`() {
         // ancestorPath() returns nodes carrying their real tree depth (here 2 and 3); the shallowest in
         // scope must anchor the left margin so a deep branch doesn't render pre-indented off the page.
