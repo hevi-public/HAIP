@@ -184,7 +184,14 @@
   document.body.addEventListener("keydown", function (e) {
     if (!e.target.matches("[data-composer-text]")) return;
     var form = composerOf(e.target);
-    if (e.key === "Escape") { hidePalettes(form); return; }
+    if (e.key === "Escape") {
+      // Tiered Escape, reconciled with the thread-nav branch (HANDOVER.md): if a palette is open,
+      // dismiss it and STOP the event so nav.js doesn't also close the composer — 1st Esc dismisses the
+      // palette and keeps focus in the field. With no palette open we let Escape bubble to thread-nav, so
+      // a 2nd Esc exits the composer back to the reading cursor.
+      if (openPalette(form)) { hidePalettes(form); e.stopPropagation(); }
+      return;
+    }
     var menu = openPalette(form);
     if (!menu) return;
     if (e.key === "ArrowDown") { e.preventDefault(); highlight(menu, activeIndex(menu) + 1); }

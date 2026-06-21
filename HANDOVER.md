@@ -44,6 +44,28 @@ Key facts for reconciliation:
 - If their nav is **composer level**, merge into one keydown handler: palette-open → this branch's
   highlight/complete logic wins; palette-closed → their logic.
 
+### ✅ Reconciliation outcome (2026-06-21, agreed with `claude/dazzling-stonebraker-0a9f21`)
+
+Their nav lives in **new files** (`static/nav.js`, `static/nav-core.mjs`) and is **inert while focus is
+in an editable element**, so there is **no file conflict** in `app.js`/`composer.kte` and no key clash on
+arrows / Enter / `/` / `@` inside the composer. `app.css` is additive (their `.is-current`/`.nav-*`/
+`mark.nav-hit` vs our `.is-active`/`.is-selected`/`.chip`/`.palette`) — no class collisions.
+
+The one shared behaviour was **Escape**. Resolved via **option (a)**, now implemented here: our composer
+`keydown` calls `e.stopPropagation()` **only when it actually dismissed an open palette**. This yields the
+tiered, vim-idiomatic Escape both branches want, race-free:
+- **1st Esc** (a slash/@mention palette open) → our handler dismisses the palette, keeps focus in the
+  field, and stops the event so nav.js does **not** also close the composer.
+- **2nd Esc** (no palette open) → our handler no-ops and lets Escape bubble to nav.js, which blurs the
+  field, closes the `<details>`, and restores the thread cursor.
+
+Contract for nav.js: **"a palette is open"** = `[data-slash-menu]:not([hidden]), [data-mention-menu]:not([hidden])`
+within a `.composer` (stable hooks). **"composer editor has focus"** — their generic
+`TEXTAREA/INPUT/SELECT` guard is preferred over our `[data-composer-text]`: it also covers our chip
+checkboxes and the `routingScope` `<select>`, which `[data-composer-text]` (textarea-only) would miss.
+The container hook is `.composer` if they ever want to scope explicitly. Agreed they exclude clicks inside
+`.composer` from moving the thread cursor.
+
 ## What shipped on this branch (the composer affordances deliverable)
 
 Built to `HAIP_design/AI Forum - Composer States.dc.html`. M1 composer UI debt, now closed.
