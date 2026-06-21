@@ -18,3 +18,11 @@ Feature: New thread creation
     When the owner starts a thread titled "Scaling SQLite" from the browser
     Then the thread exists with title "Scaling SQLite"
     And the thread shows the waiting-on-the-room empty state
+
+  # The new-thread form splits title from body: the body is the actual content of the post, rendered in
+  # the thread's opening post (distinct from the room's replies in the comment tree).
+  Scenario: Owner starts a thread with a title and a body from the browser form
+    When the owner starts a thread titled "Indexing strategy" with body "B-trees vs LSM — which fits our write pattern?" from the browser
+    Then the thread exists with title "Indexing strategy"
+    And the thread page shows the post body "B-trees vs LSM — which fits our write pattern?"
+    And the thread shows the waiting-on-the-room empty state

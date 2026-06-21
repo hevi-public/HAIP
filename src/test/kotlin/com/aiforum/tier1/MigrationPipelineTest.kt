@@ -61,10 +61,10 @@ class MigrationPipelineTest {
                     assertEquals(1, rs.getInt("color_index"), "the second row gets the next colour slot")
                 }
 
-                // flyway_schema_history records the full V1..V6 chain as applied.
+                // flyway_schema_history records the full V1..V7 chain as applied.
                 st.executeQuery("SELECT MAX(CAST(version AS INTEGER)) AS v FROM flyway_schema_history").use { rs ->
                     rs.next()
-                    assertEquals(6, rs.getInt("v"), "all six migrations should be recorded as applied")
+                    assertEquals(7, rs.getInt("v"), "all seven migrations should be recorded as applied")
                 }
             }
         }
