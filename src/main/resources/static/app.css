@@ -241,6 +241,90 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 /* ---------------------------------------------------------------- home */
 .home__title { font-size: 22px; font-weight: 700; margin: 4px 0 14px; }
 
+/* Front-page layout: side rails flanking the main thread index (design 3-col frame). Below the
+   breakpoint everything stacks to a single column (left rail, list, right rail in DOM order). */
+.home { display: block; }
+.home__rail, .home__rail-right { display: flex; flex-direction: column; gap: 16px; }
+.home__rail { margin-bottom: 16px; }
+.home__rail-right { margin-top: 16px; }
+@media (min-width: 1024px) {
+  .home {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr) 248px;
+    grid-template-areas: "left main right";
+    gap: 22px; align-items: start;
+  }
+  .home__rail { grid-area: left; margin-bottom: 0; }
+  .home__main { grid-area: main; }
+  .home__rail-right { grid-area: right; margin-top: 0; }
+  .home__rail, .home__rail-right { position: sticky; top: 18px; }
+}
+
+/* Forum-nav box — the "~/forum" terminal listing in the left rail. Shares .rail-box card chrome. */
+/* Compound selector beats the base .rail-box__title (defined later in the file) at the same specificity. */
+.rail-box__title.rail-box__title--path { text-transform: none; letter-spacing: 0; }
+.forum-nav { list-style: none; margin: 0; padding: 0; }
+.forum-nav__row + .forum-nav__row { border-top: 1px dotted var(--line-dotted); }
+.forum-nav__link {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 5px 0;
+  font-family: var(--mono); font-size: 12.5px; color: var(--link);
+}
+.forum-nav__link:hover .forum-nav__path { text-decoration: underline; }
+.forum-nav__count { flex: none; font-size: 11px; font-weight: 700; color: var(--muted); }
+
+/* Members box — roster rows in the left rail. Shares .rail-box card chrome. */
+.members-box { list-style: none; margin: 0; padding: 0; }
+.members-box__row + .members-box__row { margin-top: 7px; }
+.members-box__link { display: flex; align-items: center; gap: 8px; }
+.members-box__name { color: var(--link); font-size: 12.5px; }
+.members-box__link:hover .members-box__name { text-decoration: underline; }
+.members-box__add {
+  display: inline-block; margin-top: 10px;
+  font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--sage-ink);
+}
+
+/* Active-threads box — recent-activity shortlist in the right rail. Shares .rail-box card chrome. */
+.active-threads { list-style: none; margin: 0; padding: 0; }
+.active-threads__row + .active-threads__row { border-top: 1px dotted var(--line-dotted); }
+.active-threads__link {
+  display: flex; align-items: baseline; gap: 8px; padding: 6px 0;
+  font-size: 12px; line-height: 1.4;
+}
+.active-threads__title { color: var(--link); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.active-threads__link:hover .active-threads__title { text-decoration: underline; }
+.active-threads__time { flex: none; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+/* Recent-comments box — right-rail feed of the newest posted replies. Shares .rail-box card chrome. */
+.recent-comments { list-style: none; margin: 0; padding: 0; }
+.recent-comments__row { padding: 7px 0; }
+.recent-comments__row + .recent-comments__row { border-top: 1px dotted var(--line-dotted); }
+.recent-comments__quote { display: block; color: var(--ink); font-size: 12px; line-height: 1.4; }
+.recent-comments__quote:hover { text-decoration: underline; }
+.recent-comments__meta { margin-top: 3px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+
+.btn--block { display: flex; justify-content: center; width: 100%; }
+
+/* Ask-the-room composer — a click-to-reveal new-thread form in the main column. The <summary> is the
+   card the user sees first (title + lead + button); opening the <details> discloses the form below.
+   Shares the new-thread card chrome; the nested form drops its own card chrome to avoid a double box. */
+.ask-card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r); box-shadow: var(--shadow);
+  padding: 15px 16px; margin-top: 18px;
+}
+.ask-card__summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 8px; }
+.ask-card__summary::-webkit-details-marker { display: none; }   /* hide the default disclosure triangle */
+.ask-card__title {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: #6b6e48;
+}
+.ask-card__lead { font-size: 12px; color: var(--muted); }
+/* Once open, the form below is the action — the CTA has done its job, so retire it. */
+.ask-card[open] .ask-card__cta { display: none; }
+.ask-card .new-thread {
+  margin-top: 12px; padding: 0; background: none; border: none; box-shadow: none;   /* no nested card */
+}
+
 /* New-thread composer — a card below the thread list. Stacked: a small label, the title line, then a
    roomier body box, with the Create button right-aligned below. Shares the card chrome of the thread
    index it sits under. */
@@ -350,6 +434,15 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 .branch-index__snippet::before { content: " — "; color: var(--faint-2); }
 .branch-index__link:hover .branch-index__author { text-decoration: underline; }
 .branch-index__row + .branch-index__row { border-top: 1px dotted var(--line-dotted); }
+
+/* context legend — static key for the tree's spine/dimming convention */
+.context-legend { list-style: none; margin: 0; padding: 0; }
+.context-legend__row { display: flex; align-items: center; gap: 7px; }
+.context-legend__row + .context-legend__row { margin-top: 5px; }
+.context-legend__swatch { flex: none; width: 14px; height: 10px; }
+.context-legend__swatch--in { border-left: 3px solid var(--spine-live); background: var(--wash); }
+.context-legend__swatch--out { background: var(--card); border: 1px solid var(--line); opacity: .4; }
+.context-legend__label { font-size: 11px; color: var(--muted); }
 
 .thread__op {
   background: var(--card);

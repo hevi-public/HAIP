@@ -11,6 +11,10 @@ class ThreadRepository(private val jdbc: JdbcTemplate, private val clock: Clock)
     // body is the opening post's content (§2, V7) — may be blank for title-only / legacy threads.
     data class Thread(val id: String, val title: String, val body: String)
 
+    // A thread ranked by recent activity for the front-page rail; lastActivity is the ISO instant of
+    // the newest POSTED comment, falling back to the thread's own creation when it has no replies yet.
+    data class ActiveThread(val id: String, val title: String, val lastActivity: String)
+
     fun insert(id: String, title: String, body: String) {
         jdbc.update(
             "INSERT INTO thread(id, title, body, created_at) VALUES (?,?,?,?)",
@@ -23,6 +27,24 @@ class ThreadRepository(private val jdbc: JdbcTemplate, private val clock: Clock)
 
     fun findAll(): List<Thread> =
         jdbc.query("SELECT id, title, body FROM thread ORDER BY created_at DESC", ::mapThread)
+
+    /**
+     * Threads most recently active first, capped at [limit]. Activity = newest POSTED comment, or the
+     * thread's own creation if it has none. created_at is stored as a UTC ISO instant ('…Z'), so
+     * MAX()/ORDER BY on the text column sorts chronologically.
+     */
+    fun findActive(limit: Int): List<ActiveThread> =
+        jdbc.query(
+            """SELECT t.id, t.title,
+                      COALESCE(MAX(CASE WHEN c.state = 'POSTED' THEN c.created_at END), t.created_at) AS last_activity
+                 FROM thread t
+                 LEFT JOIN comment c ON c.thread_id = t.id
+                GROUP BY t.id, t.title, t.created_at
+                ORDER BY last_activity DESC
+                LIMIT ?""",
+            { rs, _ -> ActiveThread(rs.getString("id"), rs.getString("title"), rs.getString("last_activity")) },
+            limit,
+        )
 
     private fun mapThread(rs: ResultSet, @Suppress("UNUSED_PARAMETER") rowNum: Int) =
         Thread(rs.getString("id"), rs.getString("title"), rs.getString("body"))

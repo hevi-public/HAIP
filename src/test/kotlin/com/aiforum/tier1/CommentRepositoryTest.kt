@@ -104,4 +104,37 @@ class CommentRepositoryTest {
         assertEquals(emptyList<String>(), comments.deleteSubtree("does-not-exist"))
         assertEquals(setOf("R"), comments.threadComments(thread).map { it.body }.toSet())
     }
+
+    @Test
+    fun `recentPosted returns the newest POSTED comments across threads, newest first, capped`() {
+        // Two threads; insert in a deliberately jumbled time order, then assert the query re-sorts.
+        val t1 = data.insertThread("io_uring vs epoll")
+        val t2 = data.insertThread("Rust in the kernel")
+        // created_at is controlled directly so ordering is deterministic (the test Clock is fixed).
+        fun post(thread: String, author: String, body: String, at: String) =
+            data.insertComment(thread, authorId = author, body = body).also { id ->
+                jdbc.update("UPDATE comment SET created_at = ? WHERE id = ?", at, id)
+            }
+
+        post(t1, "vex", "oldest", "2026-06-21T10:00:00Z")
+        post(t2, "pike", "middle", "2026-06-21T11:00:00Z")
+        val newest = post(t1, "sol", "newest", "2026-06-21T12:00:00Z")
+
+        val recent = comments.recentPosted(limit = 2)
+        assertEquals(listOf("newest", "middle"), recent.map { it.body })   // newest first, capped at 2
+        assertEquals(newest, recent.first().id)
+        assertEquals(t1, recent.first().threadId)
+        assertEquals("sol", recent.first().authorId)
+    }
+
+    @Test
+    fun `recentPosted excludes drafts, failures and cancelled nodes`() {
+        val thread = data.insertThread("Scaling SQLite")
+        data.insertComment(thread, authorId = "sol", body = "posted", state = "POSTED")
+        data.insertComment(thread, authorId = "sol", body = "drafting", state = "DRAFTING")
+        data.insertComment(thread, authorId = "sol", body = "failed", state = "FAILED")
+        data.insertComment(thread, authorId = "sol", body = "cancelled", state = "CANCELLED")
+
+        assertEquals(listOf("posted"), comments.recentPosted(limit = 10).map { it.body })
+    }
 }

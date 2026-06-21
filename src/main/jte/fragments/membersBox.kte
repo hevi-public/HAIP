@@ -1,0 +1,28 @@
+@import com.aiforum.web.PersonaView
+@import com.aiforum.dto.Avatar
+@param personas: List<PersonaView>
+
+<%-- Members: the front-page left-rail roster (design "Members"). Each row is the persona's monogram
+     (same hue the reply avatars use, via Avatar.hueForIndex on the stored colour slot) + a link to the
+     profile. data-rail-box / data-member-entry are the stable hooks; the entry hook carries the persona
+     id. Empty state keeps the rail from popping when the forum has no personas yet. --%>
+<section class="rail-box" data-rail-box="members">
+    <h2 class="rail-box__title">Members</h2>
+    @if(personas.isEmpty())
+        <p class="rail-box__empty" data-members-empty="true">No members yet.</p>
+    @else
+        <ul class="members-box">
+            @for(persona in personas)
+                <li class="members-box__row">
+                    <a class="members-box__link" href="/personas/${persona.slug}"
+                       data-member-entry="${persona.id}">
+                        <span class="monogram monogram--sm" aria-hidden="true"
+                              style="--mono-h: ${Avatar.hueForIndex(persona.colorIndex)}">${persona.name.take(2).uppercase()}</span>
+                        <span class="members-box__name">${persona.name}</span>
+                    </a>
+                </li>
+            @endfor
+        </ul>
+    @endif
+    <a class="members-box__add" href="/personas" data-members-add>+ add member</a>
+</section>
