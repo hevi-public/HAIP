@@ -241,13 +241,23 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 /* ---------------------------------------------------------------- home */
 .home__title { font-size: 22px; font-weight: 700; margin: 4px 0 14px; }
 
-/* Front-page layout: a left rail of side boxes beside the main thread index (design 3-col frame; the
-   right rail is a later slice). Single column below the breakpoint so the rail stacks above the list. */
+/* Front-page layout: side rails flanking the main thread index (design 3-col frame). Below the
+   breakpoint everything stacks to a single column (left rail, list, right rail in DOM order). */
 .home { display: block; }
-.home__rail { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
-@media (min-width: 860px) {
-  .home:has(.home__rail) { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; align-items: start; }
-  .home__rail { margin-bottom: 0; position: sticky; top: 18px; }
+.home__rail, .home__rail-right { display: flex; flex-direction: column; gap: 16px; }
+.home__rail { margin-bottom: 16px; }
+.home__rail-right { margin-top: 16px; }
+@media (min-width: 1024px) {
+  .home {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr) 248px;
+    grid-template-areas: "left main right";
+    gap: 22px; align-items: start;
+  }
+  .home__rail { grid-area: left; margin-bottom: 0; }
+  .home__main { grid-area: main; }
+  .home__rail-right { grid-area: right; margin-top: 0; }
+  .home__rail, .home__rail-right { position: sticky; top: 18px; }
 }
 
 /* Members box — roster rows in the left rail. Shares .rail-box card chrome. */
@@ -260,6 +270,17 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
   display: inline-block; margin-top: 10px;
   font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--sage-ink);
 }
+
+/* Active-threads box — recent-activity shortlist in the right rail. Shares .rail-box card chrome. */
+.active-threads { list-style: none; margin: 0; padding: 0; }
+.active-threads__row + .active-threads__row { border-top: 1px dotted var(--line-dotted); }
+.active-threads__link {
+  display: flex; align-items: baseline; gap: 8px; padding: 6px 0;
+  font-size: 12px; line-height: 1.4;
+}
+.active-threads__title { color: var(--link); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.active-threads__link:hover .active-threads__title { text-decoration: underline; }
+.active-threads__time { flex: none; font-family: var(--mono); font-size: 10px; color: var(--muted); }
 
 /* New-thread composer — a card below the thread list. Stacked: a small label, the title line, then a
    roomier body box, with the Create button right-aligned below. Shares the card chrome of the thread

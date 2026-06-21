@@ -1,0 +1,25 @@
+@import com.aiforum.web.ActiveThreadRow
+@param threads: List<ActiveThreadRow>
+
+<%-- Active threads: the front-page right-rail shortlist of most-recently-active threads (design
+     "Active threads"). Each row links to the thread + shows a compact "time ago" of its last activity.
+     data-rail-box / data-active-thread are the stable hooks; the entry hook carries the thread id.
+     Empty state keeps the rail from popping before any thread exists. --%>
+<section class="rail-box" data-rail-box="active-threads">
+    <h2 class="rail-box__title">Active threads</h2>
+    @if(threads.isEmpty())
+        <p class="rail-box__empty" data-active-threads-empty="true">No threads yet.</p>
+    @else
+        <ul class="active-threads">
+            @for(thread in threads)
+                <li class="active-threads__row">
+                    <a class="active-threads__link" href="/threads/${thread.id}"
+                       data-active-thread="${thread.id}">
+                        <span class="active-threads__title">${thread.title}</span>
+                        <span class="active-threads__time">${thread.ago}</span>
+                    </a>
+                </li>
+            @endfor
+        </ul>
+    @endif
+</section>

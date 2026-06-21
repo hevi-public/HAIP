@@ -1,7 +1,9 @@
 @import com.aiforum.web.ThreadRow
 @import com.aiforum.web.PersonaView
+@import com.aiforum.web.ActiveThreadRow
 @param threads: List<ThreadRow>
 @param personas: List<PersonaView>
+@param activeThreads: List<ActiveThreadRow>
 
 @template.layout(title = "AI Forum", activeNav = "threads", content = @`
     <div class="home" data-page="home">
@@ -41,5 +43,10 @@
             </div>
         </form>
       </div>
+      <%-- Right rail. The design's right-hand side boxes; Active threads is the first occupant. Drops
+           below the main column on narrow screens — see .home:has(.home__rail-right). --%>
+      <aside class="home__rail-right" data-home-rail-right>
+          @template.fragments.activeThreadsBox(threads = activeThreads)
+      </aside>
     </div>
 `)
