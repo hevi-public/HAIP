@@ -11,7 +11,9 @@
 @template.layout(title = title, activeNav = "threads", content = @`
     <div class="thread" data-thread-id="${threadId}" data-thread-title="${title}">
       <div class="thread__main">
-        <div class="thread__op">
+        <%-- The OP is a nav item: the root of the keyboard-nav tree (k/h/gg land here). data-nav-id +
+             id="reply-<threadId>" give it a permalink in the same #reply-<id> scheme replies use. --%>
+        <div class="thread__op" data-nav-item="post" data-nav-id="${threadId}" id="reply-${threadId}">
             <h1 class="thread__title">${title}</h1>
         </div>
         @if(waitingOnRoom)

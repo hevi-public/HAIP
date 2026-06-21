@@ -24,6 +24,7 @@
    else "" }
 <article class="reply" $unsafe{pollAttrs}
          id="reply-${reply.id}"
+         data-nav-item="reply"
          data-reply-id="${reply.id}"
          data-author="${reply.authorId}"
          data-state="${reply.state.name.lowercase()}"
