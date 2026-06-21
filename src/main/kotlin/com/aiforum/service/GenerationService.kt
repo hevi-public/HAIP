@@ -86,14 +86,13 @@ class GenerationService(
         includeSiblings: Boolean = false,
         postAsOwner: Boolean = false,
         routingScope: ScopeMode = ScopeMode.WHOLE_THREAD,
-        single: Boolean = false,
     ): List<ReplyView> {
         // The composer authors the owner's message: persist it as the owner's node first, then summon
         // BENEATH it, so the personas reply to it and it flows into their context (§4/§5).
         val owner = ownerComment(threadId, parentId, text, postAsOwner)
         val anchorId = owner?.id ?: parentId
         // Resolve AFTER persisting the owner's message so the dispatcher routes on the new topic too.
-        val resolvedIds = resolvePersonas(threadId, anchorId, routingScope, personaIds, text, single)
+        val resolvedIds = resolvePersonas(threadId, anchorId, routingScope, personaIds, text)
         val started = planGeneration(threadId, anchorId, resolvedIds, scope, includeSiblings).map { plan ->
             val draft = draftView(plan)
             val token = inFlight.register(plan.id, draft)
@@ -135,11 +134,10 @@ class GenerationService(
         includeSiblings: Boolean = false,
         postAsOwner: Boolean = false,
         routingScope: ScopeMode = ScopeMode.WHOLE_THREAD,
-        single: Boolean = false,
     ): List<ReplyView> {
         val owner = ownerComment(threadId, parentId, text, postAsOwner)
         val anchorId = owner?.id ?: parentId
-        val resolvedIds = resolvePersonas(threadId, anchorId, routingScope, personaIds, text, single)
+        val resolvedIds = resolvePersonas(threadId, anchorId, routingScope, personaIds, text)
         val replies = planGeneration(threadId, anchorId, resolvedIds, scope, includeSiblings)
             .map { settleOne(it, CancellationToken()) }
         return owner?.let { listOf(it.toReplyView(children = replies)) } ?: replies
@@ -236,9 +234,8 @@ class GenerationService(
      *
      * On the "Anyone" path the owner can still steer WHO replies without naming them in the dropdown by
      * @mentioning personas in [text] (the composer's "type @ to summon" affordance): an explicit mention
-     * is a deliberate summon, so it takes precedence over the dispatcher. [single] is the Single↔Roomful
-     * toggle — when set, the resolved set is capped to one voice (the dispatcher/mentions may surface
-     * several); roomful (the default for bare API summons) leaves the breadth as resolved.
+     * is a deliberate summon, so it takes precedence over the dispatcher. Breadth follows who's tagged:
+     * a named chip / @mention resolves to exactly that set; the "Anyone" dispatcher picks the room.
      */
     private fun resolvePersonas(
         threadId: String,
@@ -246,22 +243,20 @@ class GenerationService(
         routingScope: ScopeMode,
         requested: List<String>,
         text: String,
-        single: Boolean,
     ): List<String> {
-        fun List<String>.capped() = if (single) take(1) else this
         // An explicit dropdown/chip selection passes straight through (mentions don't override a named
         // pick — naming someone IS the summon); only the deliberate "Anyone" sentinel routes.
-        if (requested.none { it == AUTO_PERSONA }) return requested.capped()
+        if (requested.none { it == AUTO_PERSONA }) return requested
         val roster = personas.findAll()
         if (roster.isEmpty()) return emptyList()
         // @mentions summon deterministically — they pre-empt the dispatcher when present.
-        MentionParser.parse(text, roster).takeIf { it.isNotEmpty() }?.let { return it.capped() }
+        MentionParser.parse(text, roster).takeIf { it.isNotEmpty() }?.let { return it }
         val context = if (routingScope == ScopeMode.BRANCH_ONLY && anchorId != null) {
             comments.ancestorPath(anchorId)
         } else {
             comments.threadComments(threadId)
         }
-        return router.pick(roster, withOpeningPost(threadId, context)).map { it.id }.capped()
+        return router.pick(roster, withOpeningPost(threadId, context)).map { it.id }
     }
 
     /** Resolve personas and assemble the (shared) context once, minting a cancellable id per persona. */
