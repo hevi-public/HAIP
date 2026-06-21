@@ -1,8 +1,16 @@
 @import com.aiforum.web.ThreadRow
+@import com.aiforum.web.PersonaView
 @param threads: List<ThreadRow>
+@param personas: List<PersonaView>
 
 @template.layout(title = "AI Forum", activeNav = "threads", content = @`
-    <div data-page="home">
+    <div class="home" data-page="home">
+      <%-- Left rail. The front-page side boxes (design left rail); Members is the first occupant. The
+           grid collapses to a single column below the rail breakpoint — see .home:has(.home__rail). --%>
+      <aside class="home__rail" data-home-rail>
+          @template.fragments.membersBox(personas = personas)
+      </aside>
+      <div class="home__main">
         <h1 class="home__title">Threads</h1>
         @if(threads.isEmpty())
             <div data-empty-state="no-threads">No threads yet — start one!</div>
@@ -32,5 +40,6 @@
                 <button class="btn" type="submit">Create ▸</button>
             </div>
         </form>
+      </div>
     </div>
 `)

@@ -241,6 +241,26 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 /* ---------------------------------------------------------------- home */
 .home__title { font-size: 22px; font-weight: 700; margin: 4px 0 14px; }
 
+/* Front-page layout: a left rail of side boxes beside the main thread index (design 3-col frame; the
+   right rail is a later slice). Single column below the breakpoint so the rail stacks above the list. */
+.home { display: block; }
+.home__rail { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
+@media (min-width: 860px) {
+  .home:has(.home__rail) { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; align-items: start; }
+  .home__rail { margin-bottom: 0; position: sticky; top: 18px; }
+}
+
+/* Members box — roster rows in the left rail. Shares .rail-box card chrome. */
+.members-box { list-style: none; margin: 0; padding: 0; }
+.members-box__row + .members-box__row { margin-top: 7px; }
+.members-box__link { display: flex; align-items: center; gap: 8px; }
+.members-box__name { color: var(--link); font-size: 12.5px; }
+.members-box__link:hover .members-box__name { text-decoration: underline; }
+.members-box__add {
+  display: inline-block; margin-top: 10px;
+  font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--sage-ink);
+}
+
 /* New-thread composer — a card below the thread list. Stacked: a small label, the title line, then a
    roomier body box, with the Create button right-aligned below. Shares the card chrome of the thread
    index it sits under. */
