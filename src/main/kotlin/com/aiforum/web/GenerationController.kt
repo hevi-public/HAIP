@@ -29,10 +29,6 @@ data class GenerateRequest(
     // omitted fields (without that module this would 400 on "Cannot map null into type boolean").
     val includeSiblings: Boolean = false,
     val triggerMode: String? = null,
-    // The composer's Single↔Roomful toggle: "single" caps the reply to one voice (the dispatcher or an
-    // @mention may surface several); anything else (incl. unset, the API default) is roomful — the
-    // resolved breadth is left as-is. Only the rendered composer sends it, so JSON summons stay roomful.
-    val roomMode: String? = null,
     val parentId: String? = null,
     // True when this carries the owner's own message (the composer path): persist `text` as the owner's
     // node before fanning out, so it appears in the tree AND seeds every summoned persona's context. A
@@ -73,12 +69,11 @@ class GenerationController(
         }
         val scope = req.scope?.let { runCatching { ScopeMode.valueOf(it) }.getOrNull() } ?: ScopeMode.WHOLE_THREAD
         val routingScope = req.routingScope?.let { runCatching { ScopeMode.valueOf(it) }.getOrNull() } ?: ScopeMode.WHOLE_THREAD
-        val single = req.roomMode.equals("single", ignoreCase = true)
         // Async (§4): start drafting and return the DRAFTING node(s) at once. Each node self-polls
         // GET /replies/{id} and carries a Cancel control; it settles to POSTED|FAILED|CANCELLED later.
         model.addAttribute(
             "replies",
-            generation.startGeneration(threadId, req.parentId, req.personaIds, req.text, scope, req.includeSiblings, req.postAsOwner, routingScope, single),
+            generation.startGeneration(threadId, req.parentId, req.personaIds, req.text, scope, req.includeSiblings, req.postAsOwner, routingScope),
         )
         // Hand the fragment what its composers need so freshly-rendered nodes can be replied to.
         model.addAttribute("threadId", threadId)

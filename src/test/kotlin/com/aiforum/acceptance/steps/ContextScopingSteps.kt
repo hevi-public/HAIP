@@ -68,6 +68,14 @@ class ContextScopingSteps(
         assertTrue(req.context.comments.any { it.body == label }, "expected node \"$label\" in context")
     }
 
+    // Substring match, for the opening post: its context node carries title + body joined as one post, so
+    // an exact-body assertion doesn't fit. Used to prove BOTH the topic and its detail reach the room.
+    @Then("the model context mentions {string}")
+    fun contextMentions(text: String) {
+        val req = llm.received.lastOrNull() ?: error("the LLM was never called")
+        assertTrue(req.context.comments.any { it.body.contains(text) }, "expected context to mention \"$text\"")
+    }
+
     @Then("the model context excludes node {string}")
     fun contextExcludes(label: String) {
         val req = llm.received.lastOrNull() ?: error("the LLM was never called")

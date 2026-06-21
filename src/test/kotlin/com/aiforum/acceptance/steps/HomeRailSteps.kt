@@ -80,4 +80,20 @@ class HomeRailSteps(
         assertTrue(Html.contains(html, "data-ask-room"), "expected the ask-the-room composer (data-ask-room) in:\n$html")
         assertTrue(Html.contains(html, "data-new-thread"), "expected the new-thread form (data-new-thread) inside it in:\n$html")
     }
+
+    @Then("the ask-the-room composer is open")
+    fun askComposerIsOpen() {
+        assertTrue(composerIsOpen(), "expected the <details data-ask-room> to be open in:\n${body()}")
+    }
+
+    @Then("the ask-the-room composer is collapsed")
+    fun askComposerIsCollapsed() {
+        assertTrue(!composerIsOpen(), "expected the <details data-ask-room> to be collapsed (no open attr) in:\n${body()}")
+    }
+
+    /** True when the <details data-ask-room> opening tag carries the boolean `open` attribute. */
+    private fun composerIsOpen(): Boolean {
+        val tag = Regex("<details\\b[^>]*data-ask-room[^>]*>").find(body())?.value ?: return false
+        return Regex("\\bopen\\b").containsMatchIn(tag)
+    }
 }

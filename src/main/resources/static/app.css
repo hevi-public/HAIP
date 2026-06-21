@@ -601,17 +601,6 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 }
 .composer .btn { margin-left: 10px; }
 
-/* Single ↔ Roomful (and any) segmented toggle — JS flips .is-active + the hidden input it drives */
-.seg {
-  margin-left: auto; display: inline-flex;
-  border: 1px solid var(--sage-2); border-radius: var(--r); overflow: hidden;
-}
-.seg__opt {
-  font-family: var(--sans); font-size: 11.5px; line-height: 1;
-  padding: 4px 11px; border: none; background: var(--card); color: var(--muted); cursor: pointer;
-}
-.seg__opt.is-active { background: var(--sage); color: var(--sage-ink); font-weight: 700; }
-
 /* The editor anchors the absolutely-positioned slash / @mention popovers below the textarea */
 .composer__editor { position: relative; }
 

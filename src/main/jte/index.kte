@@ -37,8 +37,13 @@
              CTA). The <summary> is the design's "Ask the room" card; opening the disclosure reveals
              the full new-thread form below. Built on <details> so the form still posts with JS off —
              the form (form-urlencoded POST to /threads → PRG redirect onto the fresh thread, title +
-             optional body = the opening post, §2) is always in the DOM, just visually collapsed. --%>
-        <details class="ask-card" id="new-thread" data-ask-room>
+             optional body = the opening post, §2) is always in the DOM, just visually collapsed.
+             Creating the thread auto-summons the room (a "Whole Topic + Anyone" call, §2), so the fresh
+             thread page shows the room already drafting its replies. Enter submits the form (Shift+Enter
+             = newline; app.js, [data-new-thread]).
+             On an empty forum there's nothing to browse, so it starts open — the form is the one
+             thing a first-time visitor is here to do, no click required. --%>
+        <details class="ask-card" id="new-thread" data-ask-room open="${threads.isEmpty()}">
             <summary class="ask-card__summary">
                 <span class="ask-card__title">Ask the room</span>
                 <span class="ask-card__lead">Post a question; pick who answers.</span>
