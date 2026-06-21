@@ -96,8 +96,19 @@ class PersonaController(
     ): String {
         val existing = personas.findBySlug(slug) ?: return "redirect:/personas"
         val nextSpec = PersonaSpec(existing.name, descriptor, Abilities.parse(abilities), dialsFrom(allParams))
-        // Save-what-you-see: persist a previewed/edited prompt as-is; recompose only if none was supplied.
-        val prompt = systemPrompt.ifBlank { composer.compose(nextSpec, priorOf(existing)) }
+        // Save-what-you-see, with a resync backstop (see plan_docs/persona-prompt-edit-ux.md):
+        //  - blank prompt            → compose (the one-shot path)
+        //  - prompt == stored, but a composer input changed → STALE, recompose rather than persist
+        //    a prompt that no longer matches the dials (protects a JS-off / bypassed submit)
+        //  - otherwise (hand-edited / freshly regenerated) → persist verbatim, no LLM call
+        val inputsChanged = nextSpec.dials != existing.dials ||
+            nextSpec.abilities != existing.abilities ||
+            descriptor != existing.descriptor
+        val prompt = when {
+            systemPrompt.isBlank() -> composer.compose(nextSpec, priorOf(existing))
+            systemPrompt == existing.systemPrompt && inputsChanged -> composer.compose(nextSpec, priorOf(existing))
+            else -> systemPrompt
+        }
         personas.update(existing.id, existing.name, descriptor, model, prompt, nextSpec.abilities, nextSpec.dials)
         return "redirect:/personas/${existing.slug}"
     }

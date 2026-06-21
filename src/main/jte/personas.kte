@@ -12,7 +12,7 @@
              profile. The descriptor (free character notes), abilities (keyword tags) and dials (fixed
              0–10 personality axes) are the structured inputs; the LLM composes the system prompt from
              them on submit. --%>
-        <form class="new-persona" data-new-persona method="post" action="/personas">
+        <form class="new-persona" data-new-persona data-persona-form method="post" action="/personas">
             <input class="new-persona__name" type="text" name="name" required
                    placeholder="Name (e.g. Sol)">
             <textarea class="new-persona__descriptor" name="descriptor"
@@ -38,16 +38,20 @@
             <%-- Preview is a paid LLM call, so it's an explicit action: compose into the textarea (no
                  persist), let the owner tweak, then Save persists exactly what's shown. Leaving the
                  prompt blank on submit composes once on the server (the one-shot path). --%>
-            <div class="new-persona__prompt-row">
+            <textarea id="new-persona-prompt" class="new-persona__prompt" name="systemPrompt" data-prompt-field
+                      placeholder="Composed system prompt appears here — preview, tweak, then save"></textarea>
+            <%-- Regenerate sits right next to Save so the missing step is obvious (it gets flagged when
+                 an input changes); Cancel resets the half-authored form. --%>
+            <div class="form-actions">
+                <button type="reset" class="btn btn--ghost" data-cancel-create>Cancel</button>
+                <span class="form-actions__spacer"></span>
                 <button type="button" class="btn btn--ghost" data-preview-prompt
                         hx-post="/personas/compose" hx-include="closest form"
                         hx-target="#new-persona-prompt" hx-swap="innerHTML">
                     Preview / regenerate prompt
                 </button>
-                <textarea id="new-persona-prompt" class="new-persona__prompt" name="systemPrompt" data-prompt-field
-                          placeholder="Composed system prompt appears here — preview, tweak, then save"></textarea>
+                <button class="btn" type="submit">Add member ▸</button>
             </div>
-            <button class="btn" type="submit">Add member ▸</button>
         </form>
         <div class="thread-index">
             @for(persona in personas)

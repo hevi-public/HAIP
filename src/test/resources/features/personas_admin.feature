@@ -61,3 +61,24 @@ Feature: Personas & admin
   Scenario: The create form offers a preview control and an editable prompt
     When the owner opens the members list
     Then the members page offers a preview control and a prompt field
+
+  # Cancel is a plain navigation back to the profile — nothing is persisted until Save.
+  Scenario: The edit form offers a cancel link back to the profile
+    Given a persona "vex" exists with system prompt "OLD" and dials agreeableness 1, verbosity 2
+    When the owner opens the edit form for "vex"
+    Then the edit form offers a cancel link back to "vex"'s profile
+
+  # Server resync backstop (#2): the prompt is left untouched but the dials changed, so the stale prompt
+  # is re-composed rather than persisted out of sync (this is what protects a JS-off / bypassed submit).
+  Scenario: Saving changed dials without touching the prompt re-composes
+    Given a persona "vex" exists with system prompt "OLD: a blunt contrarian." and dials agreeableness 1, verbosity 2
+    And the LLM will respond with "RESYNCED: a warmer contrarian."
+    When the owner saves "vex" with the unchanged prompt "OLD: a blunt contrarian." and dials agreeableness 8, verbosity 9
+    Then the persona "vex" has system prompt "RESYNCED: a warmer contrarian."
+
+  # A deliberately hand-edited prompt is the owner's; persist it verbatim, no paid re-compose.
+  Scenario: Saving a hand-edited prompt persists it as-is
+    Given a persona "vex" exists with system prompt "OLD: a blunt contrarian." and dials agreeableness 1, verbosity 2
+    When the owner saves "vex" with the edited prompt "HAND-EDITED: bespoke voice." and dials agreeableness 8, verbosity 9
+    Then the persona "vex" has system prompt "HAND-EDITED: bespoke voice."
+    And no composition call was made

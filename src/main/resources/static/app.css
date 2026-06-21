@@ -226,6 +226,20 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 }
 .btn--ghost:hover { background: var(--grey-bg); color: var(--ink); filter: none; }
 
+/* Persona-form actions row: Cancel pushed left, Regenerate + Save grouped on the right so the missing
+   step (Regenerate) sits right next to Save (see plan_docs/persona-prompt-edit-ux.md). */
+.form-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.form-actions__spacer { flex: 1; }
+/* When the shown prompt is stale, the (ghost) Regenerate button is promoted to a warning so it reads as
+   "do this first"; app.js toggles .is-needed and disables Save alongside it. */
+.btn.is-needed {
+  background: var(--clay, #b5532e); color: #fff; border-color: transparent; font-weight: 700;
+  animation: nudge 1.2s ease-in-out infinite;
+}
+.btn.is-needed::before { content: "\26A0"; margin-right: 2px; }  /* ⚠ */
+@keyframes nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+@media (prefers-reduced-motion: reduce) { .btn.is-needed { animation: none; } }
+
 .monogram {
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;

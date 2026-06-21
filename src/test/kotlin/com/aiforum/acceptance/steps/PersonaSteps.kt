@@ -219,4 +219,37 @@ class PersonaSteps(
         assertTrue(Html.contains(body, "/personas/compose"), "expected a preview control posting to /personas/compose in:\n$body")
         assertTrue(Html.contains(body, "name=\"systemPrompt\""), "expected a name=\"systemPrompt\" field in:\n$body")
     }
+
+    @When("the owner opens the edit form for {string}")
+    fun openEditForm(name: String) {
+        val resp = http.get("/personas/$name/edit")
+        world.lastStatus = resp.statusCode.value()
+        world.lastBody = resp.body
+    }
+
+    @Then("the edit form offers a cancel link back to {string}'s profile")
+    fun editFormOffersCancel(name: String) {
+        val body = world.lastBody ?: ""
+        assertTrue(
+            Regex("""data-cancel-edit[^>]*href="/personas/$name"""").containsMatchIn(body),
+            "expected a cancel link (data-cancel-edit → /personas/$name) in:\n$body",
+        )
+    }
+
+    @When("the owner saves {string} with the unchanged prompt {string} and dials agreeableness {int}, verbosity {int}")
+    fun saveUnchangedPrompt(name: String, prompt: String, agreeableness: Int, verbosity: Int) =
+        saveEdit(name, prompt, agreeableness, verbosity)
+
+    @When("the owner saves {string} with the edited prompt {string} and dials agreeableness {int}, verbosity {int}")
+    fun saveEditedPrompt(name: String, prompt: String, agreeableness: Int, verbosity: Int) =
+        saveEdit(name, prompt, agreeableness, verbosity)
+
+    private fun saveEdit(name: String, prompt: String, agreeableness: Int, verbosity: Int) {
+        val resp = http.postForm(
+            "/personas/$name/edit",
+            mapOf("systemPrompt" to prompt, "dial_agreeableness" to agreeableness, "dial_verbosity" to verbosity),
+        )
+        world.lastStatus = resp.statusCode.value()
+        world.lastBody = resp.body
+    }
 }
