@@ -16,4 +16,7 @@ data class BranchIndexEntry(
     // Author's avatar hue (Avatar.hue) so the rail can show a matching colour dot — a mini-avatar that
     // ties each entry to its author at a glance.
     val hue: Int,
+    // Whether the owner has starred this comment. When true the rail swaps the colour dot for a star
+    // glyph (in the same hue), turning the index into a bookmark list for navigation.
+    val starred: Boolean = false,
 )

@@ -39,25 +39,41 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
             retryAfterSeconds = rs.getObject("retry_after_seconds") as? Long
                 ?: rs.getString("retry_after_seconds")?.toLongOrNull(),
             depthBudget = rs.getInt("depth_budget"),
+            starred = rs.getInt("starred") != 0,
         )
     }
 
     fun insert(c: Comment) {
         jdbc.update(
             """INSERT INTO comment(id, thread_id, parent_id, author_id, body, state, failure_category,
-                                   reason, retry_after_seconds, depth, depth_budget, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                   reason, retry_after_seconds, depth, depth_budget, starred, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             c.id, c.threadId, c.parentId, c.authorId, c.body, c.state.name, c.failureCategory?.name,
-            c.reason, c.retryAfterSeconds, c.depth, c.depthBudget, clock.instant().toString(),
+            c.reason, c.retryAfterSeconds, c.depth, c.depthBudget, if (c.starred) 1 else 0,
+            clock.instant().toString(),
         )
     }
 
+    // Note: update() deliberately leaves `starred` (and depth_budget) alone, so a generation settle
+    // (DRAFTING → POSTED) never clears a star the owner set. The star is toggled only via toggleStar.
     fun update(c: Comment) {
         jdbc.update(
             """UPDATE comment SET body=?, state=?, failure_category=?, reason=?, retry_after_seconds=?
                WHERE id=?""",
             c.body, c.state.name, c.failureCategory?.name, c.reason, c.retryAfterSeconds, c.id,
         )
+    }
+
+    /**
+     * Flip a comment's star and return the new state. Toggled atomically in SQL (CASE) so concurrent
+     * clicks can't read-modify-write a stale value. Returns false for an unknown id (nothing updated).
+     */
+    fun toggleStar(id: String): Boolean {
+        val changed = jdbc.update(
+            "UPDATE comment SET starred = CASE WHEN starred = 0 THEN 1 ELSE 0 END WHERE id = ?", id,
+        )
+        if (changed == 0) return false
+        return jdbc.queryForObject("SELECT starred FROM comment WHERE id = ?", Int::class.java, id) != 0
     }
 
     fun findById(id: String): Comment? =

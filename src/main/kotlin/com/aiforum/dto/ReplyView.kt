@@ -16,6 +16,8 @@ data class ReplyView(
     val voteCount: Int,
     val depth: Int,
     val depthBudget: Int = 0,
+    // Owner's star bookmark — drives the filled-star control on the node and the star marker in the rail.
+    val starred: Boolean = false,
     // The comment this reply answers, for the "in reply to" anchor. Null for top-level replies (they
     // answer the post, which has no comment node). Populated on the full thread-page render.
     val parent: ParentRef? = null,

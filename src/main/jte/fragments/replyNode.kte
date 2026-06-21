@@ -67,6 +67,9 @@
          left. The vote area stays its own htmx swap target, so a +1 swaps it in place untouched. --%>
     <div class="reply__actionbar">
         @template.fragments.voteArea(reply = reply)
+        <%-- Star — the owner's navigation bookmark (firewalled like +1). Its own swap target so a toggle
+             replaces just the control; the branch-index rail mirrors it client-side (nav.js). --%>
+        @template.fragments.starControl(reply = reply)
         <%-- /more — owner directive that re-grants depth budget (§7). Appears on POSTED nodes whose
              branch has stalled (depthBudget == 0). The response is a new system directive node appended
              inside this article; children stay in the DOM via beforeend. --%>
