@@ -33,8 +33,11 @@ import java.time.Duration
  * real and the fallback hides it (you can't tell a deliberate "everyone" from a parse miss).
  *
  * Ideas to harden this, cheapest first — none implemented yet, ordered by effort/robustness trade-off:
- *  1. **Make fallbacks observable.** Log/meter when a pick is empty vs. a generation failure, so the
- *     parse-miss RATE is measurable instead of invisible. Cheapest, and tells us whether 2–5 are worth it.
+ *  1. **Make fallbacks observable. (RECOMMENDED FIRST STEP.)** Meter each pick's outcome — clean match
+ *     vs. parse-miss-widened-to-all vs. generation failure — so the parse-miss RATE is measurable instead
+ *     of invisible. We don't yet know how often this bites; this tells us, and gives the data to judge
+ *     whether 2–5 are worth their cost. Surfaced on a new Admin → Statistics page (see
+ *     plan_docs/persona-routing-observability.md).
  *  2. **Numbered menu.** Present the roster as a numbered list and ask the model to reply with the
  *     number(s); digits are far less ambiguous than names and don't collide with ordinary prose.
  *  3. **Match descriptors too, not just names.** Fall back to keyword/semantic matching on each persona's
