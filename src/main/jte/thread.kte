@@ -8,6 +8,7 @@
 
 @template.layout(title = title, activeNav = "threads", content = @`
     <div class="thread" data-thread-id="${threadId}" data-thread-title="${title}">
+      <div class="thread__main">
         <div class="thread__op">
             <h1 class="thread__title">${title}</h1>
         </div>
@@ -29,5 +30,10 @@
             </span>
         </div>
         @template.fragments.composer(placement = "bottom", targetId = threadId, parentId = null, scope = "WHOLE_THREAD", threadId = threadId, personas = personas)
+      </div>
+      <%-- Reserved side rail. Empty + hidden for now, so the main column spans full width; the side
+           boxes (TOC, activity, persona presence…) land here later and the grid becomes two columns
+           automatically (see .thread:has(.thread__rail) in app.css). --%>
+      <aside class="thread__rail" data-thread-rail hidden></aside>
     </div>
 `)
