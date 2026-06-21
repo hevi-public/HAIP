@@ -148,17 +148,28 @@ open class ProcessLlmClient(
     }
 
     private fun renderPrompt(context: PromptContext, personaName: String): String {
-        val transcript = TranscriptRenderer.render(context.comments)
-        // Name the persona explicitly and point it at the most recent message: without this the model
-        // sees its own past lines labelled "$name:" amid the transcript and gets meta about who it is
-        // ("the framing got flipped"). The system prompt carries the character; this carries the task.
+        val transcript = TranscriptRenderer.render(context.comments, context.targetId)
+        // Name the persona explicitly and point it at the target message: without this the model sees its
+        // own past lines labelled "$name:" amid the transcript and gets meta about who it is ("the framing
+        // got flipped"). The system prompt carries the character; this carries the task.
         return if (transcript.isBlank()) {
             "You are opening a new thread in the forum. Post the first message as $personaName, in " +
                 "character. $BREVITY"
         } else {
+            // Point the persona at the EXACT node it was summoned for (marked "← reply to this"), naming its
+            // ref. In whole-thread scope the target is rarely the last transcript line, so "the most recent
+            // message" would aim the reply at an unrelated branch — only fall back to that when no target is
+            // in scope (e.g. context built without one).
+            val targetRef = TranscriptRenderer.refOf(context.comments, context.targetId)
+            val task = if (targetRef != null) {
+                "Write ${personaName}'s next reply, responding to message [#$targetRef] (marked " +
+                    "\"${TranscriptRenderer.TARGET_MARKER.trim()}\" above). "
+            } else {
+                "Write ${personaName}'s next reply, responding to the most recent message above. "
+            }
             "The forum discussion so far. Each line is \"[#ref] author: message\"; indentation shows " +
                 "reply depth and \"↳ replying to #n\" marks which message it answers:\n\n$transcript\n\n---\n" +
-                "Write ${personaName}'s next reply, responding to the most recent message above. " +
+                task +
                 "Reply with the message text only, in character as $personaName. $BREVITY"
         }
     }
