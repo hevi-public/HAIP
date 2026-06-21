@@ -46,6 +46,27 @@ class BranchIndexSteps(
         assertTrue(orphans.isEmpty(), "branch index entries with no anchor on the page: $orphans")
     }
 
+    @Then("the branch index entry for {string}'s reply shows {string}")
+    fun branchEntryShows(persona: String, text: String) {
+        val id = world.replyIds["$persona's reply"] ?: error("no remembered reply for \"$persona's reply\"")
+        val entry = Html.branchEntryText(body(), id)
+        assertTrue(entry != null && entry.contains(text), "expected entry for $persona to show \"$text\", was:\n$entry")
+    }
+
+    @Then("the branch index entry for {string}'s reply is truncated with an ellipsis")
+    fun branchEntryTruncated(persona: String) {
+        val id = world.replyIds["$persona's reply"] ?: error("no remembered reply for \"$persona's reply\"")
+        val entry = Html.branchEntryText(body(), id)
+        assertTrue(entry != null && entry.contains("…"), "expected entry for $persona to end with an ellipsis, was:\n$entry")
+    }
+
+    @Then("the branch index entry for {string}'s reply does not contain {string}")
+    fun branchEntryDoesNotContain(persona: String, needle: String) {
+        val id = world.replyIds["$persona's reply"] ?: error("no remembered reply for \"$persona's reply\"")
+        val entry = Html.branchEntryText(body(), id) ?: ""
+        assertTrue(!entry.contains(needle), "expected entry for $persona NOT to contain \"$needle\", was:\n$entry")
+    }
+
     @Then("the branch index shows an empty state")
     fun branchIndexShowsEmptyState() {
         assertTrue(

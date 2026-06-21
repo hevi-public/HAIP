@@ -16,9 +16,6 @@ data class ParentRef(
         const val MAX_QUOTE = 100
 
         /** Collapse whitespace to one line and truncate to [MAX_QUOTE] chars, appending "…" if cut. */
-        fun previewOf(body: String): String {
-            val oneLine = body.replace(Regex("\\s+"), " ").trim()
-            return if (oneLine.length <= MAX_QUOTE) oneLine else oneLine.take(MAX_QUOTE).trimEnd() + "…"
-        }
+        fun previewOf(body: String): String = Snippet.oneLine(body, MAX_QUOTE)
     }
 }

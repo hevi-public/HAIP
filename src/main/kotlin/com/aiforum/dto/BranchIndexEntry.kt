@@ -9,4 +9,8 @@ data class BranchIndexEntry(
     val id: String,
     val author: String,
     val depth: Int,
+    // A short one-line preview of the comment body, so an entry reads "Dana — I love the id…" and
+    // gives enough context to gauge the branch without overflowing the narrow rail (CSS ellipsis is
+    // the second line of defence).
+    val snippet: String,
 )

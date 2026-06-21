@@ -229,9 +229,13 @@ a:hover { text-decoration: underline; }
 .branch-index__row { padding-left: calc(var(--bi-depth, 0) * 12px); }   /* light indent mirrors tree depth */
 .branch-index__link {
   display: block; padding: 3px 0;
-  font-size: 12.5px; color: var(--link);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 12.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;   /* clip preview, never wrap */
 }
+.branch-index__author { color: var(--link); font-weight: 700; }
+.branch-index__snippet { color: var(--muted); }
+.branch-index__snippet::before { content: " — "; color: var(--faint-2); }
+.branch-index__link:hover .branch-index__author { text-decoration: underline; }
 .branch-index__row + .branch-index__row { border-top: 1px dotted var(--line-dotted); }
 
 .thread__op {

@@ -14,7 +14,10 @@
             @for(entry in entries)
                 <li class="branch-index__row" style="--bi-depth: ${entry.depth};">
                     <a class="branch-index__link" href="#reply-${entry.id}"
-                       data-branch-index-entry="${entry.id}">${entry.author}</a>
+                       data-branch-index-entry="${entry.id}">
+                        <span class="branch-index__author">${entry.author}</span>
+                        <span class="branch-index__snippet">${entry.snippet}</span>
+                    </a>
                 </li>
             @endfor
         </ol>

@@ -7,7 +7,7 @@ Feature: The thread rail shows a branch index
   Background:
     Given a thread "Scaling SQLite" exists
 
-  Scenario: The rail lists every posted comment as a jump link
+  Scenario: The rail lists every posted comment as a jump link, with a preview
     Given a posted reply from "owner" saying "How do we scale?"
     And a posted reply from "sol" saying "Indexes help here"
     And a posted reply from "mira" saying "WAL mode too"
@@ -15,7 +15,15 @@ Feature: The thread rail shows a branch index
     Then the thread rail shows a branch index
     And the branch index lists 3 entries
     And the branch index has an entry for "sol"'s reply
+    And the branch index entry for "sol"'s reply shows "sol"
+    And the branch index entry for "sol"'s reply shows "Indexes help here"
     And every branch index entry links to a comment anchored on the page
+
+  Scenario: A long comment is previewed truncated in the branch index, so it can't overflow
+    Given a posted reply from "owner" saying "Indexes are the obvious lever but the recursive CTE is where the cost hides BRANCHTAIL"
+    When the owner views the thread page
+    Then the branch index entry for "owner"'s reply is truncated with an ellipsis
+    And the branch index entry for "owner"'s reply does not contain "BRANCHTAIL"
 
   Scenario: A thread with no posted comments still shows the branch index, empty
     When the owner views the thread page

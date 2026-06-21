@@ -5,6 +5,7 @@ import com.aiforum.dto.BranchIndexEntry
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReplyView
+import com.aiforum.dto.Snippet
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.ThreadReadRepository
@@ -18,6 +19,9 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import java.util.UUID
+
+/** How many characters of a comment to preview in a branch-index entry (CSS ellipsis caps the rest). */
+private const val BRANCH_SNIPPET_LEN = 48
 
 /** Request body for POST /threads. */
 data class CreateThreadRequest(
@@ -92,7 +96,9 @@ class ThreadController(
     private fun branchIndex(tree: List<ReplyView>): List<BranchIndexEntry> {
         val out = mutableListOf<BranchIndexEntry>()
         fun walk(node: ReplyView) {
-            if (node.state == GenerationState.POSTED) out += BranchIndexEntry(node.id, node.authorId, node.depth)
+            if (node.state == GenerationState.POSTED) {
+                out += BranchIndexEntry(node.id, node.authorId, node.depth, Snippet.oneLine(node.body, BRANCH_SNIPPET_LEN))
+            }
             node.children.forEach(::walk)
         }
         tree.forEach(::walk)

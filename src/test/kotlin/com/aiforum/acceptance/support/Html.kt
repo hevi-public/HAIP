@@ -39,6 +39,13 @@ object Html {
      * (before its body and before any nested children), so the first match after the child's opening
      * tag is the child's own anchor.
      */
+    /** The visible text of the branch-index entry (data-branch-index-entry="[replyId]"), or null. */
+    fun branchEntryText(html: String, replyId: String): String? {
+        val a = Regex("<a\\b[^>]*data-branch-index-entry=\"${Regex.escape(replyId)}\"[^>]*>(.*?)</a>", RegexOption.DOT_MATCHES_ALL)
+            .find(html) ?: return null
+        return a.groupValues[1].replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim()
+    }
+
     fun inReplyToText(html: String, childId: String): String? {
         val open = Regex("<article\\b[^>]*data-reply-id=\"${Regex.escape(childId)}\"[^>]*>").find(html) ?: return null
         val anchor = Regex("<a\\b[^>]*data-in-reply-to=\"[^\"]*\"[^>]*>(.*?)</a>", RegexOption.DOT_MATCHES_ALL)
