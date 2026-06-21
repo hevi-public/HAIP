@@ -3,6 +3,7 @@ package com.aiforum.web
 import com.aiforum.domain.Comment
 import com.aiforum.dto.BranchIndexEntry
 import com.aiforum.dto.GenerationState
+import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReplyView
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
@@ -102,10 +103,16 @@ class ThreadController(
     private fun assembleTree(all: List<Comment>): List<ReplyView> {
         val voteCounts = votes.countAll()
         val childrenByParent = all.groupBy { it.parentId }
+        val byId = all.associateBy { it.id }
         fun build(comment: Comment): ReplyView =
             comment.toReplyView(
                 voteCount = voteCounts[comment.id] ?: 0,
                 children = childrenByParent[comment.id].orEmpty().map(::build),
+                // "In reply to" anchor: a literal truncated quote of the parent comment. Null for
+                // top-level nodes (parentId null) — they answer the post, which has no comment node.
+                parent = comment.parentId?.let { byId[it] }?.let {
+                    ParentRef(it.id, it.authorId, ParentRef.previewOf(it.body))
+                },
             )
         return childrenByParent[null].orEmpty().map(::build)
     }

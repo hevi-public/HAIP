@@ -33,6 +33,19 @@ object Html {
     fun attrValues(html: String, name: String): List<String> =
         Regex("${Regex.escape(name)}=\"([^\"]*)\"").findAll(html).map { it.groupValues[1] }.toList()
 
+    /**
+     * The text of the in-reply-to anchor belonging to the reply with data-reply-id=[childId], or null.
+     * The anchor (data-in-reply-to="<parent id>") is the first one rendered inside the child's article
+     * (before its body and before any nested children), so the first match after the child's opening
+     * tag is the child's own anchor.
+     */
+    fun inReplyToText(html: String, childId: String): String? {
+        val open = Regex("<article\\b[^>]*data-reply-id=\"${Regex.escape(childId)}\"[^>]*>").find(html) ?: return null
+        val anchor = Regex("<a\\b[^>]*data-in-reply-to=\"[^\"]*\"[^>]*>(.*?)</a>", RegexOption.DOT_MATCHES_ALL)
+            .find(html, open.range.last + 1) ?: return null
+        return anchor.groupValues[1].replace(Regex("<[^>]*>"), "").trim()
+    }
+
     /** The data-reply-id of the first <article> whose data-author == [author], or null. */
     fun replyIdWithAuthor(html: String, author: String): String? {
         val tag = Regex("<article\\b[^>]*data-author=\"${Regex.escape(author)}\"[^>]*>").find(html)?.value ?: return null

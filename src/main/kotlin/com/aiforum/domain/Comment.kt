@@ -2,6 +2,7 @@ package com.aiforum.domain
 
 import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
+import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReplyView
 
 /** Persisted comment-tree node. */
@@ -20,7 +21,11 @@ data class Comment(
     // in GenerationService keep compiling; budget-setting call sites pass it by name.
     val depthBudget: Int = 0,
 ) {
-    fun toReplyView(voteCount: Int = 0, children: List<ReplyView> = emptyList()) = ReplyView(
+    fun toReplyView(
+        voteCount: Int = 0,
+        children: List<ReplyView> = emptyList(),
+        parent: ParentRef? = null,
+    ) = ReplyView(
         id = id,
         authorId = authorId,
         body = body,
@@ -32,6 +37,7 @@ data class Comment(
         voteCount = voteCount,
         depth = depth,
         depthBudget = depthBudget,
+        parent = parent,
         children = children,
     )
 }

@@ -38,6 +38,15 @@
             <span class="reply__badge reply__badge--${reply.state.name.lowercase()}">${badge}</span>
         @endif
     </header>
+    @if(reply.parent != null)
+        <%-- "In reply to" anchor: a literal truncated quote of the parent (ParentRef.previewOf), linking
+             up to that comment's node (#reply-<id>). data-in-reply-to carries the parent id — the
+             acceptance probe reads the anchor by it. --%>
+        <a class="reply__inreplyto" href="#reply-${reply.parent.id}" data-in-reply-to="${reply.parent.id}">
+            <span class="reply__inreplyto-label">in reply to ${reply.parent.author}:</span>
+            <span class="reply__inreplyto-quote">${reply.parent.quote}</span>
+        </a>
+    @endif
     @if(reply.reason != null)
         <div class="reason">${reply.reason}</div>
     @endif

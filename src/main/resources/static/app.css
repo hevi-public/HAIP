@@ -264,6 +264,19 @@ a:hover { text-decoration: underline; }
 .reply__author { font-weight: 700; font-size: 13px; }
 .reply__handle { font-family: var(--mono); font-size: 11px; color: var(--faint-2); }
 
+/* "in reply to" anchor — a literal truncated quote of the parent, so deep replies stay legible
+   without scrolling up. Light indent + quote bar, the affordance Dana asked for. */
+.reply__inreplyto {
+  display: block; max-width: var(--prose);
+  margin: 0 0 8px; padding: 3px 0 3px 9px;
+  border-left: 2px solid var(--sage-2);
+  font-size: 12px; line-height: 1.45; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reply__inreplyto:hover { text-decoration: none; border-left-color: var(--spine-live); color: var(--ink); }
+.reply__inreplyto-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
+.reply__inreplyto-quote { font-style: italic; }
+
 .reply .body { font-size: 13.5px; line-height: 1.6; color: var(--ink); max-width: var(--prose); white-space: pre-wrap; }
 .reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
 

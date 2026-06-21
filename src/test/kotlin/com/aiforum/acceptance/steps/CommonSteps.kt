@@ -41,6 +41,13 @@ class CommonSteps(
         world.rememberReply("$persona's reply", id)
     }
 
+    @Given("a posted reply from {string} saying {string} under {string}'s reply")
+    fun postedReplyUnder(persona: String, body: String, parent: String) {
+        val parentId = world.replyIds["$parent's reply"] ?: error("no remembered reply for \"$parent's reply\"")
+        val id = data.insertComment(world.threadId!!, authorId = persona, body = body, parentId = parentId)
+        world.rememberReply("$persona's reply", id)
+    }
+
     @Given("the LLM will respond with {string}")
     fun llmWillRespond(text: String) = llm.enqueue(Behavior.Respond(text))
 
