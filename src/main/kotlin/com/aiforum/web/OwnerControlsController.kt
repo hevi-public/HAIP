@@ -10,6 +10,7 @@ import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.ResponseBody
 import java.util.UUID
 
 /**
@@ -82,6 +83,18 @@ class OwnerControlsController(
         comments.insert(directive)
         model.addAttribute("replies", listOf(directive.toReplyView()))
         return "fragments/replyList"
+    }
+
+    /**
+     * Delete a comment and its whole subtree (§8 node operations). The browser button outerHTML-swaps the closest
+     * <article> with this empty response, so the node — and its replies, which render nested inside it —
+     * vanish from the DOM in one swap, mirroring the cascade the repository performs in the DB.
+     */
+    @PostMapping("/replies/{id}/delete")
+    @ResponseBody
+    fun delete(@PathVariable id: String): String {
+        comments.deleteSubtree(id)
+        return ""
     }
 
     private companion object {

@@ -12,8 +12,8 @@ import org.junit.jupiter.api.Test
 @Tag("tier0")
 class ContextAssemblerTest {
 
-    private fun comment(author: String, body: String) =
-        Comment("id-$body", "t", null, author, body, GenerationState.POSTED, null, 0)
+    private fun comment(author: String, body: String, parentId: String? = null, depth: Int = 0) =
+        Comment("id-$body", "t", parentId, author, body, GenerationState.POSTED, null, depth)
 
     @Test
     fun `context carries comment bodies and authors`() {
@@ -22,6 +22,17 @@ class ContextAssemblerTest {
         assertEquals(1, ctx.comments.size)
         assertEquals("indexes help", ctx.comments[0].body)
         assertEquals("sol", ctx.comments[0].authorId)
+    }
+
+    @Test
+    fun `context carries the structural fields the transcript renderer needs`() {
+        // id/parentId/depth flow through so the prompt can show reply shape (indentation + reply tags).
+        // They are structural only — see the firewall test below for what must NOT come along.
+        val ctx = ContextAssembler.assemble("sys", listOf(comment("bob", "a reply", parentId = "id-root", depth = 2)))
+        val cc = ctx.comments.single()
+        assertEquals("id-a reply", cc.id)
+        assertEquals("id-root", cc.parentId)
+        assertEquals(2, cc.depth)
     }
 
     @Test

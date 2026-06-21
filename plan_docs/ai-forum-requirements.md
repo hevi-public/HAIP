@@ -319,6 +319,7 @@ Human memory is associative, i.e. a graph — so memory reuses the forum's own m
 - ✅ **Edit / regenerate / delete** a persona's reply.
 - ✅ **Retry** a node with a different persona.
 - ✅ **History of operations is kept** for replayability (§13).
+  - ⚠️ **Implementation status (2026-06-21):** **delete** is wired as a **hard cascade delete** — a node and its whole subtree are removed and their `+1` votes cleaned up (`CommentRepository.deleteSubtree`, deepest-first to respect `foreign_keys=on`) — but it writes **no event-log record**, so the §13 replayability requirement is **not yet satisfied for deletes**. This isn't unique to delete: the `event_log` table exists (V1 migration) but is **unused by every operation today**. **Follow-up:** once §13 history lands, delete should record a tombstone / op-entry before the destructive removal (and the cascade itself should be replayable).
 - 🟣 **Branch operations (post-MVP):**
   - **Fork** a tangent into its own thread/project (the crypto sub-thread is the canonical example).
   - **Move / merge** branches between projects.

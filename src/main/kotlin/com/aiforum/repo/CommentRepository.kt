@@ -103,4 +103,33 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
                SELECT COUNT(*) - 1 FROM sub""",
             Int::class.java, nodeId,
         ) ?: 0
+
+    /**
+     * Delete [nodeId] and its entire subtree (§8) — a deleted parent takes its replies with it, so no
+     * child is ever left pointing at a gone parent. foreign_keys=on (every profile, see the datasource
+     * URLs) means dependents must go first: `vote.node_id` and `comment.parent_id` both reference
+     * `comment(id)`, so we clear the subtree's votes, then delete the comments deepest-first (a child is
+     * always removed before its parent). Returns the ids removed; empty if [nodeId] doesn't exist.
+     */
+    fun deleteSubtree(nodeId: String): List<String> {
+        val ids = subtreeIdsDeepestFirst(nodeId)
+        if (ids.isEmpty()) return emptyList()
+        val placeholders = ids.joinToString(",") { "?" }
+        jdbc.update("DELETE FROM vote WHERE node_id IN ($placeholders)", *ids.toTypedArray())
+        // Deepest-first so the self-referential parent_id FK is never momentarily violated.
+        ids.forEach { jdbc.update("DELETE FROM comment WHERE id = ?", it) }
+        return ids
+    }
+
+    /** Ids of [nodeId]'s subtree (itself + all descendants) ordered deepest depth first, for FK-safe delete. */
+    private fun subtreeIdsDeepestFirst(nodeId: String): List<String> =
+        jdbc.query(
+            """WITH RECURSIVE sub(id, depth) AS (
+                   SELECT id, depth FROM comment WHERE id = ?
+                   UNION ALL
+                   SELECT c.id, c.depth FROM comment c JOIN sub s ON c.parent_id = s.id
+               )
+               SELECT id FROM sub ORDER BY depth DESC""",
+            { rs, _ -> rs.getString("id") }, nodeId,
+        )
 }
