@@ -37,6 +37,9 @@ open class ProcessLlmClient(
     // network. These pre-authorise WebFetch for the spawned CLI. Off by default; toggled per-profile via
     // application-{dev,prod}.yml. Kotlin defaults so direct (test) construction needn't pass them; Spring
     // still injects the @Value either way.
+    // ⚠ SECURITY: enabling this lets personas fetch the open web from the host — the Docker jail
+    // (requirements §12) that should isolate this is not built yet, so the domain allowlist is the only
+    // mitigation today and web content is untrusted input (prompt injection). See requirements §12.
     @Value("\${aiforum.llm.web-fetch-enabled:false}") private val webFetchEnabled: Boolean = false,
     @Value("\${aiforum.llm.web-fetch-allowed-domains:}") private val webFetchAllowedDomains: String = "",
 ) : LlmClient {

@@ -9,6 +9,10 @@ aiforum:
   backups:
     enabled: true
   llm:
-    # Personas reach the network in prod too. Leave the allowlist blank for any host, or scope it via
-    # web-fetch-allowed-domains (see application.yml) to keep production fetches tight.
+    # Personas reach the network in prod too.
+    # ⚠ SECURITY: the Docker jail (requirements §12) is NOT built yet, so prod personas fetch from the
+    # HOST directly with no isolation, and a blank allowlist below = ANY host. Web content is untrusted
+    # (prompt-injection risk). Until the jail lands, scope web-fetch-allowed-domains to trusted hosts,
+    # e.g. "news.ycombinator.com,github.com". See requirements §12 (status note) for the full caveat.
     web-fetch-enabled: true
+    web-fetch-allowed-domains: ""   # ← blank = any host; tighten this in prod
