@@ -11,9 +11,9 @@
      probe (Html.composerScope/composerAttr) reads attributes from the single tag carrying
      data-target-id, so the composer is one <form>, not a wrapper div around a form (§4). The
      class= styling hook rides along on that same tag and is ignored by the probe. The affordances
-     below (Single/Roomful toggle, persona chips, slash palette, @mention menu — §4) are progressive
-     enhancement driven by app.js: with JS off the checkbox-backed chips still bind personaIds, the
-     textarea still posts text, and the hidden roomMode default still submits. --%>
+     below (persona chips, slash palette, @mention menu — §4) are progressive enhancement driven by
+     app.js: with JS off the checkbox-backed chips still bind personaIds and the textarea still posts
+     text. --%>
 <form class="composer composer--${placement}"
       data-composer="${placement}" data-target-id="${targetId}" data-scope="${scope}"
       hx-post="/threads/${threadId}/generate"
@@ -34,13 +34,6 @@
         <%-- Inline label describes PLACEMENT (where the reply lands), not reading scope — scope now
              defaults to whole topic, so "in this branch" would mislead. --%>
         <span class="composer__head-label">${if (placement == "bottom") "New reply to the post" else "Reply here"}</span>
-        <%-- Single ↔ Roomful: how many voices answer. The buttons drive the hidden roomMode input
-             (app.js) and gate chip multi-select; the server caps an "Anyone"/@mention pick to one when
-             roomMode=single. Defaults to Single per the composer-states comp. --%>
-        <div class="seg" data-roomful-toggle role="group" aria-label="how many reply">
-            <button type="button" class="seg__opt is-active" data-room-mode="single">Single</button>
-            <button type="button" class="seg__opt" data-room-mode="roomful">Roomful</button>
-        </div>
     </div>
 
     @if(parentId != null)
@@ -52,9 +45,6 @@
          node and seeds the room with it (otherwise the owner's words never appear and the personas only
          ever see a blank transcript, emitting a generic opener). --%>
     <input type="hidden" name="postAsOwner" value="true">
-    <%-- Mirrors the Single/Roomful toggle; the controller reads it for the breadth cap (default single,
-         matching the toggle's default highlighted state). --%>
-    <input type="hidden" name="roomMode" value="single" data-room-mode-input>
 
     <div class="composer__editor" data-composer-editor>
         <textarea name="text" data-composer-text
@@ -66,8 +56,6 @@
             <div class="palette__cap">commands · control how the reply is generated</div>
             <button type="button" class="palette__row" data-slash-cmd="branch"><span class="palette__key">/branch</span><span class="palette__desc">context = this branch</span></button>
             <button type="button" class="palette__row" data-slash-cmd="topic"><span class="palette__key">/topic</span><span class="palette__desc">context = whole topic</span></button>
-            <button type="button" class="palette__row" data-slash-cmd="roomful"><span class="palette__key">/roomful</span><span class="palette__desc">several reply in parallel</span></button>
-            <button type="button" class="palette__row" data-slash-cmd="single"><span class="palette__key">/single</span><span class="palette__desc">one voice replies</span></button>
         </div>
 
         <%-- @mention menu (app.js shows + filters it while typing an @handle). Picking a row inserts the
@@ -89,7 +77,8 @@
     <%-- Persona chips are the picker (name="personaIds", asserted by composer_reply_targeting). "Anyone"
          hands the choice to the AI dispatcher (value "auto" = GenerationService.AUTO_PERSONA); selecting
          persona chips names who replies. Checkbox-backed so the form still binds with JS off; app.js
-         enforces Anyone↔named exclusivity and the Single→one-chip rule. --%>
+         enforces Anyone↔named exclusivity (named chips are multi-select — naming several is a roomful
+         summon; breadth follows who you tag). --%>
     <div class="chips" data-persona-picker>
         <label class="chip chip--anyone is-selected" data-anyone-chip>
             <input type="checkbox" name="personaIds" value="auto" checked>

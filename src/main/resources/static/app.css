@@ -128,7 +128,7 @@ body {
   color: var(--ink);
   font-family: var(--sans);
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.45;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -165,9 +165,10 @@ a:hover { text-decoration: underline; }
 .site-header__spacer { margin-left: auto; }
 .site-header__crumb { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
 
-/* theme switcher: both options shown ("☾ dark / ☀ light"), the active one underlined. Mirrors the
- * .site-nav active treatment (sage border-bottom) so it reads as part of the header chrome. The
- * active state is CSS-driven off html[data-theme], so it renders correctly before paint (no flash). */
+/* theme switcher: all options shown ("☾ dark / ☀ light / ◑ auto"), the active one underlined. Mirrors
+ * the .site-nav active treatment (sage border-bottom) so it reads as part of the header chrome. The
+ * active state is CSS-driven off html[data-theme-mode] (the user's choice, not the resolved palette),
+ * so it renders correctly before paint (no flash) and "auto" stays lit even as the palette flips. */
 .theme-toggle {
   margin-left: auto;
   display: inline-flex; align-items: center; gap: 8px;
@@ -180,8 +181,10 @@ a:hover { text-decoration: underline; }
   color: var(--link); padding: 2px 0; border-bottom: 2px solid transparent;
 }
 .theme-toggle__opt:hover { color: var(--ink); }
-html:not([data-theme="dark"]) .theme-toggle__opt[data-set-theme="light"],
-html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
+html[data-theme-mode="dark"]  .theme-toggle__opt[data-set-theme="dark"],
+html[data-theme-mode="light"] .theme-toggle__opt[data-set-theme="light"],
+html[data-theme-mode="auto"]  .theme-toggle__opt[data-set-theme="auto"],
+html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   color: var(--ink); font-weight: 700; border-bottom-color: var(--sage);
 }
 
@@ -222,7 +225,7 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 /* ghost = neutral, low-emphasis action (e.g. Cancel an in-flight draft — a choice, not a failure) */
 .btn--ghost {
   background: transparent; color: var(--muted);
-  border-color: var(--sage-2); font-weight: 400; padding: 4px 12px; font-size: 12px;
+  border-color: var(--sage-2); font-weight: 400; padding: 2px 9px; font-size: 11.5px;
 }
 .btn--ghost:hover { background: var(--grey-bg); color: var(--ink); filter: none; }
 
@@ -243,7 +246,7 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 .monogram {
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px;
+  width: 24px; height: 24px;
   /* Pastel tint per author: --mono-h is set inline from the author's avatar hue (AuthorColor); fixed
      lightness + saturation keep every avatar in the same soft register. Falls back to sage if unset. */
   background: hsl(var(--mono-h, 75) 42% 84%);
@@ -412,7 +415,17 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
   .thread:has(.thread__rail) { grid-template-columns: minmax(0, 1fr) var(--rail); }
 }
 .thread__rail { display: flex; flex-direction: column; gap: 14px; }
-@media (min-width: 1000px) { .thread__rail { position: sticky; top: 18px; } }   /* rail follows as the tree scrolls */
+@media (min-width: 1000px) {       /* rail follows as the tree scrolls and caps to the viewport. Rather than
+                                      scrolling the whole rail, only the branch-index list scrolls inside its
+                                      own box, so the context legend below stays visible however long the index
+                                      gets (a sticky rail taller than the viewport would pin its top and hide
+                                      its tail). The branch-index box is the one allowed to shrink; the legend
+                                      holds its full height. */
+  .thread__rail { position: sticky; top: 18px; max-height: calc(100vh - 36px); }
+  .thread__rail .rail-box[data-rail-box="branch-index"] { display: flex; flex-direction: column; min-height: 0; }
+  .thread__rail .rail-box[data-rail-box="branch-index"] .branch-index { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .thread__rail .rail-box[data-rail-box="context-legend"] { flex-shrink: 0; }
+}
 
 /* rail box — the shared card chrome for side-rail occupants (branch index is the first) */
 .rail-box {
@@ -448,6 +461,28 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 .branch-index__snippet::before { content: " — "; color: var(--faint-2); }
 .branch-index__link:hover .branch-index__author { text-decoration: underline; }
 .branch-index__row + .branch-index__row { border-top: 1px dotted var(--line-dotted); }
+/* starred marker: a star in the author's hue, swapped in for the dot when the owner bookmarks a
+   comment. Both glyphs are always in the DOM; data-starred on the link picks which shows, so nav.js
+   can flip a star live (after a toggle) by just changing the attribute — no re-render. */
+.branch-index__star {
+  display: none; width: 11px; height: 11px; margin-right: 5px; vertical-align: baseline;
+  color: hsl(var(--mono-h, 75) 52% 58%);
+}
+.branch-index__link[data-starred="true"] .branch-index__dot { display: none; }
+.branch-index__link[data-starred="true"] .branch-index__star { display: inline-block; }
+/* the selected comment, reflected in the rail — same cursor language as .reply.is-current */
+.branch-index__row.is-current { background: var(--wash); border-radius: var(--r-sm); }
+.branch-index__row.is-current .branch-index__link { box-shadow: inset 3px 0 0 0 var(--spine-live); padding-left: 4px; }
+
+/* the starred toggle on a comment: a filled star reads "bookmarked" at a glance */
+.reply__star-btn.is-starred { color: hsl(45 90% 42%); }
+.reply__star-icon { width: 14px; height: 14px; vertical-align: text-bottom; }
+/* In the baseline-aligned action row, a flex button reports its FIRST child as its baseline — for the
+   Star chip that's the icon, not the text, so it rode a touch high next to the text-only +1 / /more.
+   Align the button's own items to the text baseline (so the chip reports the text baseline like the
+   others) while re-centering the icon so it still sits visually middled. */
+.reply__star-btn { align-items: baseline; }
+.reply__star-btn .reply__star-icon { align-self: center; }
 
 /* context legend — static key for the tree's spine/dimming convention */
 .context-legend { list-style: none; margin: 0; padding: 0; }
@@ -463,33 +498,32 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
   border: 1px solid var(--line);
   border-radius: var(--r);
   box-shadow: var(--shadow);
-  padding: 18px 22px 16px;
-  margin-bottom: 14px;
+  padding: 13px 18px 12px;
+  margin-bottom: 10px;
 }
-.thread__title { font-size: 21px; font-weight: 700; line-height: 1.25; margin: 0; max-width: var(--prose); }
+.thread__title { font-size: 19px; font-weight: 700; line-height: 1.2; margin: 0; max-width: var(--prose); }
 /* The OP body: the post's own content, sitting under the title (the comment tree is the room's reply). */
 .thread__body {
-  margin: 11px 0 0; max-width: var(--prose);
-  font-size: 13.5px; line-height: 1.65; color: var(--ink);
-  white-space: pre-wrap;
+  margin: 8px 0 0; max-width: var(--prose);
+  font-size: 13.5px; line-height: 1.5; color: var(--ink);
 }
 
 /* reply tree -------------------------------------------------------------- */
-.reply-list { display: flex; flex-direction: column; gap: 8px; }
+.reply-list { display: flex; flex-direction: column; gap: 6px; }
 
 .reply {
   background: var(--card);
   border: 1px solid var(--line-node);
   border-left: 3px solid var(--spine);
   border-radius: 0 var(--r) var(--r) 0;
-  padding: 11px 14px;
+  padding: 8px 13px 9px;
 }
 /* DOM nesting === tree depth (replyNode renders children inside the parent <article>) */
-.reply .reply { margin-top: 8px; margin-left: 20px; }
+.reply .reply { margin-top: 6px; margin-left: 18px; }
 
 .reply__head {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin-bottom: 7px;
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin-bottom: 4px;
 }
 .reply__author { font-weight: 700; font-size: 13px; }
 .reply__handle { font-family: var(--mono); font-size: 11px; color: var(--faint-2); }
@@ -498,28 +532,69 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
    without scrolling up. Light indent + quote bar, the affordance Dana asked for. */
 .reply__inreplyto {
   display: block; max-width: var(--prose);
-  margin: 0 0 8px; padding: 3px 0 3px 9px;
+  margin: 0 0 5px; padding: 2px 0 2px 9px;
   border-left: 2px solid var(--sage-2);
-  font-size: 12px; line-height: 1.45; color: var(--muted);
+  font-size: 12px; line-height: 1.4; color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .reply__inreplyto:hover { text-decoration: none; border-left-color: var(--spine-live); color: var(--ink); }
 .reply__inreplyto-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
 .reply__inreplyto-quote { font-style: italic; }
 
-.reply .body { font-size: 13.5px; line-height: 1.6; color: var(--ink); max-width: var(--prose); white-space: pre-wrap; }
-.reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
+.reply .body { font-size: 13.5px; line-height: 1.5; color: var(--ink); max-width: var(--prose); }
+.reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 5px; }
+
+/* Markdown-rendered body content (reply bodies + the OP). Now structured HTML, not pre-wrapped text:
+   reset block margins at the edges so the card padding owns the outer gap, and give inner blocks rhythm.
+   Token colour for code lives in hljs-theme.css; everything here is layout/chrome. */
+.reply .body > :first-child, .thread__body > :first-child { margin-top: 0; }
+.reply .body > :last-child, .thread__body > :last-child { margin-bottom: 0; }
+.reply .body p, .thread__body p { margin: 0 0 9px; }
+.reply .body ul, .reply .body ol,
+.thread__body ul, .thread__body ol { margin: 0 0 9px; padding-left: 1.4em; }
+.reply .body blockquote, .thread__body blockquote {
+  margin: 0 0 9px; padding: 2px 0 2px 11px;
+  border-left: 2px solid var(--sage-2); color: var(--muted);
+}
+
+/* Fenced code blocks. hljs-theme.css sets the token colours, background, inner padding and the
+   horizontal scroll on `pre code.hljs`; this is just the block chrome around it. */
+.reply .body pre, .thread__body pre {
+  margin: 0 0 10px; max-width: var(--prose);
+  border: 1px solid var(--line-node); border-radius: var(--r);
+  overflow: hidden; /* clip the inner scroll area to the rounded corners */
+}
+.reply .body pre code.hljs, .thread__body pre code.hljs {
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+}
+/* Inline code (a `span` of code, never inside a <pre>). */
+.reply .body :not(pre) > code, .thread__body :not(pre) > code {
+  font-family: var(--mono); font-size: 12px;
+  padding: 1px 5px; border-radius: 4px; background: rgba(127, 127, 127, 0.14);
+}
+
+/* Markdown (GFM) tables. */
+.reply .body table, .thread__body table {
+  border-collapse: collapse; margin: 0 0 10px; font-size: 12.5px; max-width: 100%;
+}
+.reply .body th, .reply .body td,
+.thread__body th, .thread__body td {
+  border: 1px solid var(--line-node); padding: 4px 9px; text-align: left;
+}
+.reply .body th, .thread__body th { background: rgba(127, 127, 127, 0.10); font-weight: 700; }
 
 .reply__vote {
   display: inline-block; margin-top: 8px;
   font-family: var(--mono); font-size: 11.5px; color: var(--faint-2);
 }
 
-/* action row: +1 (and /more / Retry) on the left, Delete pushed to the far right. flex-start keeps the
-   +1 anchored to the top of the row even when the delete disclosure opens and grows tall. */
+/* action row: Reply, +1, Star (and /more / Retry) on the left, Delete pushed to the far right.
+   baseline alignment lines up the borderless "Reply" link with the bordered ghost chips on one text
+   baseline (flex-start left their tops aligned but baselines off — the "weird" stagger); it also keeps
+   every item anchored to the top line when the delete disclosure opens and grows tall below. */
 .reply__actionbar {
-  display: flex; align-items: flex-start; flex-wrap: wrap;
-  gap: 8px; margin-top: 9px;
+  display: flex; align-items: baseline; flex-wrap: wrap;
+  gap: 6px; margin-top: 6px;
 }
 
 /* state badge ------------------------------------------------------------- */
@@ -599,17 +674,6 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 }
 .composer .btn { margin-left: 10px; }
 
-/* Single ↔ Roomful (and any) segmented toggle — JS flips .is-active + the hidden input it drives */
-.seg {
-  margin-left: auto; display: inline-flex;
-  border: 1px solid var(--sage-2); border-radius: var(--r); overflow: hidden;
-}
-.seg__opt {
-  font-family: var(--sans); font-size: 11.5px; line-height: 1;
-  padding: 4px 11px; border: none; background: var(--card); color: var(--muted); cursor: pointer;
-}
-.seg__opt.is-active { background: var(--sage); color: var(--sage-ink); font-weight: 700; }
-
 /* The editor anchors the absolutely-positioned slash / @mention popovers below the textarea */
 .composer__editor { position: relative; }
 
@@ -656,17 +720,21 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 .monogram--sm { width: 22px; height: 22px; font-size: 9px; }
 .monogram--xs { width: 18px; height: 18px; font-size: 8px; border-radius: var(--r-sm); }
 
-/* inline reply as a disclosure — collapsed until the owner opens it (one composer at a time) */
-.reply__compose { margin-top: 10px; }
+/* Inline reply — leads the footer action row as a collapsed disclosure (one composer at a time).
+   Closed: it's a plain "↩ Reply" text trigger, first in the row. Open: it spans the full row width
+   (flex-basis:100%) so the composer drops onto its own line below the footer buttons. */
+.reply__compose { order: -1; }                 /* keep Reply first even if markup order shifts */
+.reply__compose[open] { flex-basis: 100%; }
 .reply__compose > summary {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: 5px;
   list-style: none; cursor: pointer;
+  padding: 2px 0;                              /* nudge baseline to match the bordered ghost buttons */
   font-size: 11.5px; font-weight: 700; color: var(--link);
   width: max-content;
 }
 .reply__compose > summary::-webkit-details-marker { display: none; }
 .reply__compose > summary::before { content: "↩"; }
-.reply__compose[open] > summary { margin-bottom: 10px; }
+.reply__compose[open] > summary { margin-bottom: 9px; }
 
 /* delete — destructive, so gated behind an inline "are you sure" panel (the clay = error/warning hue,
    which re-skins itself in dark mode via the --clay-* tokens). Trigger is a ghost-button-shaped
@@ -723,7 +791,7 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 
 /* ------------------------------------------------------------ thread controls */
 .thread__controls {
-  display: flex; align-items: center; gap: 10px; margin-top: 14px;
+  display: flex; align-items: center; gap: 10px; margin-top: 10px;
 }
 
 /* htmx-indicator: hidden by default, shown (inline-flex) when htmx-request is added */

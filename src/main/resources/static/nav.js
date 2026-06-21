@@ -80,6 +80,31 @@ function rebuild() {
   // re-apply the highlight: an htmx swap replaces element objects, dropping the class.
   const el = elById.get(currentId);
   if (el) el.classList.add("is-current");
+  // Branch-index rail mirrors two things the cursor/swaps change: which entry is selected, and which
+  // comments are starred. A star toggle swaps in a fresh .reply__star-area (with the new data-starred)
+  // but never touches the rail, so re-sync both here — rebuild runs on load and on every htmx:afterSwap.
+  highlightRailEntry(currentId);
+  syncRailMarkers();
+}
+
+// --- branch-index rail mirroring --------------------------------------------------------------------
+
+const cssId = (id) => (window.CSS && CSS.escape ? CSS.escape(id) : id);
+const railEntry = (id) => (id == null ? null : document.querySelector('[data-branch-index-entry="' + cssId(id) + '"]'));
+
+/** Reflect the reading cursor in the rail: the selected comment's entry gets .is-current. */
+function highlightRailEntry(id) {
+  document.querySelectorAll(".branch-index__row.is-current").forEach((r) => r.classList.remove("is-current"));
+  const row = railEntry(id)?.closest(".branch-index__row");
+  if (row) row.classList.add("is-current");
+}
+
+/** Mirror each comment's star state onto its rail entry (data-starred drives the dot↔star swap in CSS). */
+function syncRailMarkers() {
+  document.querySelectorAll(".reply__star-area[data-reply-id]").forEach((area) => {
+    const a = railEntry(area.dataset.replyId);
+    if (a) a.dataset.starred = area.dataset.starred === "true" ? "true" : "false";
+  });
 }
 
 function setCursor(id, scroll = true) {
@@ -92,6 +117,7 @@ function setCursor(id, scroll = true) {
   try { history.replaceState(history.state, "", hashFor(id)); } catch (e) { /* non-fatal */ }
   const el = elById.get(id);
   el.classList.add("is-current");
+  highlightRailEntry(id); // keep the rail's selected entry in step with the reading cursor
   if (scroll) scrollCommentIntoView(el);
 }
 
@@ -367,7 +393,7 @@ function onKey(e) {
 // cursor, mirroring an editor's tap-to-place-caret; double-tap is deliberately NOT used (browsers
 // reserve it for zoom). We don't preventDefault, so buttons/links inside the comment still work.
 function onClick(e) {
-  // Clicks inside a composer (chips, Single/Roomful toggle, slash/@mention palette — PR #29) must NOT
+  // Clicks inside a composer (chips, slash/@mention palette — PR #29) must NOT
   // move the reading cursor or clear the Esc-return target. Agreed contract with the composer branch.
   if (e.target.closest(".composer")) return;
   const el = e.target.closest(NAV);

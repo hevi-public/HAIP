@@ -1,7 +1,7 @@
 # Persona prompt editing — dials/prompt divergence & the Cancel flow
 
 > **Status:** decided & built · **Owner:** Hevi · **Created:** 2026-06-22
-> Companion to the persona-traits feature (`com.aiforum.persona`, V9) and `personas_admin.feature`.
+> Companion to the persona-traits feature (`com.aiforum.persona`, V10) and `personas_admin.feature`.
 
 ## The problem
 

@@ -46,6 +46,13 @@ object Html {
         return a.groupValues[1].replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim()
     }
 
+    /** The value of [attr] on the branch-index entry anchor (data-branch-index-entry="[replyId]"), or
+     *  null. Reads e.g. data-starred, the rail's authoritative star marker the star feature asserts on. */
+    fun branchEntryAttr(html: String, replyId: String, attr: String): String? {
+        val tag = Regex("<a\\b[^>]*data-branch-index-entry=\"${Regex.escape(replyId)}\"[^>]*>").find(html)?.value ?: return null
+        return Regex("${Regex.escape(attr)}=\"([^\"]*)\"").find(tag)?.groupValues?.get(1)
+    }
+
     fun inReplyToText(html: String, childId: String): String? {
         val open = Regex("<article\\b[^>]*data-reply-id=\"${Regex.escape(childId)}\"[^>]*>").find(html) ?: return null
         val anchor = Regex("<a\\b[^>]*data-in-reply-to=\"[^\"]*\"[^>]*>(.*?)</a>", RegexOption.DOT_MATCHES_ALL)

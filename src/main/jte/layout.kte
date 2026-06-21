@@ -7,19 +7,28 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>${title}</title>
-    <%-- Resolve theme before first paint to avoid a light flash: an explicit localStorage choice wins,
-         otherwise we follow the OS prefers-color-scheme. Runs inline (not /app.js) so it executes
-         synchronously in <head> before the body renders. --%>
+    <%-- Resolve theme before first paint to avoid a light flash. We track two things on <html>:
+         data-theme-mode = the user's choice (dark | light | auto), persisted in localStorage;
+         data-theme      = the resolved palette (dark | light) the CSS keys off. In "auto" (the
+         default) the palette follows the OS prefers-color-scheme. Runs inline (not /app.js) so it
+         executes synchronously in <head> before the body renders. --%>
     <script>
         (function () {
             try {
-                var saved = localStorage.getItem("theme");
-                var theme = saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-                document.documentElement.setAttribute("data-theme", theme);
+                var mode = localStorage.getItem("theme") || "auto";
+                var theme = mode === "auto"
+                    ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+                    : mode;
+                var root = document.documentElement;
+                root.setAttribute("data-theme-mode", mode);
+                root.setAttribute("data-theme", theme);
             } catch (e) {}
         })();
     </script>
     <link rel="stylesheet" href="/app.css">
+    <%-- highlight.js token colours, scoped to the [data-theme] toggle. Derived from the vendored
+         highlightjs webjar themes (see hljs-theme.css header); served as a static asset, no CDN. --%>
+    <link rel="stylesheet" href="/hljs-theme.css">
     <%-- htmx served from the webjar (see build.gradle.kts); version-agnostic path via webjars-locator-lite --%>
     <script src="/webjars/htmx.org/dist/htmx.min.js"></script>
     <script src="/app.js" defer></script>
@@ -44,6 +53,8 @@
             <button type="button" class="theme-toggle__opt" data-set-theme="dark"><span aria-hidden="true">&#x263E;</span> dark</button>
             <span class="theme-toggle__sep" aria-hidden="true">/</span>
             <button type="button" class="theme-toggle__opt" data-set-theme="light"><span aria-hidden="true">&#x2600;</span> light</button>
+            <span class="theme-toggle__sep" aria-hidden="true">/</span>
+            <button type="button" class="theme-toggle__opt" data-set-theme="auto"><span aria-hidden="true">&#x25D1;</span> auto</button>
         </div>
     </header>
     <main class="container">

@@ -95,7 +95,7 @@ class PersonaRepositoryTest {
     }
 
     @Test
-    fun `a persona seeded with the pre-V9 columns reads back empty abilities and dials`() {
+    fun `a persona seeded with the pre-V10 columns reads back empty abilities and dials`() {
         // The DEFAULT '[]' / '{}' the migration sets must deserialize to empty collections.
         jdbc.update(
             "INSERT INTO persona(id, name, handle, system_prompt, slug, color_index) VALUES (?,?,?,?,?,?)",

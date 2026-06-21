@@ -9,7 +9,7 @@ import tools.jackson.module.kotlin.readValue
 @Repository
 class PersonaRepository(private val jdbc: JdbcTemplate) {
 
-    // abilities (JSON array) + dials (JSON object) are stored as text (V9); a small Jackson mapper
+    // abilities (JSON array) + dials (JSON object) are stored as text (V10); a small Jackson mapper
     // round-trips them so user-typed ability tags with commas/quotes survive without hand-rolled escaping.
     private val json = jacksonMapperBuilder().build()
 
@@ -17,7 +17,7 @@ class PersonaRepository(private val jdbc: JdbcTemplate) {
     // fallback. `slug` is the URL-safe name used in profile links (V5): lower-cased, spaces → hyphens.
     // `colorIndex` (V6) is the persona's stable avatar-colour slot — assigned once at insert as the next
     // free slot, so it's bound to the persona for life and adding/removing others never recolours it.
-    // `abilities`/`dials` (V9) are the structured authoring inputs the composer turned into systemPrompt.
+    // `abilities`/`dials` (V10) are the structured authoring inputs the composer turned into systemPrompt.
     data class Persona(
         val id: String,
         val name: String,

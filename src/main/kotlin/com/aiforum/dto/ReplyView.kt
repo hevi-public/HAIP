@@ -7,6 +7,7 @@ package com.aiforum.dto
 data class ReplyView(
     val id: String,
     val authorId: String,
+    // Raw markdown source — kept for non-display uses (e.g. the "in reply to" quote) and assertions.
     val body: String,
     val state: GenerationState,
     val failureCategory: FailureCategory?,
@@ -16,8 +17,14 @@ data class ReplyView(
     val voteCount: Int,
     val depth: Int,
     val depthBudget: Int = 0,
+    // Owner's star bookmark — drives the filled-star control on the node and the star marker in the rail.
+    val starred: Boolean = false,
     // The comment this reply answers, for the "in reply to" anchor. Null for top-level replies (they
     // answer the post, which has no comment node). Populated on the full thread-page render.
     val parent: ParentRef? = null,
     val children: List<ReplyView> = emptyList(),
+    // [body] rendered from GitHub-flavoured markdown to trusted HTML (see MarkdownRenderer); the template
+    // emits this via $unsafe{}. Trailing default so positional constructions stay valid. Empty for
+    // bodiless nodes (validation errors), which never display a body.
+    val bodyHtml: String = "",
 )

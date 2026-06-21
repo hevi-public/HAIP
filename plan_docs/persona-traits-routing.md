@@ -2,12 +2,12 @@
 
 > **Status:** proposed (design note, not yet built) · **Owner:** Hevi · **Created:** 2026-06-21
 > Companion to the `PersonaRouter` KDoc, `src/test/resources/features/persona_routing.feature`, and the
-> persona-traits feature (abilities + dials + LLM-composed prompt, V9 — see `com.aiforum.persona`).
+> persona-traits feature (abilities + dials + LLM-composed prompt, V10 — see `com.aiforum.persona`).
 > Related: `plan_docs/persona-routing-observability.md` (instrument the fallback first).
 
 ## Background — we now have structured personality the router ignores
 
-Personas gained two structured fields (V9): **abilities** (open-vocabulary keyword tags — `kotlin`,
+Personas gained two structured fields (V10): **abilities** (open-vocabulary keyword tags — `kotlin`,
 `backend`, `history`) and **dials** (a fixed 0–10 schema: agreeableness, verbosity, rigor, warmth —
 `com.aiforum.persona.Dials.KEYS`). Today these feed only the *composed system prompt*; the **`PersonaRouter`
 still routes purely on the model naming roster members in free text**, then word-boundary-matches those

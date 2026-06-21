@@ -124,26 +124,13 @@ class GenerationServiceTest {
     }
 
     @Test
-    fun `Single caps an Anyone pick to one voice even when the dispatcher names several`() {
-        // First call is the dispatcher (names two), second is the one persona that survives the cap.
-        val llm = ScriptedLlm(listOf("Sol, Paul", "Sol's take"))
-        val service = GenerationService(llm, RecordingComments(), roster("Sol", "Paul"))
-
-        val replies = service.generate("t1", null, listOf("auto"), "make these faster?", single = true)
-
-        assertEquals(1, replies.size, "Single must collapse a multi-persona route to one reply")
-        assertEquals("Sol", replies.single().authorId)
-        assertEquals("Sol's take", replies.single().body)
-    }
-
-    @Test
-    fun `Roomful leaves a multi-persona Anyone pick at full breadth`() {
+    fun `the Anyone dispatcher summons everyone it names — breadth follows the pick, not a toggle`() {
         val llm = ScriptedLlm(listOf("Sol, Paul", "Sol's take", "Paul's take"))
         val service = GenerationService(llm, RecordingComments(), roster("Sol", "Paul"))
 
-        val replies = service.generate("t1", null, listOf("auto"), "make these faster?", single = false)
+        val replies = service.generate("t1", null, listOf("auto"), "make these faster?")
 
-        assertEquals(listOf("Sol", "Paul"), replies.map { it.authorId }, "Roomful keeps everyone the dispatcher named")
+        assertEquals(listOf("Sol", "Paul"), replies.map { it.authorId }, "Anyone keeps everyone the dispatcher named")
     }
 
     @Test

@@ -1,6 +1,8 @@
 package com.aiforum.tier1
 
 import com.aiforum.acceptance.support.TestData
+import com.aiforum.domain.Comment
+import com.aiforum.dto.GenerationState
 import com.aiforum.repo.CommentRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -125,6 +127,50 @@ class CommentRepositoryTest {
         assertEquals(newest, recent.first().id)
         assertEquals(t1, recent.first().threadId)
         assertEquals("sol", recent.first().authorId)
+    }
+
+    @Test
+    fun `insert persists the starred flag and toggleStar flips it both ways`() {
+        val thread = data.insertThread("Scaling SQLite")
+        fun node(author: String, body: String, starred: Boolean) = Comment(
+            id = data.newId(), threadId = thread, parentId = null, authorId = author, body = body,
+            state = GenerationState.POSTED, failureCategory = null, depth = 0, starred = starred,
+        )
+        val pinned = node("sol", "pinned", starred = true).also(comments::insert)
+        val loose = node("vex", "loose", starred = false).also(comments::insert)
+
+        // insert round-trips the flag
+        assertEquals(true, comments.findById(pinned.id)!!.starred)
+        assertEquals(false, comments.findById(loose.id)!!.starred)
+
+        // toggle flips and persists, both directions, returning the new state
+        assertEquals(true, comments.toggleStar(loose.id))
+        assertEquals(true, comments.findById(loose.id)!!.starred)
+        assertEquals(false, comments.toggleStar(loose.id))
+        assertEquals(false, comments.findById(loose.id)!!.starred)
+    }
+
+    @Test
+    fun `update keeps a star set on the node — a generation settle never clears it`() {
+        val thread = data.insertThread("Scaling SQLite")
+        val draft = Comment(
+            id = data.newId(), threadId = thread, parentId = null, authorId = "sol", body = "draft",
+            state = GenerationState.DRAFTING, failureCategory = null, depth = 0,
+        )
+        comments.insert(draft)
+        comments.toggleStar(draft.id)
+
+        comments.update(draft.copy(state = GenerationState.POSTED, body = "settled"))
+
+        val after = comments.findById(draft.id)!!
+        assertEquals(GenerationState.POSTED, after.state)
+        assertEquals("settled", after.body)
+        assertEquals(true, after.starred) // update() leaves starred alone
+    }
+
+    @Test
+    fun `toggleStar on an unknown id is a no-op returning false`() {
+        assertEquals(false, comments.toggleStar("does-not-exist"))
     }
 
     @Test

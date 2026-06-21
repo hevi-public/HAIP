@@ -45,10 +45,16 @@ class MigrationPipelineTest {
                 st.executeUpdate(
                     "INSERT INTO thread (id, title, created_at) VALUES ('T1', 'Old thread', '2026-01-01T00:00:00Z')",
                 )
+                // A comment on the old schema (pre-V9, no `starred` column) — proves V9's NOT NULL
+                // DEFAULT 0 leaves existing comments unstarred after the upgrade.
+                st.executeUpdate(
+                    "INSERT INTO comment (id, thread_id, author_id, body, state, depth, created_at) VALUES " +
+                        "('C1', 'T1', 'Ada', 'Old comment', 'POSTED', 0, '2026-01-01T00:00:00Z')",
+                )
             }
         }
 
-        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending V4–V8).
+        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending V4–V10).
         flyway(url, null).migrate()
 
         // 4. The old rows survived, and the new columns carry their migration default / backfill.
@@ -60,8 +66,8 @@ class MigrationPipelineTest {
                     assertEquals("", rs.getString("model"), "V4 DEFAULT '' applies to the pre-existing row")
                     assertEquals("", rs.getString("slug"), "V5 DEFAULT '' applies to the pre-existing row")
                     assertEquals(0, rs.getInt("color_index"), "V6 backfills colour slots in rowid order")
-                    assertEquals("[]", rs.getString("abilities"), "V9 DEFAULT '[]' applies to the pre-existing row")
-                    assertEquals("{}", rs.getString("dials"), "V9 DEFAULT '{}' applies to the pre-existing row")
+                    assertEquals("[]", rs.getString("abilities"), "V10 DEFAULT '[]' applies to the pre-existing row")
+                    assertEquals("{}", rs.getString("dials"), "V10 DEFAULT '{}' applies to the pre-existing row")
                     rs.next()
                     assertEquals("Bob", rs.getString("id"))
                     assertEquals(1, rs.getInt("color_index"), "the second row gets the next colour slot")
@@ -75,10 +81,16 @@ class MigrationPipelineTest {
                     assertEquals("", rs.getString("body"), "the pre-existing thread reads '' after V7/V8")
                 }
 
-                // flyway_schema_history records the full V1..V8 chain as applied.
+                // The pre-existing comment survived and V9's NOT NULL DEFAULT 0 left it unstarred.
+                st.executeQuery("SELECT starred FROM comment WHERE id = 'C1'").use { rs ->
+                    rs.next()
+                    assertEquals(0, rs.getInt("starred"), "V9 DEFAULT 0 applies to the pre-existing comment")
+                }
+
+                // flyway_schema_history records the full V1..V10 chain as applied.
                 st.executeQuery("SELECT MAX(CAST(version AS INTEGER)) AS v FROM flyway_schema_history").use { rs ->
                     rs.next()
-                    assertEquals(9, rs.getInt("v"), "all nine migrations should be recorded as applied")
+                    assertEquals(10, rs.getInt("v"), "all ten migrations should be recorded as applied")
                 }
             }
         }

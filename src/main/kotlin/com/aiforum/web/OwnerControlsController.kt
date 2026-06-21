@@ -32,6 +32,20 @@ class OwnerControlsController(
     }
 
     /**
+     * Star / unstar a comment — the owner's navigation bookmark, firewalled from the model like `+1`.
+     * Toggles the persisted flag and re-renders just the star control (its own htmx swap target), so
+     * the button reflects the new state in place. The branch-index rail mirrors the star client-side
+     * (nav.js reads each star area's data-starred), so the rail marker flips without a full reload.
+     */
+    @PostMapping("/replies/{id}/star")
+    fun star(@PathVariable id: String, model: Model): String {
+        comments.toggleStar(id)
+        val comment = comments.findById(id) ?: error("no reply $id")
+        model.addAttribute("reply", comment.toReplyView(voteCount = votes.count(id)))
+        return "fragments/starControl"
+    }
+
+    /**
      * The owner comments on a branch. The owner is just another member to the personas (§2), so this is
      * an ordinary node — but as an owner comment it re-grants the branch's depth budget (§4), so
      * autonomous growth resumes there (and only there).
