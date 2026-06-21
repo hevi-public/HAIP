@@ -33,14 +33,11 @@
         </div>
         @template.fragments.composer(placement = "bottom", targetId = threadId, parentId = null, scope = "WHOLE_THREAD", threadId = threadId, personas = personas)
       </div>
-      <%-- Side rail. Its first occupant is the branch index; it stays hidden (and the thread stays
-           single-column) until the room has posted, so an empty thread doesn't show a bare column.
-           The grid flips to two columns automatically once the rail is shown — see
-           .thread:has(.thread__rail:not([hidden])) in app.css. --%>
-      <aside class="thread__rail" data-thread-rail hidden="${branchIndex.isEmpty()}">
-          @if(!branchIndex.isEmpty())
-              @template.fragments.branchIndex(entries = branchIndex)
-          @endif
+      <%-- Side rail. Always present — the branch index box shows an empty state before anything is
+           posted, so the layout doesn't pop from one column to two when the first reply lands. The
+           grid is two columns whenever the rail is there — see .thread:has(.thread__rail) in app.css. --%>
+      <aside class="thread__rail" data-thread-rail>
+          @template.fragments.branchIndex(entries = branchIndex)
       </aside>
     </div>
 `)

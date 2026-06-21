@@ -4,7 +4,6 @@ import com.aiforum.acceptance.support.Html
 import com.aiforum.acceptance.support.ScenarioWorld
 import io.cucumber.java.en.Then
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 
 /**
@@ -47,11 +46,11 @@ class BranchIndexSteps(
         assertTrue(orphans.isEmpty(), "branch index entries with no anchor on the page: $orphans")
     }
 
-    @Then("the page shows no branch index")
-    fun pageShowsNoBranchIndex() {
-        assertFalse(
-            Html.hasAttr(body(), "data-rail-box", "branch-index"),
-            "expected NO branch-index box in:\n${body()}",
+    @Then("the branch index shows an empty state")
+    fun branchIndexShowsEmptyState() {
+        assertTrue(
+            Html.hasAttr(body(), "data-branch-index-empty", "true"),
+            "expected the branch-index empty state (data-branch-index-empty=\"true\") in:\n${body()}",
         )
     }
 }
