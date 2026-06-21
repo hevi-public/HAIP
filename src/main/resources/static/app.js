@@ -31,3 +31,18 @@
   // htmx swaps in new composers (inline replies, re-rendered nodes) — re-bind the swapped subtree.
   document.body.addEventListener("htmx:afterSwap", function (e) { bind(e.target); });
 })();
+
+/*
+ * Theme switcher: each option sets a specific theme on <html> and persists the explicit choice. The
+ * initial theme is already resolved by the inline <head> script in layout.kte (prefers-color-scheme +
+ * localStorage); the active-option underline is CSS-driven, so there's nothing to update here.
+ */
+(function () {
+  document.addEventListener("click", function (e) {
+    var opt = e.target.closest("[data-set-theme]");
+    if (!opt) return;
+    var theme = opt.getAttribute("data-set-theme");
+    document.documentElement.setAttribute("data-theme", theme);
+    try { localStorage.setItem("theme", theme); } catch (err) {}
+  });
+})();

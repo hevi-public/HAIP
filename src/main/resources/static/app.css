@@ -21,6 +21,7 @@
   --bar:         #f2f0e6;  /* header & footer bars */
   --strip:       #edeee0;  /* table-header / strip rows */
   --wash:        #eef0e4;  /* composer "in-context" green wash */
+  --row-hover:   #f2f1e4;  /* thread / member row hover */
 
   /* borders */
   --line:        #e3e2cf;  /* hairline */
@@ -64,6 +65,58 @@
 
   --sans: Verdana, "DejaVu Sans", Geneva, Tahoma, sans-serif;
   --mono: "DejaVu Sans Mono", ui-monospace, "SF Mono", "Courier New", monospace;
+
+  color-scheme: light;
+}
+
+/* ------------------------------------------------------------------ dark theme
+ * Token-only override layer (palette source: HAIP_design/AI Forum - *-Dark-.dc.html).
+ * Every component reads these vars, so flipping html[data-theme="dark"] re-skins the whole app.
+ * The sage accent family is intentionally LEFT UNCHANGED — the comps keep the light-sage chips on
+ * dark surfaces. Per-persona avatar hues (.monogram / .branch-index__dot, see below) are also left
+ * as-is on purpose, pending a visual pass. */
+html[data-theme="dark"] {
+  /* surfaces */
+  --page:        #15150e;
+  --frame:       #232219;
+  --card:        #2a2920;
+  --input:       #2a2920;
+  --bar:         #2e2d23;
+  --strip:       #343328;
+  --wash:        #2b3020;  /* composer "in-context" green wash (comp: in-path/target bg) */
+  --row-hover:   #34332a;  /* thread / member row hover — a clear step above --card on dark */
+
+  /* borders */
+  --line:        #3c3b30;
+  --line-dotted: #37362c;
+  --line-node:   #34332a;
+
+  /* sage accent left unchanged (stays light on dark, per comps); only the tree spine shifts */
+  --spine:       #3a3930;  /* default tree spine (comp: inactive spine) */
+  --spine-live:  #aab487;  /* in-context / active spine (comp: in-path spine) */
+
+  /* text */
+  --ink:         #e7e5d6;
+  --muted:       #a8a690;
+  --faint:       #a3a18b;
+  --faint-2:     #9a9a86;
+  --link:        #9aa6c4;
+
+  /* code / popover inset — slightly lighter than the frame so it still reads as an inset */
+  --dark:        #34342a;
+  --dark-ink:    #e9e8d6;
+  --dark-dim:    #b3b596;
+
+  /* error-state accents — provisional dark tints (eyeball later, same as persona hues) */
+  --clay-bg:   #2f241d;  --clay-line: #4a3a2e;  --clay-ink: #d79a7f;
+  --amber-bg:  #2e2a1a;  --amber-line:#4a4327;  --amber-ink:#d8bd78;
+  --grey-bg:   #2c2b22;  --grey-ink:  #a8a690;
+
+  /* depth — shadows need more weight against the dark page to read at all */
+  --shadow:      0 1px 4px rgba(0, 0, 0, .4);
+  --shadow-pop:  0 6px 22px rgba(0, 0, 0, .55);
+
+  color-scheme: dark;
 }
 
 /* -------------------------------------------------------------------- base */
@@ -111,6 +164,26 @@ a:hover { text-decoration: underline; }
 .site-nav a[aria-current="page"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--sage); }
 .site-header__spacer { margin-left: auto; }
 .site-header__crumb { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+
+/* theme switcher: both options shown ("☾ dark / ☀ light"), the active one underlined. Mirrors the
+ * .site-nav active treatment (sage border-bottom) so it reads as part of the header chrome. The
+ * active state is CSS-driven off html[data-theme], so it renders correctly before paint (no flash). */
+.theme-toggle {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 12.5px;
+}
+.theme-toggle__sep { color: var(--faint-2); }
+.theme-toggle__opt {
+  border: 0; background: none; cursor: pointer; font: inherit;
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--link); padding: 2px 0; border-bottom: 2px solid transparent;
+}
+.theme-toggle__opt:hover { color: var(--ink); }
+html:not([data-theme="dark"]) .theme-toggle__opt[data-set-theme="light"],
+html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
+  color: var(--ink); font-weight: 700; border-bottom-color: var(--sage);
+}
 
 .container { max-width: var(--maxw); margin: 0 auto; padding: 20px clamp(16px, 2.5vw, 36px) 40px; }
 /* The thread view runs full-bleed — it wants every horizontal pixel for the reply tree. Prose stays
@@ -181,7 +254,7 @@ a:hover { text-decoration: underline; }
   border-top: 1px dotted var(--line-dotted);
 }
 .thread-row:first-child { border-top: 0; }
-.thread-row:hover { background: #f2f1e4; }
+.thread-row:hover { background: var(--row-hover); }
 .thread-row[data-unread-count="0"] { padding-left: 17px; }       /* read: no spine, align with unread text */
 .thread-row:not([data-unread-count="0"]) { border-left: 3px solid var(--sage); padding-left: 14px; }
 .thread-row__title { font-weight: 700; font-size: 14px; flex: 1 1 auto; }
@@ -195,7 +268,7 @@ a:hover { text-decoration: underline; }
   border-top: 1px dotted var(--line-dotted);
 }
 .member-row:first-child { border-top: 0; }
-.member-row:hover { background: #f2f1e4; }
+.member-row:hover { background: var(--row-hover); }
 .member-row .thread-row__title { font-weight: 700; font-size: 14px; }
 .member-row .reply__handle { margin-left: auto; color: var(--muted); }
 

@@ -7,6 +7,18 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>${title}</title>
+    <%-- Resolve theme before first paint to avoid a light flash: an explicit localStorage choice wins,
+         otherwise we follow the OS prefers-color-scheme. Runs inline (not /app.js) so it executes
+         synchronously in <head> before the body renders. --%>
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem("theme");
+                var theme = saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+                document.documentElement.setAttribute("data-theme", theme);
+            } catch (e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="/app.css">
     <%-- htmx served from the webjar (see build.gradle.kts); version-agnostic path via webjars-locator-lite --%>
     <script src="/webjars/htmx.org/dist/htmx.min.js"></script>
@@ -22,6 +34,11 @@
             <a href="/" aria-current="${if (activeNav == "threads") "page" else null}">threads</a>
             <a href="/personas" aria-current="${if (activeNav == "members") "page" else null}">members</a>
         </nav>
+        <div class="theme-toggle" role="group" aria-label="Theme">
+            <button type="button" class="theme-toggle__opt" data-set-theme="dark"><span aria-hidden="true">&#x263E;</span> dark</button>
+            <span class="theme-toggle__sep" aria-hidden="true">/</span>
+            <button type="button" class="theme-toggle__opt" data-set-theme="light"><span aria-hidden="true">&#x2600;</span> light</button>
+        </div>
     </header>
     <main class="container">
     ${content}

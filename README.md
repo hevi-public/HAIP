@@ -111,7 +111,7 @@ src/main/kotlin/com/aiforum/
   config/     ClockConfig, ProfileGuard, DataDirectoryInitializer (auto-creates the SQLite data dir
               at startup), PersonaSeeder + PersonaSeedProperties (seeds the default persona team)
 src/main/jte/ layout.kte (page shell + htmx) · fragments/ (composer, replyNode, replyList) — stable data-* hooks
-src/main/resources/static/ app.css + app.js — hand-written styling layer (sage HUP aesthetic, htmx-aware auto-grow)
+src/main/resources/static/ app.css + app.js — hand-written styling layer (sage HUP aesthetic, light/dark theme tokens, htmx-aware auto-grow, theme switcher)
 src/test/kotlin/com/aiforum/
   acceptance/ Cucumber↔Spring wiring, scriptable LlmClient fake, steps, hooks, support
   tier0/      pure-function tests
