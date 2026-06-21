@@ -146,6 +146,7 @@ class ThreadController(
                 out += BranchIndexEntry(
                     node.id, node.authorId, node.depth,
                     Snippet.oneLine(node.body, BRANCH_SNIPPET_LEN), AuthorColor.hue(node.authorId, personas),
+                    starred = node.starred,
                 )
             }
             node.children.forEach(::walk)

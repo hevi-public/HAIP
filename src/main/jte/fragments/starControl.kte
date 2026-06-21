@@ -1,0 +1,26 @@
+@import com.aiforum.dto.ReplyView
+@import com.aiforum.dto.GenerationState
+@param reply: ReplyView
+<%-- The owner's star bookmark (§7): firewalled from the model, a pure navigation aid. The outer span
+     is the htmx swap target — a toggle POST replaces just this control, leaving the rest of the action
+     bar untouched. data-starred is the authoritative state nav.js mirrors onto the rail entry so the
+     branch-index marker flips without a reload (it reads .reply__star-area[data-reply-id][data-starred]).
+     Only POSTED nodes can be starred — a drafting/failed node has no rail entry to mark. --%>
+<span class="reply__star-area" data-reply-id="${reply.id}" data-starred="${reply.starred.toString()}">
+    @if(reply.state == GenerationState.POSTED)
+        <button type="button"
+                class="btn btn--ghost reply__star-btn @if(reply.starred)is-starred@endif"
+                aria-pressed="${reply.starred.toString()}"
+                hx-post="/replies/${reply.id}/star"
+                hx-target="closest .reply__star-area"
+                hx-swap="outerHTML">
+            <svg class="icon reply__star-icon" viewBox="0 0 24 24"
+                 fill="${if (reply.starred) "currentColor" else "none"}" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true" focusable="false">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+            <span>@if(reply.starred)Starred@else Star@endif</span>
+        </button>
+    @endif
+</span>

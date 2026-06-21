@@ -14,8 +14,16 @@
             @for(entry in entries)
                 <li class="branch-index__row" style="--bi-depth: ${entry.depth};">
                     <a class="branch-index__link" href="#reply-${entry.id}"
-                       data-branch-index-entry="${entry.id}">
+                       data-branch-index-entry="${entry.id}" data-starred="${entry.starred.toString()}">
+                        <%-- Marker: a star (in the author's hue) when the owner has bookmarked this
+                             comment, otherwise the plain mini-avatar dot. Both carry --mono-h so the
+                             colour stays the author's either way. nav.js can flip between them live by
+                             toggling data-starred on the anchor (CSS shows one or the other). --%>
                         <span class="branch-index__dot" aria-hidden="true" style="--mono-h: ${entry.hue}"></span>
+                        <svg class="branch-index__star" viewBox="0 0 24 24" aria-hidden="true"
+                             style="--mono-h: ${entry.hue}" fill="currentColor">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
                         <span class="branch-index__author">${entry.author}</span>
                         <span class="branch-index__snippet">${entry.snippet}</span>
                     </a>

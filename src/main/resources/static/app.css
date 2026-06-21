@@ -434,6 +434,22 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 .branch-index__snippet::before { content: " — "; color: var(--faint-2); }
 .branch-index__link:hover .branch-index__author { text-decoration: underline; }
 .branch-index__row + .branch-index__row { border-top: 1px dotted var(--line-dotted); }
+/* starred marker: a star in the author's hue, swapped in for the dot when the owner bookmarks a
+   comment. Both glyphs are always in the DOM; data-starred on the link picks which shows, so nav.js
+   can flip a star live (after a toggle) by just changing the attribute — no re-render. */
+.branch-index__star {
+  display: none; width: 11px; height: 11px; margin-right: 5px; vertical-align: baseline;
+  color: hsl(var(--mono-h, 75) 52% 58%);
+}
+.branch-index__link[data-starred="true"] .branch-index__dot { display: none; }
+.branch-index__link[data-starred="true"] .branch-index__star { display: inline-block; }
+/* the selected comment, reflected in the rail — same cursor language as .reply.is-current */
+.branch-index__row.is-current { background: var(--wash); border-radius: var(--r-sm); }
+.branch-index__row.is-current .branch-index__link { box-shadow: inset 3px 0 0 0 var(--spine-live); padding-left: 4px; }
+
+/* the starred toggle on a comment: a filled star reads "bookmarked" at a glance */
+.reply__star-btn.is-starred { color: hsl(45 90% 42%); }
+.reply__star-icon { width: 14px; height: 14px; vertical-align: text-bottom; }
 
 /* context legend — static key for the tree's spine/dimming convention */
 .context-legend { list-style: none; margin: 0; padding: 0; }
