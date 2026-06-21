@@ -1,5 +1,6 @@
 package com.aiforum.llm
 
+import com.aiforum.domain.context.TranscriptRenderer
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
@@ -147,7 +148,7 @@ open class ProcessLlmClient(
     }
 
     private fun renderPrompt(context: PromptContext, personaName: String): String {
-        val transcript = context.comments.joinToString("\n\n") { "${it.authorId}: ${it.body}" }
+        val transcript = TranscriptRenderer.render(context.comments)
         // Name the persona explicitly and point it at the most recent message: without this the model
         // sees its own past lines labelled "$name:" amid the transcript and gets meta about who it is
         // ("the framing got flipped"). The system prompt carries the character; this carries the task.
@@ -155,7 +156,8 @@ open class ProcessLlmClient(
             "You are opening a new thread in the forum. Post the first message as $personaName, in " +
                 "character. $BREVITY"
         } else {
-            "The forum discussion so far (each line is \"author: message\"):\n\n$transcript\n\n---\n" +
+            "The forum discussion so far. Each line is \"[#ref] author: message\"; indentation shows " +
+                "reply depth and \"↳ replying to #n\" marks which message it answers:\n\n$transcript\n\n---\n" +
                 "Write ${personaName}'s next reply, responding to the most recent message above. " +
                 "Reply with the message text only, in character as $personaName. $BREVITY"
         }
