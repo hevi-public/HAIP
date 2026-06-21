@@ -8,3 +8,7 @@ spring:
 aiforum:
   backups:
     enabled: true
+  llm:
+    # Dev dogfooding: let personas actually hit the web (e.g. "check HackerNews"). Leave the domain
+    # allowlist blank for any host, or scope it (see application.yml) if you want to keep dev fetches tight.
+    web-fetch-enabled: true
