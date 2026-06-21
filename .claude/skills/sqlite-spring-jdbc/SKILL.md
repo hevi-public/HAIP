@@ -84,6 +84,14 @@ aiforum:
 `application-dev.yml` / `application-prod.yml` point at their own files (e.g.
 `jdbc:sqlite:data/aiforum-dev.db`, `…/aiforum.db`) with backups enabled.
 
+These URLs are *relative*, and xerial does NOT create the parent directory — so a fresh checkout
+(where `data/` is gitignored, hence absent) used to fail at Flyway startup with
+`[SQLITE_CANTOPEN] unable to open database file`. `DataDirectoryInitializer` (an
+`org.springframework.boot.EnvironmentPostProcessor`, registered in `META-INF/spring.factories`) now
+parses `spring.datasource.url`, strips the `jdbc:sqlite:` prefix + `?…` query, and creates the parent
+dir before any bean — Flyway, Hikari — runs. So no manual `mkdir data` is needed; add a new datasource
+profile and the dir is handled automatically.
+
 ### The profile guard (rail-tested config)
 
 Config drifts silently, so assert it. A small bean validates the wiring at startup, and a rail
