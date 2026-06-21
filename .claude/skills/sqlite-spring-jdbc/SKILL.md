@@ -81,16 +81,44 @@ aiforum:
     enabled: false        # ← rail-tested: backups OFF under test
 ```
 
-`application-dev.yml` / `application-prod.yml` point at their own files (e.g.
-`jdbc:sqlite:data/aiforum-dev.db`, `…/aiforum.db`) with backups enabled.
+`application-dev.yml` is a *relative* throwaway file in the project tree
+(`jdbc:sqlite:data/aiforum-dev.db`) — nuke it freely to test intermediate stages with a fresh DB.
+`application-prod.yml` is a *persistent* home-directory DB for long-term work:
 
-These URLs are *relative*, and xerial does NOT create the parent directory — so a fresh checkout
-(where `data/` is gitignored, hence absent) used to fail at Flyway startup with
-`[SQLITE_CANTOPEN] unable to open database file`. `DataDirectoryInitializer` (an
-`org.springframework.boot.EnvironmentPostProcessor`, registered in `META-INF/spring.factories`) now
-parses `spring.datasource.url`, strips the `jdbc:sqlite:` prefix + `?…` query, and creates the parent
-dir before any bean — Flyway, Hikari — runs. So no manual `mkdir data` is needed; add a new datasource
-profile and the dir is handled automatically.
+```yaml
+spring:
+  datasource:
+    url: jdbc:sqlite:${user.home}/.haip/data/aiforum.db?journal_mode=WAL&busy_timeout=5000&foreign_keys=on
+```
+
+Both have backups enabled. Launch prod with **`./gradlew bootRunProd`** (a `BootRun` task passing
+`--spring.profiles.active=prod`); plain `bootRun` stays dev.
+
+### Filesystem paths: absolute + `~`-hardened (the rule for ALL path config)
+
+> Any new filesystem-path config — the DB here, but equally **backups**, exports, logs — must resolve
+> to an **absolute** path and tolerate a `~`. Two traps, both real:
+> 1. **Relative defaults leak into the cwd.** A bare `jdbc:sqlite:data/…` is relative to wherever the
+>    process started, so prod data would land in the project dir instead of the home dir. Prod uses
+>    `${user.home}` (resolved by Spring *before* the URL is read) to stay absolute.
+> 2. **The JVM does NOT expand a leading `~`.** `Path.of("~/x")` makes a literal junk `~` directory in
+>    the cwd (nasty to delete) and the driver opens the wrong file. So **never rely on `~` reaching the
+>    filesystem.**
+
+`DataDirectoryInitializer` (an `org.springframework.boot.EnvironmentPostProcessor`, registered in
+`META-INF/spring.factories`) enforces both before any bean — Flyway, Hikari — runs. It delegates
+parsing/expansion to the pure, tier0-tested `config/SqlitePath.expand(url, homeDir)` (strips the
+`jdbc:sqlite:` prefix + `?…` query, expands a leading `~`/`~/…` against `user.home`, returns `null` for
+in-memory/non-sqlite), then `Files.createDirectories(parent)` and — if expansion changed the URL —
+**republishes** it via an `addFirst` `MapPropertySource` so the driver opens the same absolute file the
+dir was created for. Net effect: add a new datasource profile and the dir is handled automatically; a
+literal `~` can never create a stray dir. (This is also the fresh-checkout fix for the old
+`[SQLITE_CANTOPEN] unable to open database file` — no manual `mkdir data` needed.)
+
+**When you add the second path (e.g. the backup writer):** don't hand-roll a path again — reuse
+`SqlitePath`'s `~`-expansion (factor it into a shared helper once there's a real second consumer) and
+add a `ProfileGuard`-style assertion that prod paths are absolute, pinned by a `config_guardrails`
+rail scenario. Code beats prose for a contract this easy to reintroduce.
 
 ### The profile guard (rail-tested config)
 
@@ -202,3 +230,8 @@ Cheapest reliable approach: `DELETE FROM` every table (children before parents, 
 - App boots under `test` and Flyway applies migrations to `build/aiforum-test.db` (delete the file to
   start clean).
 - The `ProfileGuard` throws if the test profile is ever pointed at a non-test URL or has backups on.
+- `tier0` runs `SqlitePathTest` (pure `~`-expansion); `tier1` runs `DataDirectoryInitializerTest`
+  (dir-creation + `~`/republish) and `MigrationPipelineTest` (Flyway upgrades an *older* DB forward:
+  migrate to V3, seed rows, migrate to latest, assert data survives + new-column DEFAULT/backfill).
+- `./gradlew bootRunProd` boots the prod profile against `~/.haip/data/aiforum.db` (persistent; created
+  on first run) — confirm no stray `~` dir appears in the project.

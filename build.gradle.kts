@@ -128,4 +128,15 @@ tasks.register("verifyAll") {
     dependsOn("tier0", "tier1", "tier2", "acceptance")
 }
 
+// `bootRun` (plugin-configured) uses the default `dev` profile → throwaway project-local DB. This
+// sibling runs the prod profile for long-term work: a persistent DB at ~/.haip/data/aiforum.db (see
+// application-prod.yml; ${user.home} resolves there). The profile is passed as an application arg.
+tasks.register<org.springframework.boot.gradle.tasks.run.BootRun>("bootRunProd") {
+    group = "application"
+    description = "Runs the app with the prod profile (persistent DB at ~/.haip/data/aiforum.db)."
+    mainClass.set("com.aiforum.AiForumApplicationKt")
+    classpath = sourceSets.main.get().runtimeClasspath   // pulls in generateJte → compile, like bootRun
+    args("--spring.profiles.active=prod")
+}
+
 tasks.named("check") { dependsOn("verifyAll") }
