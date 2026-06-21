@@ -193,7 +193,16 @@
       return;
     }
     var menu = openPalette(form);
-    if (!menu) return;
+    if (!menu) {
+      // No palette open: Enter submits the form, Shift+Enter inserts a newline (default textarea
+      // behavior). requestSubmit() fires a real submit event so htmx intercepts and posts it.
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        if (typeof form.requestSubmit === "function") form.requestSubmit();
+        else { var btn = form.querySelector("button[type='submit']"); if (btn) btn.click(); }
+      }
+      return;
+    }
     if (e.key === "ArrowDown") { e.preventDefault(); highlight(menu, activeIndex(menu) + 1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); highlight(menu, activeIndex(menu) - 1); }
     else if (e.key === "Enter") {

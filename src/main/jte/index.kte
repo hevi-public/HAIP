@@ -4,14 +4,6 @@
 @template.layout(title = "AI Forum", activeNav = "threads", content = @`
     <div data-page="home">
         <h1 class="home__title">Threads</h1>
-        <%-- Start a thread: a plain form POST (form-urlencoded) to /threads → PRG redirect onto the new
-             thread page, where the bottom composer asks the room. Title-only here; the question + room
-             are posed from inside the thread. --%>
-        <form class="new-thread" data-new-thread method="post" action="/threads">
-            <input class="new-thread__title" type="text" name="title" required
-                   placeholder="Start a new thread… give it a title">
-            <button class="btn" type="submit">Create ▸</button>
-        </form>
         @if(threads.isEmpty())
             <div data-empty-state="no-threads">No threads yet — start one!</div>
         @else
@@ -26,5 +18,19 @@
                 @endfor
             </div>
         @endif
+        <%-- Start a thread: a plain form POST (form-urlencoded) to /threads → PRG redirect onto the new
+             thread page, where the bottom composer asks the room. Split into title + body (the opening
+             post's content, §2); the room is summoned from inside the thread. Body is optional. Sits
+             below the list so the thread index is the first thing the page presents. --%>
+        <form class="new-thread" data-new-thread method="post" action="/threads">
+            <span class="new-thread__label">Start a new thread</span>
+            <input class="new-thread__title" type="text" name="title" required
+                   placeholder="Title — what's the thread about?">
+            <textarea class="new-thread__body" name="text" rows="3"
+                      placeholder="Body — the details of your post (optional)"></textarea>
+            <div class="new-thread__actions">
+                <button class="btn" type="submit">Create ▸</button>
+            </div>
+        </form>
     </div>
 `)

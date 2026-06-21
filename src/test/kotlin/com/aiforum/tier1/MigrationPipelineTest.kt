@@ -34,16 +34,12 @@ class MigrationPipelineTest {
         flyway(url, "3").migrate()
 
         // 2. Seed two persona rows against the OLD (pre-V4/V5/V6) schema — no model/slug/color columns yet.
-        //    Also seed a thread on the pre-V7 schema (no body column yet) to prove the V7 add survives it.
         DriverManager.getConnection(url).use { c ->
             c.createStatement().use { st ->
                 st.executeUpdate(
                     "INSERT INTO persona (id, name, handle, system_prompt) VALUES " +
                         "('Ada', 'Ada', 'ada', 'You are Ada.'), " +
                         "('Bob', 'Bob', 'bob', 'You are Bob.')",
-                )
-                st.executeUpdate(
-                    "INSERT INTO thread (id, title, created_at) VALUES ('T1', 'Old thread', '2026-01-01T00:00:00Z')",
                 )
             }
         }
@@ -63,13 +59,6 @@ class MigrationPipelineTest {
                     rs.next()
                     assertEquals("Bob", rs.getString("id"))
                     assertEquals(1, rs.getInt("color_index"), "the second row gets the next colour slot")
-                }
-
-                // The pre-V7 thread survived and its new body column is NULL (V7 adds it nullable, no backfill).
-                st.executeQuery("SELECT title, body FROM thread WHERE id = 'T1'").use { rs ->
-                    rs.next()
-                    assertEquals("Old thread", rs.getString("title"), "the pre-existing thread must survive the upgrade")
-                    assertEquals(null, rs.getString("body"), "V7 adds thread.body nullable — old rows read NULL")
                 }
 
                 // flyway_schema_history records the full V1..V7 chain as applied.

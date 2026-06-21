@@ -48,41 +48,38 @@ class ThreadController(
     // on the returned thread HTML. Both go through [newThread] so the behaviour can't drift.
     @PostMapping("/threads", consumes = [MediaType.APPLICATION_JSON_VALUE])
     fun createJson(@RequestBody req: CreateThreadRequest, model: Model): String {
-        return renderThread(newThread(req.title, req.text), model)
+        val id = newThread(req.title, req.text)
+        return renderThread(id, req.title, req.text, model)
     }
 
     @PostMapping("/threads", consumes = [MediaType.APPLICATION_FORM_URLENCODED_VALUE])
     fun createForm(req: CreateThreadRequest): String {
-        val thread = newThread(req.title, req.text)
+        val id = newThread(req.title, req.text)
         // Post/Redirect/Get: land the browser on the new thread (correct URL, refresh-safe), where the
         // bottom composer is waiting to ask the room.
-        return "redirect:/threads/${thread.id}"
+        return "redirect:/threads/$id"
     }
 
-    // The opening question [text] is the post's body — it must NOT be dropped here (without it the
-    // owner's words vanish "on the way in" and the room only ever sees a blank transcript). Blank → null
-    // (the browser quick-create posts a title only). The post stays the thread-backed root node.
-    private fun newThread(title: String, text: String): ThreadRepository.Thread {
+    // text is the opening post's body — split out from the title on the new-thread form (§2). Optional;
+    // blank for the title-only API/browser paths.
+    private fun newThread(title: String, body: String): String {
         val id = UUID.randomUUID().toString()
-        val body = text.trim().ifBlank { null }
         threads.insert(id, title, body)
-        return ThreadRepository.Thread(id, title, body)
+        return id
     }
 
     @GetMapping("/threads/{id}")
     fun view(@PathVariable id: String, model: Model): String {
         val thread = threads.find(id) ?: return "redirect:/"
         threadReads.markRead(id)
-        return renderThread(thread, model)
+        return renderThread(thread.id, thread.title, thread.body, model)
     }
 
-    private fun renderThread(thread: ThreadRepository.Thread, model: Model): String {
-        val id = thread.id
+    private fun renderThread(id: String, title: String, body: String, model: Model): String {
         val all = comments.threadComments(id)
         model.addAttribute("threadId", id)
-        model.addAttribute("title", thread.title)
-        // The opening post renders on the OP node (thread__op), under the title.
-        model.addAttribute("body", thread.body)
+        model.addAttribute("title", title)
+        model.addAttribute("body", body)
         // Nest replies under their parents so the page reflects the comment tree (a persona reply sits
         // under the message it answered). replyNode.kte renders reply.children recursively; the flat
         // list it gets here was rendering every node at level 0. Children keep their repository order
