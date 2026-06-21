@@ -50,3 +50,12 @@ Feature: The front page shows the side-rail boxes
   Scenario: The main column carries the ask-the-room composer
     When the owner opens the front page
     Then the front page shows the ask-the-room composer
+
+  Scenario: The composer starts open on an empty forum, so a first visit needs no click
+    When the owner opens the front page
+    Then the ask-the-room composer is open
+
+  Scenario: The composer is collapsed once there are threads to browse
+    Given a thread "Scaling SQLite" exists
+    When the owner opens the front page
+    Then the ask-the-room composer is collapsed
