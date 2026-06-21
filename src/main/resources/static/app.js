@@ -266,47 +266,5 @@
   });
 })();
 
-/*
- * Persona prompt staleness (plan_docs/persona-prompt-edit-ux.md): the composed system prompt can drift
- * from the dials/abilities/descriptor it was composed from. When the owner changes one of those inputs we
- * mark the shown prompt STALE — disable Save and flag Regenerate (a ⚠ via the .is-needed highlight) so the
- * missing step is obvious. Regenerating (htmx swaps fresh text into the prompt) or hand-editing the prompt
- * (the owner taking it over) clears it. Pure progressive enhancement: with JS off the server still resyncs
- * a stale prompt on save. Event-delegated, so it covers any persona form on the page.
- */
-(function () {
-  function formOf(el) { return el && el.closest("[data-persona-form]"); }
-  // The composer inputs whose change makes the prompt stale.
-  function isComposerInput(el) {
-    return el.matches('[name^="dial_"], [name="abilities"], [name="descriptor"]');
-  }
-  function setStale(form, stale) {
-    if (!form) return;
-    var prompt = form.querySelector("[data-prompt-field]");
-    // Nothing to go stale until there's a prompt to be out of date (fresh create starts empty → the
-    // server composes on save), so only gate Save when a prompt is actually shown.
-    var has = prompt && prompt.value.trim().length > 0;
-    var on = stale && has;
-    form.classList.toggle("is-prompt-stale", on);
-    var save = form.querySelector('button[type="submit"]');
-    if (save) save.disabled = on;
-    var regen = form.querySelector("[data-preview-prompt]");
-    if (regen) regen.classList.toggle("is-needed", on);
-  }
-  document.body.addEventListener("input", function (e) {
-    var form = formOf(e.target);
-    if (!form) return;
-    // The owner hand-editing the prompt makes it theirs → no longer stale.
-    if (e.target.matches("[data-prompt-field]")) { setStale(form, false); return; }
-    if (isComposerInput(e.target)) setStale(form, true);
-  });
-  document.body.addEventListener("change", function (e) {
-    var form = formOf(e.target);
-    if (form && isComposerInput(e.target)) setStale(form, true);
-  });
-  // A successful Regenerate swaps fresh text into the prompt field → in sync again.
-  document.body.addEventListener("htmx:afterSwap", function (e) {
-    var form = formOf(e.target);
-    if (form && e.target.matches("[data-prompt-field]")) setStale(form, false);
-  });
-})();
+// Persona create/edit prompt-staleness guard lives in persona-form.js (+ persona-form-core.mjs, unit
+// tested) — a pure-core/glue module pair like nav, loaded separately from layout.kte.

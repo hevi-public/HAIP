@@ -60,5 +60,9 @@ Regenerate reads as "do this first". When stale, Regenerate carries a `⚠` and 
 
 - Acceptance (HTTP): the edit form offers a Cancel link to the profile; a stale submit (unchanged prompt +
   changed dials) re-composes; a hand-edited prompt persists with no composition call.
-- **Not covered by Cucumber (JS):** the actual Save-disable / Regenerate-flag. Revisit when a DOM/Playwright
-  driver replaces the HTTP client (see `HttpClient` KDoc).
+- **Frontend unit tier** (`src/test/js/persona-form-core.test.mjs`, run by the `jsTest` Gradle task in the
+  pipeline): the staleness decision logic — `classifyField` / `reduceStale` / `shouldGate` — extracted into
+  the pure `persona-form-core.mjs` (DOM glue in `persona-form.js`), the JS analogue of a Tier-0 unit. This
+  covers *which* changes go stale and that the gate needs a shown prompt.
+- **Still not covered (full DOM integration):** that the glue actually toggles `disabled`/`is-needed` on the
+  real page — needs a browser/Playwright driver (see `HttpClient` KDoc). Manually verified for now.

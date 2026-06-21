@@ -107,6 +107,17 @@ registerTier("tier0", "tier0", null)
 registerTier("tier1", "tier1", "tier0")
 registerTier("tier2", "tier2", "tier1")
 
+// Frontend unit tier (src/test/js): pure *-core.mjs modules under node:test — the JS analogue of tier0
+// (pure logic, no DOM/IO). Delegates to `npm test` so there's one source of truth for the runner glob;
+// honours discovery mode like the JVM tiers so red breaks the build rather than being a suggestion.
+tasks.register<Exec>("jsTest") {
+    group = "verification"
+    description = "Runs the frontend (node:test) unit tests."
+    workingDir = projectDir
+    commandLine("npm", "test")
+    isIgnoreExitValue = discoveryMode
+}
+
 tasks.register<Test>("acceptance") {
     testClassesDirs = testSourceSet.output.classesDirs
     classpath = testSourceSet.runtimeClasspath
@@ -124,8 +135,8 @@ tasks.register<Test>("acceptance") {
 
 tasks.register("verifyAll") {
     group = "verification"
-    description = "Runs all test tiers lowest-first, then acceptance."
-    dependsOn("tier0", "tier1", "tier2", "acceptance")
+    description = "Runs all test tiers lowest-first (incl. the frontend jsTest), then acceptance."
+    dependsOn("jsTest", "tier0", "tier1", "tier2", "acceptance")
 }
 
 // `bootRun` (plugin-configured) uses the default `dev` profile → throwaway project-local DB. This
