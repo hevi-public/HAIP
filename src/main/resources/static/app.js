@@ -33,17 +33,35 @@
 })();
 
 /*
- * Theme switcher: each option sets a specific theme on <html> and persists the explicit choice. The
- * initial theme is already resolved by the inline <head> script in layout.kte (prefers-color-scheme +
- * localStorage); the active-option underline is CSS-driven, so there's nothing to update here.
+ * Theme switcher: each option persists a mode (dark | light | auto) and applies it. data-theme-mode
+ * records the choice (drives the active-option underline, CSS-side); data-theme is the resolved palette
+ * the styles key off. In "auto" the palette follows the OS and tracks it live (e.g. flips at sunset).
+ * Initial state is already resolved by the inline <head> script in layout.kte to avoid a flash.
  */
 (function () {
+  var mql = matchMedia("(prefers-color-scheme: dark)");
+  function resolve(mode) {
+    return mode === "auto" ? (mql.matches ? "dark" : "light") : mode;
+  }
+  function apply(mode) {
+    var root = document.documentElement;
+    root.setAttribute("data-theme-mode", mode);
+    root.setAttribute("data-theme", resolve(mode));
+  }
+
   document.addEventListener("click", function (e) {
     var opt = e.target.closest("[data-set-theme]");
     if (!opt) return;
-    var theme = opt.getAttribute("data-set-theme");
-    document.documentElement.setAttribute("data-theme", theme);
-    try { localStorage.setItem("theme", theme); } catch (err) {}
+    var mode = opt.getAttribute("data-set-theme");
+    apply(mode);
+    try { localStorage.setItem("theme", mode); } catch (err) {}
+  });
+
+  // While in auto mode, follow OS changes live without a reload.
+  mql.addEventListener("change", function () {
+    var mode;
+    try { mode = localStorage.getItem("theme"); } catch (err) {}
+    if ((mode || "auto") === "auto") apply("auto");
   });
 })();
 
