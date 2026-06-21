@@ -8,6 +8,7 @@ import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 
 /**
@@ -43,6 +44,45 @@ class OwnerControlSteps(
         assertTrue(
             (world.lastBody ?: "").contains("hx-post=\"/replies/$id/plus-one\""),
             "expected +1 button (hx-post=/replies/$id/plus-one) in page:\n${world.lastBody}",
+        )
+    }
+
+    @When("the owner deletes {string}'s reply")
+    fun deleteReply(persona: String) {
+        val id = world.replyIds["$persona's reply"] ?: error("no remembered reply for $persona")
+        val resp = http.post("/replies/$id/delete")
+        world.lastStatus = resp.statusCode.value()
+        world.lastBody = resp.body
+    }
+
+    @Then("the delete button is present on {string}'s reply")
+    fun deleteButtonPresent(persona: String) {
+        val id = world.replyIds["$persona's reply"] ?: error("no remembered reply for $persona")
+        assertNotNull(
+            Html.replyAttr(world.lastBody ?: "", id, "data-reply-id"),
+            "expected reply node for $persona in page",
+        )
+        assertTrue(
+            (world.lastBody ?: "").contains("hx-post=\"/replies/$id/delete\""),
+            "expected delete button (hx-post=/replies/$id/delete) in page:\n${world.lastBody}",
+        )
+    }
+
+    @Then("the thread no longer shows {string}'s reply")
+    fun threadNoLongerShows(persona: String) {
+        val id = world.replyIds["$persona's reply"] ?: error("no remembered reply for $persona")
+        assertNull(
+            Html.replyAttr(world.lastBody ?: "", id, "data-reply-id"),
+            "expected $persona's reply ($id) to be gone from the page:\n${world.lastBody}",
+        )
+    }
+
+    @Then("the thread still shows {string}'s reply")
+    fun threadStillShows(persona: String) {
+        val id = world.replyIds["$persona's reply"] ?: error("no remembered reply for $persona")
+        assertNotNull(
+            Html.replyAttr(world.lastBody ?: "", id, "data-reply-id"),
+            "expected $persona's reply ($id) to still be on the page:\n${world.lastBody}",
         )
     }
 

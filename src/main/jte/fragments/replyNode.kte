@@ -61,30 +61,62 @@
                     hx-target="closest article" hx-swap="outerHTML">Cancel</button>
         </div>
     @endif
-    @template.fragments.voteArea(reply = reply)
-    <%-- /more — owner directive that re-grants depth budget (§7). Appears on POSTED nodes whose branch
-         has stalled (depthBudget == 0). The response is a new system directive node appended inside
-         this article; children stay in the DOM via beforeend. --%>
-    @if(reply.state == GenerationState.POSTED && reply.depthBudget == 0)
-        <div class="reply__actions">
+    <%-- Action bar: +1 sits on the left; Delete is pushed to the far right of the same row
+         (.reply__delete { margin-left:auto }). /more and Retry, when present, sit beside +1 on the
+         left. The vote area stays its own htmx swap target, so a +1 swaps it in place untouched. --%>
+    <div class="reply__actionbar">
+        @template.fragments.voteArea(reply = reply)
+        <%-- /more — owner directive that re-grants depth budget (§7). Appears on POSTED nodes whose
+             branch has stalled (depthBudget == 0). The response is a new system directive node appended
+             inside this article; children stay in the DOM via beforeend. --%>
+        @if(reply.state == GenerationState.POSTED && reply.depthBudget == 0)
             <button type="button" class="btn btn--ghost"
                     hx-post="/replies/${reply.id}/more"
                     hx-target="closest article"
                     hx-swap="beforeend">/more</button>
-        </div>
-    @endif
-    <%-- Retry is the dead-end escape for a FAILED/CANCELLED draft (reply.retryable, §4) — the settled
-         counterpart to the DRAFTING Cancel above. The endpoint re-renders this node alone via
-         fragments/replyNode, so outerHTML swapping the closest <article> replaces just this node in
-         place. No data-* hooks here — they all stay on the opening tag. --%>
-    @if(reply.retryable)
-        <div class="reply__actions">
+        @endif
+        <%-- Retry is the dead-end escape for a FAILED/CANCELLED draft (reply.retryable, §4) — the
+             settled counterpart to the DRAFTING Cancel above. The endpoint re-renders this node alone
+             via fragments/replyNode, so outerHTML swapping the closest <article> replaces just this
+             node in place. No data-* hooks here — they all stay on the opening tag. --%>
+        @if(reply.retryable)
             <button type="button" class="btn btn--ghost"
                     hx-post="/replies/${reply.id}/retry"
                     hx-target="closest article"
                     hx-swap="outerHTML">Retry</button>
-        </div>
-    @endif
+        @endif
+        <%-- Delete cascades to the whole subtree (§8 node operations), pushed to the bottom-right of the action row. The
+             trash trigger opens an inline "are you sure" panel (a <details> disclosure) instead of the
+             browser's plain native confirm. The real POST lives on the "Yes, delete" button, so it
+             still outerHTML-swaps this <article> away — children, which render nested inside it, go with
+             it. Cancel just closes the disclosure (no request). Hidden on a DRAFTING node (it has
+             Cancel instead). --%>
+        @if(reply.state != GenerationState.DRAFTING)
+            <details class="reply__delete">
+                <summary class="reply__delete-trigger">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        <line x1="10" y1="11" x2="10" y2="17"/>
+                        <line x1="14" y1="11" x2="14" y2="17"/>
+                    </svg>
+                    <span>Delete</span>
+                </summary>
+                <div class="reply__delete-confirm" role="group" aria-label="Confirm delete">
+                    <p class="reply__delete-warning">Delete this comment and all of its replies? This can't be undone.</p>
+                    <div class="reply__delete-buttons">
+                        <button type="button" class="btn btn--danger"
+                                hx-post="/replies/${reply.id}/delete"
+                                hx-target="closest article"
+                                hx-swap="outerHTML">Yes, delete</button>
+                        <button type="button" class="btn btn--ghost"
+                                onclick="this.closest('details').open = false">Cancel</button>
+                    </div>
+                </div>
+            </details>
+        @endif
+    </div>
     <%-- Inline composer only on a POSTED node whose thread context is known (full page / generate /
          auto-grow); fragments rendered without it (e.g. retry, drafting, failed) re-render without a
          composer. It is a collapsed disclosure so only one reply box opens at a time (§4). --%>
