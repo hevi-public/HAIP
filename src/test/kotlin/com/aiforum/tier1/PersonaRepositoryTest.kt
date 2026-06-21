@@ -55,4 +55,54 @@ class PersonaRepositoryTest {
         data.insertPersona(id = "lune", name = "Lune")
         assertEquals("", personas.find("lune")?.model)
     }
+
+    @Test
+    fun `abilities and dials round-trip through insert and find`() {
+        personas.insert(
+            "lune", "Lune", "",
+            systemPrompt = "composed",
+            abilities = listOf("kotlin", "systems"),
+            dials = mapOf("verbosity" to 1, "agreeableness" to 2),
+        )
+        val found = personas.find("lune")!!
+        assertEquals(listOf("kotlin", "systems"), found.abilities)
+        assertEquals(1, found.dials["verbosity"])
+        assertEquals(2, found.dials["agreeableness"])
+    }
+
+    @Test
+    fun `insert normalizes the dials to the fixed schema`() {
+        // off-schema key dropped, out-of-range clamped, missing axes defaulted.
+        personas.insert("vex", "Vex", "", dials = mapOf("charisma" to 7, "verbosity" to 99))
+        val dials = personas.find("vex")!!.dials
+        assertEquals(com.aiforum.persona.Dials.KEYS.toSet(), dials.keys)
+        assertEquals(com.aiforum.persona.Dials.MAX, dials["verbosity"])
+        assertEquals(com.aiforum.persona.Dials.DEFAULT, dials["rigor"])
+    }
+
+    @Test
+    fun `update rewrites traits and prompt but keeps the colour slot`() {
+        personas.insert("vex", "Vex", "", systemPrompt = "OLD", abilities = listOf("a"), dials = mapOf("warmth" to 1))
+        val colour = personas.find("vex")!!.colorIndex
+
+        personas.update("vex", "Vex", "", model = "", systemPrompt = "NEW", abilities = listOf("b", "c"), dials = mapOf("warmth" to 9))
+
+        val updated = personas.find("vex")!!
+        assertEquals("NEW", updated.systemPrompt)
+        assertEquals(listOf("b", "c"), updated.abilities)
+        assertEquals(9, updated.dials["warmth"])
+        assertEquals(colour, updated.colorIndex, "the avatar colour slot is stable across edits")
+    }
+
+    @Test
+    fun `a persona seeded with the pre-V9 columns reads back empty abilities and dials`() {
+        // The DEFAULT '[]' / '{}' the migration sets must deserialize to empty collections.
+        jdbc.update(
+            "INSERT INTO persona(id, name, handle, system_prompt, slug, color_index) VALUES (?,?,?,?,?,?)",
+            "old", "Old", "old", "You are Old.", "old", 0,
+        )
+        val found = personas.find("old")!!
+        assertEquals(emptyList<String>(), found.abilities)
+        assertEquals(emptyMap<String, Int>(), found.dials)
+    }
 }

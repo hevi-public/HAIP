@@ -54,12 +54,14 @@ class MigrationPipelineTest {
         // 4. The old rows survived, and the new columns carry their migration default / backfill.
         DriverManager.getConnection(url).use { c ->
             c.createStatement().use { st ->
-                st.executeQuery("SELECT id, model, slug, color_index FROM persona ORDER BY rowid").use { rs ->
+                st.executeQuery("SELECT id, model, slug, color_index, abilities, dials FROM persona ORDER BY rowid").use { rs ->
                     rs.next()
                     assertEquals("Ada", rs.getString("id"), "the pre-existing row must survive the upgrade")
                     assertEquals("", rs.getString("model"), "V4 DEFAULT '' applies to the pre-existing row")
                     assertEquals("", rs.getString("slug"), "V5 DEFAULT '' applies to the pre-existing row")
                     assertEquals(0, rs.getInt("color_index"), "V6 backfills colour slots in rowid order")
+                    assertEquals("[]", rs.getString("abilities"), "V9 DEFAULT '[]' applies to the pre-existing row")
+                    assertEquals("{}", rs.getString("dials"), "V9 DEFAULT '{}' applies to the pre-existing row")
                     rs.next()
                     assertEquals("Bob", rs.getString("id"))
                     assertEquals(1, rs.getInt("color_index"), "the second row gets the next colour slot")
@@ -76,7 +78,7 @@ class MigrationPipelineTest {
                 // flyway_schema_history records the full V1..V8 chain as applied.
                 st.executeQuery("SELECT MAX(CAST(version AS INTEGER)) AS v FROM flyway_schema_history").use { rs ->
                     rs.next()
-                    assertEquals(8, rs.getInt("v"), "all eight migrations should be recorded as applied")
+                    assertEquals(9, rs.getInt("v"), "all nine migrations should be recorded as applied")
                 }
             }
         }

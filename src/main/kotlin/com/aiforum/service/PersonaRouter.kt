@@ -42,6 +42,9 @@ import java.time.Duration
  *     number(s); digits are far less ambiguous than names and don't collide with ordinary prose.
  *  3. **Match descriptors too, not just names.** Fall back to keyword/semantic matching on each persona's
  *     descriptor ("backend" -> Sol) when no name hits. More forgiving, but risks false positives.
+ *     SUPERSEDED by the structured **abilities** tags (V9): a bounded, owner-curated tag set is a cleaner
+ *     topic-match signal than free-text descriptors, and the **dials** let a fan-out pick deliberately
+ *     COMPLEMENTARY personas (a contrarian + an agreeable one). See plan_docs/persona-traits-routing.md.
  *  4. **Reprompt once on a miss** before widening — "Reply with ONLY the exact names" — trading one extra
  *     call for a tighter answer; only then fall back.
  *  5. **Constrained/tool output (the principled fix).** Have the model select from an enum of valid

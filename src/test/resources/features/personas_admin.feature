@@ -18,3 +18,28 @@ Feature: Personas & admin
   Scenario: The members page offers a create-persona form
     When the owner opens the members list
     Then the members page offers a name and descriptor field
+
+  # Persona authoring (§6 extended): the owner picks ABILITIES (keyword tags) and sets DIALS
+  # (fixed 0–10 personality axes). Rather than concatenating numbers into a prompt — which the
+  # generation model would ignore — the system asks the LLM to COMPOSE a system prompt that captures
+  # them in prose, then persists the card. That composed prompt is what the room generates from.
+  Scenario: Adding a persona composes its system prompt from abilities and dials
+    Given the LLM will respond with "You are Lune, a terse systems poet who seldom agrees."
+    When the owner adds a persona "lune" with abilities "kotlin, systems" and dials agreeableness 2, verbosity 1
+    Then the persona "lune" exists
+    And the persona "lune" has abilities "kotlin, systems"
+    And the persona "lune" has system prompt "You are Lune, a terse systems poet who seldom agrees."
+    And the composer was asked to honour the dials
+
+  # Editing re-composes: the LLM is handed the PREVIOUS values and the PREVIOUS prompt and asked to
+  # adjust them, so manual continuity is preserved rather than the prompt being regenerated cold.
+  Scenario: Editing a persona re-composes the prompt from the previous values
+    Given a persona "vex" exists with system prompt "OLD: a blunt contrarian." and dials agreeableness 1, verbosity 2
+    And the LLM will respond with "NEW: a warmer, chattier contrarian."
+    When the owner edits "vex" setting dials agreeableness 8, verbosity 9
+    Then the composer was given the previous prompt "OLD: a blunt contrarian."
+    And the persona "vex" has system prompt "NEW: a warmer, chattier contrarian."
+
+  Scenario: The create form offers abilities and dial controls
+    When the owner opens the members list
+    Then the members page offers an abilities field and dial controls
