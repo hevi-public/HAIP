@@ -48,21 +48,23 @@ class ThreadController(
     // on the returned thread HTML. Both go through [newThread] so the behaviour can't drift.
     @PostMapping("/threads", consumes = [MediaType.APPLICATION_JSON_VALUE])
     fun createJson(@RequestBody req: CreateThreadRequest, model: Model): String {
-        val id = newThread(req.title)
-        return renderThread(id, req.title, model)
+        val id = newThread(req.title, req.text)
+        return renderThread(id, req.title, req.text, model)
     }
 
     @PostMapping("/threads", consumes = [MediaType.APPLICATION_FORM_URLENCODED_VALUE])
     fun createForm(req: CreateThreadRequest): String {
-        val id = newThread(req.title)
+        val id = newThread(req.title, req.text)
         // Post/Redirect/Get: land the browser on the new thread (correct URL, refresh-safe), where the
         // bottom composer is waiting to ask the room.
         return "redirect:/threads/$id"
     }
 
-    private fun newThread(title: String): String {
+    // text is the opening post's body — split out from the title on the new-thread form (§2). Optional;
+    // blank for the title-only API/browser paths.
+    private fun newThread(title: String, body: String): String {
         val id = UUID.randomUUID().toString()
-        threads.insert(id, title)
+        threads.insert(id, title, body)
         return id
     }
 
@@ -70,13 +72,14 @@ class ThreadController(
     fun view(@PathVariable id: String, model: Model): String {
         val thread = threads.find(id) ?: return "redirect:/"
         threadReads.markRead(id)
-        return renderThread(thread.id, thread.title, model)
+        return renderThread(thread.id, thread.title, thread.body, model)
     }
 
-    private fun renderThread(id: String, title: String, model: Model): String {
+    private fun renderThread(id: String, title: String, body: String, model: Model): String {
         val all = comments.threadComments(id)
         model.addAttribute("threadId", id)
         model.addAttribute("title", title)
+        model.addAttribute("body", body)
         // Nest replies under their parents so the page reflects the comment tree (a persona reply sits
         // under the message it answered). replyNode.kte renders reply.children recursively; the flat
         // list it gets here was rendering every node at level 0. Children keep their repository order

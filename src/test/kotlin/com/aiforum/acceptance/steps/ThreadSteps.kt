@@ -41,6 +41,27 @@ class ThreadSteps(
         assertTrue(world.threadId != null, "expected thread \"$title\" on the home page after create:\n$home")
     }
 
+    @When("the owner starts a thread titled {string} with body {string} from the browser")
+    fun startThreadWithBodyFromBrowser(title: String, body: String) {
+        // Same browser form path as the title-only step, but the new-thread form now carries a body
+        // (name="text") alongside the title — the opening post's content.
+        http.postForm("/threads", mapOf("title" to title, "text" to body))
+        val home = http.get("/").body ?: ""
+        world.threadId = Regex("""data-thread-id="([^"]+)"\s+data-thread-title="${Regex.escape(title)}"""")
+            .find(home)?.groupValues?.get(1)
+        assertTrue(world.threadId != null, "expected thread \"$title\" on the home page after create:\n$home")
+    }
+
+    @Then("the thread page shows the post body {string}")
+    fun threadPageShowsBody(body: String) {
+        val resp = http.get("/threads/${world.threadId}")
+        world.lastStatus = resp.statusCode.value()
+        world.lastBody = resp.body
+        val html = world.lastBody ?: ""
+        assertTrue(html.contains("data-op-body"), "expected an OP body element in:\n$html")
+        assertTrue(Html.contains(html, body), "expected body \"$body\" in thread page:\n$html")
+    }
+
     @Then("the thread exists with title {string}")
     fun threadExistsWithTitle(title: String) {
         val resp = http.get("/threads/${world.threadId}")

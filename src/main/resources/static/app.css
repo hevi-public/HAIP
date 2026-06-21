@@ -241,6 +241,37 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 /* ---------------------------------------------------------------- home */
 .home__title { font-size: 22px; font-weight: 700; margin: 4px 0 14px; }
 
+/* New-thread composer — a card below the thread list. Stacked: a small label, the title line, then a
+   roomier body box, with the Create button right-aligned below. Shares the card chrome of the thread
+   index it sits under. */
+.new-thread {
+  display: flex; flex-direction: column; gap: 9px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 15px 16px;
+  margin-top: 18px;
+}
+.new-thread__label {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: #6b6e48;
+}
+.new-thread__title, .new-thread__body {
+  width: 100%; box-sizing: border-box;
+  background: var(--input); color: var(--ink);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  font-family: var(--sans);
+  padding: 9px 11px;
+}
+.new-thread__title { font-size: 15px; font-weight: 700; }
+.new-thread__body {
+  font-size: 13.5px; line-height: 1.6;
+  resize: vertical; min-height: 70px;
+}
+.new-thread__title:focus, .new-thread__body:focus { outline: none; border-color: #9aa882; }
+.new-thread__actions { display: flex; justify-content: flex-end; }
+
 .thread-index {
   background: var(--card);
   border: 1px solid var(--line);
@@ -329,6 +360,12 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
   margin-bottom: 14px;
 }
 .thread__title { font-size: 21px; font-weight: 700; line-height: 1.25; margin: 0; max-width: var(--prose); }
+/* The OP body: the post's own content, sitting under the title (the comment tree is the room's reply). */
+.thread__body {
+  margin: 11px 0 0; max-width: var(--prose);
+  font-size: 13.5px; line-height: 1.65; color: var(--ink);
+  white-space: pre-wrap;
+}
 
 /* reply tree -------------------------------------------------------------- */
 .reply-list { display: flex; flex-direction: column; gap: 8px; }
