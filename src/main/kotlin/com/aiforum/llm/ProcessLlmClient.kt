@@ -39,6 +39,20 @@ open class ProcessLlmClient(
         const val KILL_GRACE_MILLIS = 500L
         /** Once the process has exited, its pipes are at EOF; this bounds the reader join so no path can hang. */
         const val STREAM_GRACE_MILLIS = 2_000L
+
+        /**
+         * Length discipline appended to every render. Personas were defaulting to essay-length replies
+         * (a multi-paragraph wall with bullet lists for a one-line point), which makes a threaded forum
+         * unreadable. This asks for variety with a *concise* default — short by default, longer only when
+         * the substance earns it — without hard-capping, so a genuinely meaty reply can still breathe.
+         * It lives in the task prompt (not the stored per-persona system prompt) so it applies to every
+         * persona immediately, including ones already seeded into the DB.
+         */
+        const val BREVITY =
+            "Keep it concise and conversational, the way you'd actually talk in a thread: match the " +
+                "length to what you genuinely have to say. Most replies are a sentence or two; reach " +
+                "for a short paragraph only when the point really needs it, and avoid long bullet " +
+                "lists or essays. Don't restate the question or pad — make your point and stop."
     }
 
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
@@ -110,11 +124,12 @@ open class ProcessLlmClient(
         // sees its own past lines labelled "$name:" amid the transcript and gets meta about who it is
         // ("the framing got flipped"). The system prompt carries the character; this carries the task.
         return if (transcript.isBlank()) {
-            "You are opening a new thread in the forum. Post the first message as $personaName, in character."
+            "You are opening a new thread in the forum. Post the first message as $personaName, in " +
+                "character. $BREVITY"
         } else {
             "The forum discussion so far (each line is \"author: message\"):\n\n$transcript\n\n---\n" +
                 "Write ${personaName}'s next reply, responding to the most recent message above. " +
-                "Reply with the message text only, in character as $personaName."
+                "Reply with the message text only, in character as $personaName. $BREVITY"
         }
     }
 
