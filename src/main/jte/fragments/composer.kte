@@ -33,14 +33,30 @@
          node and seeds the room with it (otherwise the owner's words never appear and the personas only
          ever see a blank transcript, emitting a generic opener). --%>
     <input type="hidden" name="postAsOwner" value="true">
-    <textarea name="text" placeholder="Ask the room…   write a question, pick who answers"></textarea>
+    <textarea name="text" placeholder="Ask the room…   write a question — anyone can answer"></textarea>
     <div class="composer__row">
         <label>who answers</label>
+        <%-- Default to "Anyone": the value "auto" hands the pick to the AI dispatcher, which reads the
+             topic and decides which persona(s) should chime in. Selecting a name instead summons just
+             that persona. The sentinel "auto" matches GenerationService.AUTO_PERSONA. --%>
         <select name="personaIds">
+            <option value="auto" selected>Anyone (the room decides)</option>
             @for(p in personas)
                 <option value="${p.id}">${p.name}</option>
             @endfor
         </select>
+        <%-- When "Anyone" is chosen, this scopes what the dispatcher reads to decide WHO replies:
+             the whole topic (default) or just this branch. Ignored when a specific persona is named.
+             Values match ScopeMode; it's independent of the hidden generation `scope` above. Inline only:
+             the bottom composer is top-level (no ancestor path), so "this branch" == "whole topic" there
+             — omitting it (the controller defaults routingScope to WHOLE_THREAD) keeps that placement clean. --%>
+        @if(placement != "bottom")
+            <label>looking at</label>
+            <select name="routingScope">
+                <option value="WHOLE_THREAD" selected>whole topic</option>
+                <option value="BRANCH_ONLY">this branch</option>
+            </select>
+        @endif
         <button class="btn" type="submit">Ask ▸</button>
     </div>
 </form>

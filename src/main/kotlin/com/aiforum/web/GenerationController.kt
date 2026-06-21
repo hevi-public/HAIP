@@ -21,6 +21,10 @@ data class GenerateRequest(
     val personaIds: List<String> = emptyList(),
     val text: String = "",
     val scope: String? = null,
+    // Scope the "Anyone" dispatcher reads when deciding WHO replies (its own selector in the composer):
+    // WHOLE_THREAD = the whole topic, BRANCH_ONLY = just the branch being replied to. Independent of
+    // [scope] (which scopes what the chosen persona then READS). Null/unset => WHOLE_THREAD.
+    val routingScope: String? = null,
     // non-null with a default — works because the Jackson 3 Kotlin module applies Kotlin defaults to
     // omitted fields (without that module this would 400 on "Cannot map null into type boolean").
     val includeSiblings: Boolean = false,
@@ -64,11 +68,12 @@ class GenerationController(
             return "fragments/replyList"
         }
         val scope = req.scope?.let { runCatching { ScopeMode.valueOf(it) }.getOrNull() } ?: ScopeMode.WHOLE_THREAD
+        val routingScope = req.routingScope?.let { runCatching { ScopeMode.valueOf(it) }.getOrNull() } ?: ScopeMode.WHOLE_THREAD
         // Async (§4): start drafting and return the DRAFTING node(s) at once. Each node self-polls
         // GET /replies/{id} and carries a Cancel control; it settles to POSTED|FAILED|CANCELLED later.
         model.addAttribute(
             "replies",
-            generation.startGeneration(threadId, req.parentId, req.personaIds, req.text, scope, req.includeSiblings, req.postAsOwner),
+            generation.startGeneration(threadId, req.parentId, req.personaIds, req.text, scope, req.includeSiblings, req.postAsOwner, routingScope),
         )
         // Hand the fragment what its composers need so freshly-rendered nodes can be replied to.
         model.addAttribute("threadId", threadId)

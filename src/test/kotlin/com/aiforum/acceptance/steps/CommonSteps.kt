@@ -77,6 +77,14 @@ class CommonSteps(
         assertTrue(Html.contains(body(), text), "expected body to contain \"$text\" in:\n${body()}")
     }
 
+    @Then("the reply author is {string}")
+    fun replyAuthor(author: String) {
+        assertTrue(
+            Html.hasAttr(body(), "data-author", author),
+            "expected a reply with data-author=\"$author\" in:\n${body()}",
+        )
+    }
+
     @Then("the reply failureCategory is {string}")
     fun replyFailureCategory(category: String) {
         assertTrue(
