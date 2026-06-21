@@ -34,6 +34,7 @@ class MigrationPipelineTest {
         flyway(url, "3").migrate()
 
         // 2. Seed two persona rows against the OLD (pre-V4/V5/V6) schema — no model/slug/color columns yet.
+        //    Also seed a title-only thread to prove it survives the body-adding bumps (V7/V8).
         DriverManager.getConnection(url).use { c ->
             c.createStatement().use { st ->
                 st.executeUpdate(
@@ -41,10 +42,13 @@ class MigrationPipelineTest {
                         "('Ada', 'Ada', 'ada', 'You are Ada.'), " +
                         "('Bob', 'Bob', 'bob', 'You are Bob.')",
                 )
+                st.executeUpdate(
+                    "INSERT INTO thread (id, title, created_at) VALUES ('T1', 'Old thread', '2026-01-01T00:00:00Z')",
+                )
             }
         }
 
-        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies only the pending V4–V6).
+        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending V4–V8).
         flyway(url, null).migrate()
 
         // 4. The old rows survived, and the new columns carry their migration default / backfill.
@@ -61,10 +65,18 @@ class MigrationPipelineTest {
                     assertEquals(1, rs.getInt("color_index"), "the second row gets the next colour slot")
                 }
 
-                // flyway_schema_history records the full V1..V7 chain as applied.
+                // The pre-existing thread survived; the canonical V7's NOT NULL DEFAULT '' gives it ''.
+                // (V8's NULL→'' backfill is a no-op on this canonical chain — NULLs are only possible on the
+                // legacy nullable-V7 lineage, where the column carries no NOT NULL constraint.)
+                st.executeQuery("SELECT body FROM thread WHERE id = 'T1'").use { rs ->
+                    rs.next()
+                    assertEquals("", rs.getString("body"), "the pre-existing thread reads '' after V7/V8")
+                }
+
+                // flyway_schema_history records the full V1..V8 chain as applied.
                 st.executeQuery("SELECT MAX(CAST(version AS INTEGER)) AS v FROM flyway_schema_history").use { rs ->
                     rs.next()
-                    assertEquals(7, rs.getInt("v"), "all seven migrations should be recorded as applied")
+                    assertEquals(8, rs.getInt("v"), "all eight migrations should be recorded as applied")
                 }
             }
         }
