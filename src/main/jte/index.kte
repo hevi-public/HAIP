@@ -19,9 +19,10 @@
             </div>
         @endif
         <%-- Start a thread: a plain form POST (form-urlencoded) to /threads → PRG redirect onto the new
-             thread page, where the bottom composer asks the room. Split into title + body (the opening
-             post's content, §2); the room is summoned from inside the thread. Body is optional. Sits
-             below the list so the thread index is the first thing the page presents. --%>
+             thread page. Creating the thread auto-summons the room (a "Whole Topic + Anyone" call, §2),
+             so the fresh page shows the room already drafting its replies. Split into title + body (the
+             opening post's content); body is optional. Sits below the list so the thread index is the
+             first thing the page presents. --%>
         <form class="new-thread" data-new-thread method="post" action="/threads">
             <span class="new-thread__label">Start a new thread</span>
             <input class="new-thread__title" type="text" name="title" required

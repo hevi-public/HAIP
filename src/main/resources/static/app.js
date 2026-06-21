@@ -265,3 +265,22 @@
     if (e.target.matches('.chip input[name="personaIds"]')) syncChips(composerOf(e.target), e.target);
   });
 })();
+
+/*
+ * New-thread form (home page): Enter submits, Shift+Enter inserts a newline in the body — the same
+ * keyboard contract the composer gives its textarea above, so the two text-entry surfaces feel
+ * identical. The title <input> already submits on Enter natively, but the body <textarea> would just
+ * insert a newline; this extends the submit gesture to both fields. requestSubmit() fires a real submit
+ * event (running validation + the action). Pure progressive enhancement — the Create button still works
+ * with JS off.
+ */
+(function () {
+  document.body.addEventListener("keydown", function (e) {
+    var field = e.target.closest("[data-new-thread] input, [data-new-thread] textarea");
+    if (!field || e.key !== "Enter" || e.shiftKey) return;
+    e.preventDefault();
+    var form = field.closest("form");
+    if (typeof form.requestSubmit === "function") form.requestSubmit();
+    else { var btn = form.querySelector("button[type='submit']"); if (btn) btn.click(); }
+  });
+})();

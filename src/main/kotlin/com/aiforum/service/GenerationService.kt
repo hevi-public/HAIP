@@ -48,16 +48,18 @@ class GenerationService(
 ) {
     private val timeout = Duration.ofSeconds(120)
 
-    private companion object {
-        // Runaway backstop for autoGrow; real growth always drains in ≤ DepthBudget.DEFAULT_GRANT rounds.
-        const val GROWTH_ROUND_CAP = 100
-        // The author id under which the owner's own composer messages are persisted (matches the seeded
-        // "owner" nodes the firewall/context scenarios use).
-        const val OWNER_AUTHOR = "owner"
+    companion object {
         // Sentinel the composer's default "Anyone" option submits instead of a persona id: it hands the
         // pick to the AI dispatcher ([PersonaRouter]) rather than naming who replies. An explicit
         // persona selection never carries it, so the routing call only happens on the "Anyone" path.
+        // Public so the auto-summon-on-create path (ThreadController) names the same "Anyone" sentinel.
         const val AUTO_PERSONA = "auto"
+
+        // Runaway backstop for autoGrow; real growth always drains in ≤ DepthBudget.DEFAULT_GRANT rounds.
+        private const val GROWTH_ROUND_CAP = 100
+        // The author id under which the owner's own composer messages are persisted (matches the seeded
+        // "owner" nodes the firewall/context scenarios use).
+        private const val OWNER_AUTHOR = "owner"
     }
 
     /** A resolved unit of work: one persona's reply, with its id minted up front so it is cancellable. */
@@ -96,7 +98,7 @@ class GenerationService(
         val resolvedIds = resolvePersonas(threadId, anchorId, routingScope, personaIds, text, single)
         val started = planGeneration(threadId, anchorId, resolvedIds, scope, includeSiblings).map { plan ->
             val draft = draftView(plan)
-            val token = inFlight.register(plan.id, draft)
+            val token = inFlight.register(plan.id, plan.threadId, draft)
             Triple(plan, token, draft)
         }
         inFlight.submit {
@@ -120,6 +122,14 @@ class GenerationService(
 
     /** The transient DRAFTING view while a node is still in flight — the poll endpoint's DB-first fallback. */
     fun inFlightView(replyId: String): ReplyView? = inFlight.view(replyId)
+
+    /**
+     * The DRAFTING nodes still in flight for [threadId] — surfaced on the thread page so an async summon's
+     * replies appear (and self-poll to settle) on a plain page load, before any row exists. Used by the
+     * auto-summon-on-create path, where the room is summoned and the browser then lands on the thread via
+     * a PRG redirect with no fragment to carry the drafts.
+     */
+    fun inFlightViews(threadId: String): List<ReplyView> = inFlight.viewsFor(threadId)
 
     /**
      * Synchronous summon/fan-out: settle every persona inline and return the settled views. Kept for the
@@ -304,17 +314,22 @@ class GenerationService(
     }
 
     /**
-     * The opening post is the topic itself — it lives on the thread (thread.body), rendered as the post
-     * node (id == threadId), NOT as a persisted comment. Inject it at the HEAD of every persona's context
-     * so the room engages with the question instead of a blank transcript (the "dropped on the way in"
-     * bug). Null when the thread has no body (title-only quick-create) or when [threads] isn't wired (the
-     * Tier-2 construction). The synthetic node carries the post's canonical id (threadId), depth 0, no
-     * parent — exactly how the page models the OP. Owner-authored, like any composer message already in
-     * context: the firewall is about VOTES, not the "owner" label.
+     * The opening post is the topic itself — its **title AND body** — and lives on the thread (the
+     * `thread` row), rendered as the post node (id == threadId), NOT as a persisted comment. Inject it at
+     * the HEAD of every persona's (and the dispatcher's) context so the room engages with the actual
+     * question instead of a blank transcript (the "dropped on the way in" bug). Both fields go in: the
+     * title is the topic, the body its detail, joined as one post (blank-line separated) — so a title-only
+     * quick-create still seeds the topic rather than handing the room nothing. Null only when [threads]
+     * isn't wired (the Tier-2 construction) or the thread has neither. The synthetic node carries the
+     * post's canonical id (threadId), depth 0, no parent — exactly how the page models the OP.
+     * Owner-authored, like any composer message already in context: the firewall is about VOTES, not the
+     * "owner" label.
      */
     private fun openingPost(threadId: String): Comment? =
-        threads?.find(threadId)?.body?.takeIf { it.isNotBlank() }?.let {
-            Comment(threadId, threadId, null, OWNER_AUTHOR, it, GenerationState.POSTED, null, 0)
+        threads?.find(threadId)?.let { thread ->
+            listOf(thread.title, thread.body).filter { it.isNotBlank() }.joinToString("\n\n")
+                .takeIf { it.isNotBlank() }
+                ?.let { Comment(threadId, threadId, null, OWNER_AUTHOR, it, GenerationState.POSTED, null, 0) }
         }
 
     /** Prepend the opening post to [comments] (deduped) so it heads the context handed to the model. */
