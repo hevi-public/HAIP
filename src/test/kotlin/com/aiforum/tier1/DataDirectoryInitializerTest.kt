@@ -2,6 +2,7 @@ package com.aiforum.tier1
 
 import com.aiforum.config.DataDirectoryInitializer
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
@@ -21,8 +22,13 @@ import java.nio.file.Path
 class DataDirectoryInitializerTest {
 
     private fun runWith(url: String) {
+        runReturningEnv(url)
+    }
+
+    private fun runReturningEnv(url: String): MockEnvironment {
         val env = MockEnvironment().withProperty("spring.datasource.url", url)
         DataDirectoryInitializer().postProcessEnvironment(env, SpringApplication())
+        return env
     }
 
     @Test
@@ -50,5 +56,43 @@ class DataDirectoryInitializerTest {
     @Test
     fun `ignores a non-sqlite datasource url`() {
         assertDoesNotThrow { runWith("jdbc:postgresql://localhost:5432/aiforum") }
+    }
+
+    @Test
+    fun `expands a leading tilde to the home dir and never creates a junk ~ directory`(@TempDir tmp: Path) {
+        val originalHome = System.getProperty("user.home")
+        System.setProperty("user.home", tmp.toString())
+        try {
+            runWith("jdbc:sqlite:~/.haip/data/aiforum.db?journal_mode=WAL")
+
+            assertTrue(Files.isDirectory(tmp.resolve(".haip/data")), "expected the home-expanded parent dir")
+            // The headline guarantee: a literal `~/.haip/…` was NOT created relative to the cwd.
+            assertFalse(Files.exists(Path.of("~", ".haip")), "a literal ~ directory must never be created")
+        } finally {
+            System.setProperty("user.home", originalHome)
+        }
+    }
+
+    @Test
+    fun `republishes the resolved url so the driver opens the expanded path, ~-free`(@TempDir tmp: Path) {
+        val originalHome = System.getProperty("user.home")
+        System.setProperty("user.home", tmp.toString())
+        try {
+            val env = runReturningEnv("jdbc:sqlite:~/.haip/data/aiforum.db?journal_mode=WAL")
+
+            val resolved = env.getProperty("spring.datasource.url")!!
+            assertFalse(resolved.contains("~"), "the republished datasource url must contain no literal ~")
+            assertTrue(resolved.contains(tmp.toString()), "the url must point at the home-expanded path")
+            assertTrue(resolved.endsWith("?journal_mode=WAL"), "the query string must be preserved")
+        } finally {
+            System.setProperty("user.home", originalHome)
+        }
+    }
+
+    @Test
+    fun `leaves a tilde-free url untouched (no republish)`(@TempDir tmp: Path) {
+        val url = "jdbc:sqlite:$tmp/data/aiforum.db?journal_mode=WAL"
+        val env = runReturningEnv(url)
+        assertEquals(url, env.getProperty("spring.datasource.url"), "a url with no ~ must not be rewritten")
     }
 }

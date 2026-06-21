@@ -1,6 +1,10 @@
 spring:
   datasource:
-    url: jdbc:sqlite:data/aiforum.db?journal_mode=WAL&busy_timeout=5000&foreign_keys=on
+    # Persistent home-directory DB for long-term work (dev uses a throwaway project-local file).
+    # ${user.home} is resolved by Spring to an absolute path before xerial/the DataDirectoryInitializer
+    # see it, so the SQLite driver never receives a literal `~` (which it would NOT expand). The
+    # initializer also hardens against a literal `~` as a backstop.
+    url: jdbc:sqlite:${user.home}/.haip/data/aiforum.db?journal_mode=WAL&busy_timeout=5000&foreign_keys=on
     driver-class-name: org.sqlite.JDBC
     hikari:
       maximum-pool-size: 5
