@@ -351,6 +351,15 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 .branch-index__link:hover .branch-index__author { text-decoration: underline; }
 .branch-index__row + .branch-index__row { border-top: 1px dotted var(--line-dotted); }
 
+/* context legend — static key for the tree's spine/dimming convention */
+.context-legend { list-style: none; margin: 0; padding: 0; }
+.context-legend__row { display: flex; align-items: center; gap: 7px; }
+.context-legend__row + .context-legend__row { margin-top: 5px; }
+.context-legend__swatch { flex: none; width: 14px; height: 10px; }
+.context-legend__swatch--in { border-left: 3px solid var(--spine-live); background: var(--wash); }
+.context-legend__swatch--out { background: var(--card); border: 1px solid var(--line); opacity: .4; }
+.context-legend__label { font-size: 11px; color: var(--muted); }
+
 .thread__op {
   background: var(--card);
   border: 1px solid var(--line);

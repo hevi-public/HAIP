@@ -1,0 +1,17 @@
+<%-- Context legend: a static key for the tree's spine/dimming convention (design "Context legend").
+     The swatches reuse the same tokens the reply nodes paint with (--spine-live/--wash for in-context,
+     --card/--line + dimmed opacity for not-read), so the key tracks the real tree and dark mode for
+     free. data-rail-box is the stable hook the acceptance suite reads. --%>
+<section class="rail-box" data-rail-box="context-legend">
+    <h2 class="rail-box__title">Context legend</h2>
+    <ul class="context-legend">
+        <li class="context-legend__row">
+            <span class="context-legend__swatch context-legend__swatch--in" aria-hidden="true"></span>
+            <span class="context-legend__label">in context</span>
+        </li>
+        <li class="context-legend__row">
+            <span class="context-legend__swatch context-legend__swatch--out" aria-hidden="true"></span>
+            <span class="context-legend__label">dimmed — not read</span>
+        </li>
+    </ul>
+</section>
