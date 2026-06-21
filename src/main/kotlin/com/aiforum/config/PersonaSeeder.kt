@@ -6,34 +6,48 @@ import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
-import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Profile
+import org.springframework.stereotype.Component
 
 /**
- * Predefined personas declared in config (see `aiforum.seed.personas` in application.yml). On startup
- * any persona that doesn't already exist is inserted, so a fresh DB comes up with a usable team rather
- * than forcing the owner to hand-author personas before the forum is usable. Idempotent: existing
- * personas (matched by id) are left untouched, so this never clobbers owner edits or re-runs on reboot.
+ * Idempotent seeding of the predefined persona roster (`aiforum.seed.personas`). [seedMissing] inserts
+ * any configured persona that doesn't already exist — matched by id — and returns how many it added, so
+ * a reboot never duplicates and an owner's edits are never clobbered.
  *
- * Disabled under the `test` profile — acceptance scenarios author their own personas against a DB that
- * is wiped before each scenario, and seeded rows would just be noise.
+ * The startup *trigger* is split out into [PersonaSeedRunner] (which is `@Profile("!test")`): this bean
+ * carries only the testable logic and exists in every profile, so the acceptance suite can drive it
+ * against the real DB + real config + real members page. That mirrors the §14 skill's rule for a
+ * `@Profile("!test")` adapter — keep the un-fakeable trigger thin, test the logic above the seam.
  */
-@Configuration
-@Profile("!test")
+@Component
 @EnableConfigurationProperties(PersonaSeedProperties::class)
 class PersonaSeeder(
     private val personas: PersonaRepository,
     private val props: PersonaSeedProperties,
-) : ApplicationRunner {
-
-    private val log = LoggerFactory.getLogger(javaClass)
-
-    override fun run(args: ApplicationArguments) {
-        val seeded = props.personas.count { persona ->
+) {
+    /** Insert every configured persona that isn't already present (by id); returns the number added. */
+    fun seedMissing(): Int =
+        props.personas.count { persona ->
             (personas.find(persona.id) == null).also { missing ->
                 if (missing) personas.insert(persona.id, persona.name, persona.descriptor, persona.model)
             }
         }
+}
+
+/**
+ * Runs [PersonaSeeder.seedMissing] once at startup so a fresh DB comes up with a usable team rather than
+ * forcing the owner to hand-author personas first. Disabled under the `test` profile — acceptance
+ * scenarios drive seeding explicitly against a per-scenario-wiped DB, so auto-seeding at context start
+ * would just be noise.
+ */
+@Component
+@Profile("!test")
+class PersonaSeedRunner(private val seeder: PersonaSeeder) : ApplicationRunner {
+
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    override fun run(args: ApplicationArguments) {
+        val seeded = seeder.seedMissing()
         if (seeded > 0) log.info("Seeded {} predefined persona(s) into the forum.", seeded)
     }
 }

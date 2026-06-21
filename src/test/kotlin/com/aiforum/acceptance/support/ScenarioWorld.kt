@@ -26,6 +26,9 @@ class ScenarioWorld {
     /** alias -> integer snapshot (e.g. a branch's descendant count before autonomous growth). */
     val counts = mutableMapOf<String, Int>()
 
+    /** How many personas the most recent seeding run inserted — for the idempotency assertion. */
+    var lastSeedCount: Int? = null
+
     fun rememberReply(alias: String, id: String) {
         replyIds[alias] = id
         lastReplyId = id
