@@ -31,7 +31,9 @@
       hx-on::after-request="if(event.detail.successful){this.reset();this.closest('details')?.removeAttribute('open')}">
     <div class="composer__head">
         <span class="composer__tag">${if (placement == "bottom") "↳ level 0" else "↳ inline"}</span>
-        <span class="composer__head-label">${if (placement == "bottom") "New reply to the post" else "Reply in this branch"}</span>
+        <%-- Inline label describes PLACEMENT (where the reply lands), not reading scope — scope now
+             defaults to whole topic, so "in this branch" would mislead. --%>
+        <span class="composer__head-label">${if (placement == "bottom") "New reply to the post" else "Reply here"}</span>
         <%-- Single ↔ Roomful: how many voices answer. The buttons drive the hidden roomMode input
              (app.js) and gate chip multi-select; the server caps an "Anyone"/@mention pick to one when
              roomMode=single. Defaults to Single per the composer-states comp. --%>
