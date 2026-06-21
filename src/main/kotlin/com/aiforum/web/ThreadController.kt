@@ -5,6 +5,7 @@ import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ReplyView
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
+import com.aiforum.repo.ThreadReadRepository
 import com.aiforum.repo.ThreadRepository
 import com.aiforum.repo.VoteRepository
 import org.springframework.http.MediaType
@@ -33,6 +34,7 @@ class ThreadController(
     private val comments: CommentRepository,
     private val personas: PersonaRepository,
     private val votes: VoteRepository,
+    private val threadReads: ThreadReadRepository,
 ) {
 
     // Two bindings, one creation path: the browser's new-thread form posts form-urlencoded and wants a
@@ -61,6 +63,7 @@ class ThreadController(
     @GetMapping("/threads/{id}")
     fun view(@PathVariable id: String, model: Model): String {
         val thread = threads.find(id) ?: return "redirect:/"
+        threadReads.markRead(id)
         return renderThread(thread.id, thread.title, model)
     }
 
@@ -74,7 +77,7 @@ class ThreadController(
         // (depth, created_at), so siblings stay chronological.
         model.addAttribute("replies", assembleTree(all))
         model.addAttribute("waitingOnRoom", all.none { it.state == GenerationState.POSTED })
-        model.addAttribute("personas", personas.findAll().map { PersonaView(it.id, it.name, it.descriptor) })
+        model.addAttribute("personas", personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug) })
         return "thread"
     }
 

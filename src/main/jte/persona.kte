@@ -8,5 +8,8 @@
             <h1 class="thread__title">${persona.name}</h1>
         </div>
         <p class="reply__handle">${persona.descriptor}</p>
+        @if(persona.model.isNotBlank())
+            <p class="reply__handle">model: ${persona.model}</p>
+        @endif
     </div>
 `)

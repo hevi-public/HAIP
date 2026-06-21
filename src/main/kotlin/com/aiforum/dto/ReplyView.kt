@@ -15,5 +15,6 @@ data class ReplyView(
     val retryAfterSeconds: Long?,
     val voteCount: Int,
     val depth: Int,
+    val depthBudget: Int = 0,
     val children: List<ReplyView> = emptyList(),
 )

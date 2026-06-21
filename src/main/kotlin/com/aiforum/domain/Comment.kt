@@ -31,6 +31,7 @@ data class Comment(
         retryAfterSeconds = retryAfterSeconds,
         voteCount = voteCount,
         depth = depth,
+        depthBudget = depthBudget,
         children = children,
     )
 }
