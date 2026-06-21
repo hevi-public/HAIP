@@ -260,6 +260,18 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
   .home__rail, .home__rail-right { position: sticky; top: 18px; }
 }
 
+/* Forum-nav box — the "~/forum" terminal listing in the left rail. Shares .rail-box card chrome. */
+/* Compound selector beats the base .rail-box__title (defined later in the file) at the same specificity. */
+.rail-box__title.rail-box__title--path { text-transform: none; letter-spacing: 0; }
+.forum-nav { list-style: none; margin: 0; padding: 0; }
+.forum-nav__row + .forum-nav__row { border-top: 1px dotted var(--line-dotted); }
+.forum-nav__link {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 5px 0;
+  font-family: var(--mono); font-size: 12.5px; color: var(--link);
+}
+.forum-nav__link:hover .forum-nav__path { text-decoration: underline; }
+.forum-nav__count { flex: none; font-size: 11px; font-weight: 700; color: var(--muted); }
+
 /* Members box — roster rows in the left rail. Shares .rail-box card chrome. */
 .members-box { list-style: none; margin: 0; padding: 0; }
 .members-box__row + .members-box__row { margin-top: 7px; }

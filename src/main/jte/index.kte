@@ -6,12 +6,15 @@
 @param personas: List<PersonaView>
 @param activeThreads: List<ActiveThreadRow>
 @param recentComments: List<RecentCommentRow>
+@param threadCount: Int
+@param personaCount: Int
 
 @template.layout(title = "AI Forum", activeNav = "threads", content = @`
     <div class="home" data-page="home">
       <%-- Left rail. The front-page side boxes (design left rail); Members is the first occupant. The
            grid collapses to a single column below the rail breakpoint — see .home:has(.home__rail). --%>
       <aside class="home__rail" data-home-rail>
+          @template.fragments.forumNavBox(threadCount = threadCount, personaCount = personaCount)
           @template.fragments.membersBox(personas = personas)
       </aside>
       <div class="home__main">

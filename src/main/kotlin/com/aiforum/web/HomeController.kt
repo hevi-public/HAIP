@@ -39,9 +39,13 @@ class HomeController(
             ThreadRow(t.id, t.title, threadReads.unreadCount(t.id))
         }
         model.addAttribute("threads", rows)
-        model.addAttribute("personas", personas.findAll().map {
+        val personaViews = personas.findAll().map {
             PersonaView(it.id, it.name, it.descriptor, it.slug, colorIndex = it.colorIndex)
-        })
+        }
+        model.addAttribute("personas", personaViews)
+        // Left-rail "~/forum" nav counts.
+        model.addAttribute("threadCount", rows.size)
+        model.addAttribute("personaCount", personaViews.size)
         val now = clock.instant()
         model.addAttribute("activeThreads", threads.findActive(ACTIVE_THREADS_LIMIT).map { a ->
             ActiveThreadRow(a.id, a.title, RelativeTime.ago(Instant.parse(a.lastActivity), now))
