@@ -14,6 +14,14 @@ object ContextAssembler {
     fun assemble(personaSystemPrompt: String, comments: List<Comment>): PromptContext =
         PromptContext(
             personaSystemPrompt = personaSystemPrompt,
-            comments = comments.map { ContextComment(authorId = it.authorId, body = it.body) },
+            comments = comments.map {
+                ContextComment(
+                    id = it.id,
+                    authorId = it.authorId,
+                    body = it.body,
+                    parentId = it.parentId,
+                    depth = it.depth,
+                )
+            },
         )
 }

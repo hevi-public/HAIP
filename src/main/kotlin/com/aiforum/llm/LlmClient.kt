@@ -35,7 +35,15 @@ data class PromptContext(
     val comments: List<ContextComment>,
 )
 
-data class ContextComment(val authorId: String, val body: String)
+// `parentId`/`depth` are structural-only: they let renderPrompt show the model the reply shape
+// (indentation + "↳ replying to #n" tags). Still no vote/owner signal — the firewall is unchanged.
+data class ContextComment(
+    val id: String,
+    val authorId: String,
+    val body: String,
+    val parentId: String?,
+    val depth: Int,
+)
 
 /** Cooperative cancellation: the fake checks it; production maps it to process.destroyForcibly(). */
 class CancellationToken {

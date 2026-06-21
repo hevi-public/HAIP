@@ -57,7 +57,10 @@ class ProcessLlmClientTest {
     }
 
     private fun request(timeout: Duration, personaModel: String = "") = LlmRequest(
-        context = PromptContext("you are sol", listOf(ContextComment("sol", "indexes help here"))),
+        context = PromptContext(
+            "you are sol",
+            listOf(ContextComment(id = "c1", authorId = "sol", body = "indexes help here", parentId = null, depth = 0)),
+        ),
         persona = PersonaRef("sol", "Sol", personaModel),
         timeout = timeout,
     )
