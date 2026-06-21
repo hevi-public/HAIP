@@ -13,4 +13,7 @@ data class BranchIndexEntry(
     // gives enough context to gauge the branch without overflowing the narrow rail (CSS ellipsis is
     // the second line of defence).
     val snippet: String,
+    // Author's avatar hue (Avatar.hue) so the rail can show a matching colour dot — a mini-avatar that
+    // ties each entry to its author at a glance.
+    val hue: Int,
 )

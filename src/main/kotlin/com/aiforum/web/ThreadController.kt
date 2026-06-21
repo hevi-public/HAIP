@@ -1,6 +1,7 @@
 package com.aiforum.web
 
 import com.aiforum.domain.Comment
+import com.aiforum.dto.Avatar
 import com.aiforum.dto.BranchIndexEntry
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
@@ -83,21 +84,28 @@ class ThreadController(
         // (depth, created_at), so siblings stay chronological.
         val tree = assembleTree(all)
         model.addAttribute("replies", tree)
+        // Persona registry order (by name) drives the avatar hues — same list the templates use, so the
+        // branch-index colour dots match the monograms.
+        val personaList = personas.findAll()
+        val order = personaList.map { it.name }
         // Branch index for the side rail: the posted nodes flattened in the same depth-first order the
         // page renders them, so the rail reads top-to-bottom alongside the thread. Empty until the room
         // has spoken, which keeps a fresh thread single-column (the aside stays hidden).
-        model.addAttribute("branchIndex", branchIndex(tree))
+        model.addAttribute("branchIndex", branchIndex(tree, order))
         model.addAttribute("waitingOnRoom", all.none { it.state == GenerationState.POSTED })
-        model.addAttribute("personas", personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug) })
+        model.addAttribute("personas", personaList.map { PersonaView(it.id, it.name, it.descriptor, it.slug) })
         return "thread"
     }
 
     /** Flatten the reply tree depth-first into the rail's jump list, posted nodes only. */
-    private fun branchIndex(tree: List<ReplyView>): List<BranchIndexEntry> {
+    private fun branchIndex(tree: List<ReplyView>, order: List<String>): List<BranchIndexEntry> {
         val out = mutableListOf<BranchIndexEntry>()
         fun walk(node: ReplyView) {
             if (node.state == GenerationState.POSTED) {
-                out += BranchIndexEntry(node.id, node.authorId, node.depth, Snippet.oneLine(node.body, BRANCH_SNIPPET_LEN))
+                out += BranchIndexEntry(
+                    node.id, node.authorId, node.depth,
+                    Snippet.oneLine(node.body, BRANCH_SNIPPET_LEN), Avatar.hue(node.authorId, order),
+                )
             }
             node.children.forEach(::walk)
         }

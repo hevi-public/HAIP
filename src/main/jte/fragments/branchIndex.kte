@@ -15,6 +15,7 @@
                 <li class="branch-index__row" style="--bi-depth: ${entry.depth};">
                     <a class="branch-index__link" href="#reply-${entry.id}"
                        data-branch-index-entry="${entry.id}">
+                        <span class="branch-index__dot" aria-hidden="true" style="--mono-h: ${entry.hue}"></span>
                         <span class="branch-index__author">${entry.author}</span>
                         <span class="branch-index__snippet">${entry.snippet}</span>
                     </a>
