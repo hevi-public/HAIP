@@ -401,7 +401,11 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   .thread:has(.thread__rail) { grid-template-columns: minmax(0, 1fr) var(--rail); }
 }
 .thread__rail { display: flex; flex-direction: column; gap: 14px; }
-@media (min-width: 1000px) { .thread__rail { position: sticky; top: 18px; } }   /* rail follows as the tree scrolls */
+@media (min-width: 1000px) {       /* rail follows as the tree scrolls; caps to the viewport and scrolls
+                                      internally so a long branch index can't run off the bottom unreachably
+                                      (a sticky element taller than the viewport pins its top and hides its tail) */
+  .thread__rail { position: sticky; top: 18px; max-height: calc(100vh - 36px); overflow-y: auto; }
+}
 
 /* rail box — the shared card chrome for side-rail occupants (branch index is the first) */
 .rail-box {
