@@ -371,7 +371,12 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
   font-family: var(--mono); font-size: 11.5px; color: var(--faint-2);
 }
 
-.reply__actions { margin-top: 9px; }
+/* action row: +1 (and /more / Retry) on the left, Delete pushed to the far right. flex-start keeps the
+   +1 anchored to the top of the row even when the delete disclosure opens and grows tall. */
+.reply__actionbar {
+  display: flex; align-items: flex-start; flex-wrap: wrap;
+  gap: 8px; margin-top: 9px;
+}
 
 /* state badge ------------------------------------------------------------- */
 .reply__badge {
@@ -459,6 +464,39 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 .reply__compose > summary::-webkit-details-marker { display: none; }
 .reply__compose > summary::before { content: "↩"; }
 .reply__compose[open] > summary { margin-bottom: 10px; }
+
+/* delete — destructive, so gated behind an inline "are you sure" panel (the clay = error/warning hue,
+   which re-skins itself in dark mode via the --clay-* tokens). Trigger is a ghost-button-shaped
+   <summary>; opening it reveals the confirm panel whose "Yes, delete" button carries the real POST. */
+.reply__delete { margin-left: auto; }   /* push Delete to the far right of the action row */
+.reply__delete > summary {
+  display: inline-flex; align-items: center; gap: 6px;
+  list-style: none; cursor: pointer; width: max-content;
+  color: var(--muted);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  padding: 4px 12px; font-size: 12px;
+}
+.reply__delete > summary::-webkit-details-marker { display: none; }
+.reply__delete > summary .icon { width: 14px; height: 14px; }
+.reply__delete > summary:hover,
+.reply__delete[open] > summary {
+  color: var(--clay-ink); border-color: var(--clay-line); background: var(--clay-bg);
+}
+.reply__delete-confirm {
+  margin-top: 8px; max-width: 360px;
+  background: var(--clay-bg);
+  border: 1px solid var(--clay-line); border-left: 3px solid var(--clay);
+  border-radius: var(--r); padding: 11px 13px;
+}
+.reply__delete-warning {
+  margin: 0 0 10px;
+  font-size: 12.5px; line-height: 1.5; color: var(--clay-ink);
+}
+.reply__delete-buttons { display: flex; align-items: center; gap: 8px; }
+
+/* danger button — the destructive confirm itself (clay fill, white text) */
+.btn--danger { background: var(--clay); color: #fff; border-color: var(--clay); }
+.btn--danger:hover { filter: brightness(1.05); }
 
 /* --------------------------------------------------------------- empty states */
 [data-empty-state] {

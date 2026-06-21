@@ -73,4 +73,35 @@ class CommentRepositoryTest {
         assertEquals(1, comments.descendantCount(a))
         assertEquals(0, comments.descendantCount(comments.childrenOf(r).first { it.body == "B" }.id))
     }
+
+    @Test
+    fun `deleteSubtree removes the node, its whole subtree, and their votes — siblings survive`() {
+        // tree:  R ─┬─ A ── A1
+        //          └─ B          ← B (and R) must survive a delete of the A subtree
+        val thread = data.insertThread("Scaling SQLite")
+        val r = data.insertComment(thread, authorId = "owner", body = "R", parentId = null, depth = 0)
+        val a = data.insertComment(thread, authorId = "vex", body = "A", parentId = r)
+        val b = data.insertComment(thread, authorId = "pike", body = "B", parentId = r)
+        val a1 = data.insertComment(thread, authorId = "sol", body = "A1", parentId = a, depth = 2)
+        // votes on a doomed node, a doomed descendant, and a survivor
+        listOf(a, a1, b).forEach { jdbc.update("INSERT INTO vote(node_id, voter_id) VALUES (?, 'owner')", it) }
+
+        val removed = comments.deleteSubtree(a)
+
+        assertEquals(setOf(a, a1), removed.toSet())
+        // A and its descendant A1 are gone; R and B survive
+        assertEquals(setOf("R", "B"), comments.threadComments(thread).map { it.body }.toSet())
+        // votes for the deleted nodes are gone; B's vote survives (no FK violation deleting deepest-first)
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM vote WHERE node_id IN (?, ?)", Int::class.java, a, a1))
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM vote WHERE node_id = ?", Int::class.java, b))
+    }
+
+    @Test
+    fun `deleteSubtree on an unknown id is a no-op`() {
+        val thread = data.insertThread("Scaling SQLite")
+        data.insertComment(thread, authorId = "owner", body = "R", parentId = null, depth = 0)
+
+        assertEquals(emptyList<String>(), comments.deleteSubtree("does-not-exist"))
+        assertEquals(setOf("R"), comments.threadComments(thread).map { it.body }.toSet())
+    }
 }
