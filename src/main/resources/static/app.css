@@ -444,14 +444,73 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin-top: 10px;
 }
-.composer__hint { font-family: var(--mono); font-size: 11px; color: var(--faint-2); }
-.composer label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-.composer select {
+.composer__hint { font-family: var(--mono); font-size: 11px; color: var(--faint-2); margin-left: auto; }
+.composer__hint b { color: var(--link); font-weight: 700; }
+.composer label, .composer__ctx-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.composer__head-label { color: var(--sage-ink-2); font-weight: 700; }
+.composer select, .composer__select {
   font-family: var(--sans); font-size: 12.5px; color: var(--ink);
   background: var(--input); border: 1px solid var(--sage-2); border-radius: var(--r);
   padding: 5px 8px;
 }
-.composer .btn { margin-left: auto; }
+.composer .btn { margin-left: 10px; }
+
+/* Single ↔ Roomful (and any) segmented toggle — JS flips .is-active + the hidden input it drives */
+.seg {
+  margin-left: auto; display: inline-flex;
+  border: 1px solid var(--sage-2); border-radius: var(--r); overflow: hidden;
+}
+.seg__opt {
+  font-family: var(--sans); font-size: 11.5px; line-height: 1;
+  padding: 4px 11px; border: none; background: var(--card); color: var(--muted); cursor: pointer;
+}
+.seg__opt.is-active { background: var(--sage); color: var(--sage-ink); font-weight: 700; }
+
+/* The editor anchors the absolutely-positioned slash / @mention popovers below the textarea */
+.composer__editor { position: relative; }
+
+/* Slash + @mention popover — a dark overlay menu (reads as a layer above the page in both themes) */
+.palette {
+  position: absolute; left: 0; right: 0; z-index: 30; margin-top: 6px;
+  background: #34342a; border: 1px solid #44443a; border-radius: 4px; overflow: hidden;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
+}
+.palette[hidden] { display: none; }
+.palette__cap {
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  color: #b3b596; padding: 6px 12px; border-bottom: 1px solid #44443a;
+}
+.palette__row {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 7px 12px; border: none; border-bottom: 1px solid #3c3c32;
+  background: transparent; color: #cdd0bb; cursor: pointer;
+}
+/* An explicit display on .palette__row beats the UA [hidden]{display:none}, so JS filtering needs this. */
+.palette__row[hidden] { display: none; }
+.palette__row:last-child { border-bottom: none; }
+.palette__row:hover, .palette__row.is-active { background: #3f3f33; }
+.palette__key { font-family: var(--mono); font-size: 12px; font-weight: 700; color: #cdd0bb; min-width: 64px; flex: none; }
+.palette__desc {
+  font-size: 11px; color: #b9b9a4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+
+/* Persona chips — the who-answers picker; the real checkbox is visually hidden, the label IS the chip */
+.chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 11px 3px 7px; border: 1px solid var(--sage-2); border-radius: 999px;
+  background: var(--input); color: var(--muted); font-size: 12px; cursor: pointer; user-select: none;
+}
+.chip input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.chip:hover { border-color: var(--sage); }
+.chip:focus-within { outline: 2px solid var(--link); outline-offset: 1px; }
+.chip.is-selected { background: var(--sage); border-color: var(--sage); color: var(--sage-ink); }
+.chip--anyone { font-weight: 700; padding-left: 11px; }
+
+/* Monogram size variants for the chips (xs) and @mention rows (sm) */
+.monogram--sm { width: 22px; height: 22px; font-size: 9px; }
+.monogram--xs { width: 18px; height: 18px; font-size: 8px; border-radius: var(--r-sm); }
 
 /* inline reply as a disclosure — collapsed until the owner opens it (one composer at a time) */
 .reply__compose { margin-top: 10px; }
