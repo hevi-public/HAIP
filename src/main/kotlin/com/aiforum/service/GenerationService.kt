@@ -37,6 +37,9 @@ class GenerationService(
     // Default keeps the 3-arg Tier-2 construction compiling; Spring injects the real @Component bean
     // (a single primary constructor means Spring passes all args, so the default is never used in app).
     private val inFlight: InFlightGenerations = InFlightGenerations(),
+    // The "Anyone" dispatcher (defaulted for the same reason; Spring injects the @Component). Shares the
+    // single LlmClient seam, so routing is just another call through the same boundary the tests fake.
+    private val router: PersonaRouter = PersonaRouter(llm),
 ) {
     private val timeout = Duration.ofSeconds(120)
 
@@ -46,6 +49,10 @@ class GenerationService(
         // The author id under which the owner's own composer messages are persisted (matches the seeded
         // "owner" nodes the firewall/context scenarios use).
         const val OWNER_AUTHOR = "owner"
+        // Sentinel the composer's default "Anyone" option submits instead of a persona id: it hands the
+        // pick to the AI dispatcher ([PersonaRouter]) rather than naming who replies. An explicit
+        // persona selection never carries it, so the routing call only happens on the "Anyone" path.
+        const val AUTO_PERSONA = "auto"
     }
 
     /** A resolved unit of work: one persona's reply, with its id minted up front so it is cancellable. */
@@ -73,11 +80,15 @@ class GenerationService(
         scope: ScopeMode = ScopeMode.WHOLE_THREAD,
         includeSiblings: Boolean = false,
         postAsOwner: Boolean = false,
+        routingScope: ScopeMode = ScopeMode.WHOLE_THREAD,
     ): List<ReplyView> {
         // The composer authors the owner's message: persist it as the owner's node first, then summon
         // BENEATH it, so the personas reply to it and it flows into their context (§4/§5).
         val owner = ownerComment(threadId, parentId, text, postAsOwner)
-        val started = planGeneration(threadId, owner?.id ?: parentId, personaIds, scope, includeSiblings).map { plan ->
+        val anchorId = owner?.id ?: parentId
+        // Resolve AFTER persisting the owner's message so the dispatcher routes on the new topic too.
+        val resolvedIds = resolvePersonas(threadId, anchorId, routingScope, personaIds)
+        val started = planGeneration(threadId, anchorId, resolvedIds, scope, includeSiblings).map { plan ->
             val draft = draftView(plan)
             val token = inFlight.register(plan.id, draft)
             Triple(plan, token, draft)
@@ -117,9 +128,12 @@ class GenerationService(
         scope: ScopeMode = ScopeMode.WHOLE_THREAD,
         includeSiblings: Boolean = false,
         postAsOwner: Boolean = false,
+        routingScope: ScopeMode = ScopeMode.WHOLE_THREAD,
     ): List<ReplyView> {
         val owner = ownerComment(threadId, parentId, text, postAsOwner)
-        val replies = planGeneration(threadId, owner?.id ?: parentId, personaIds, scope, includeSiblings)
+        val anchorId = owner?.id ?: parentId
+        val resolvedIds = resolvePersonas(threadId, anchorId, routingScope, personaIds)
+        val replies = planGeneration(threadId, anchorId, resolvedIds, scope, includeSiblings)
             .map { settleOne(it, CancellationToken()) }
         return owner?.let { listOf(it.toReplyView(children = replies)) } ?: replies
     }
@@ -199,6 +213,35 @@ class GenerationService(
         )
         comments.insert(owner)
         return owner
+    }
+
+    /**
+     * Turn the requested selection into concrete persona ids. A normal selection passes straight through;
+     * the composer's default "Anyone" option submits [AUTO_PERSONA], which hands the choice to the AI
+     * dispatcher so it picks who weighs in based on the topic. An empty selection is NOT auto — the
+     * controller already rejects that as a validation error — so the routing call is confined to the
+     * deliberate "Anyone" path and never fires on the explicit-persona scenarios.
+     *
+     * [routingScope] is the owner's own "looking at" selector (default whole topic): BRANCH_ONLY narrows
+     * the dispatcher to the ancestor path of [anchorId] (the branch being replied to) so the pick reflects
+     * that sub-discussion, not the whole tree. It is independent of the generation [scope] the chosen
+     * persona then reads.
+     */
+    private fun resolvePersonas(
+        threadId: String,
+        anchorId: String?,
+        routingScope: ScopeMode,
+        requested: List<String>,
+    ): List<String> {
+        if (requested.none { it == AUTO_PERSONA }) return requested
+        val roster = personas.findAll()
+        if (roster.isEmpty()) return emptyList()
+        val context = if (routingScope == ScopeMode.BRANCH_ONLY && anchorId != null) {
+            comments.ancestorPath(anchorId)
+        } else {
+            comments.threadComments(threadId)
+        }
+        return router.pick(roster, context).map { it.id }
     }
 
     /** Resolve personas and assemble the (shared) context once, minting a cancellable id per persona. */
