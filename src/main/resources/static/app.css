@@ -165,9 +165,10 @@ a:hover { text-decoration: underline; }
 .site-header__spacer { margin-left: auto; }
 .site-header__crumb { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
 
-/* theme switcher: both options shown ("☾ dark / ☀ light"), the active one underlined. Mirrors the
- * .site-nav active treatment (sage border-bottom) so it reads as part of the header chrome. The
- * active state is CSS-driven off html[data-theme], so it renders correctly before paint (no flash). */
+/* theme switcher: all options shown ("☾ dark / ☀ light / ◑ auto"), the active one underlined. Mirrors
+ * the .site-nav active treatment (sage border-bottom) so it reads as part of the header chrome. The
+ * active state is CSS-driven off html[data-theme-mode] (the user's choice, not the resolved palette),
+ * so it renders correctly before paint (no flash) and "auto" stays lit even as the palette flips. */
 .theme-toggle {
   margin-left: auto;
   display: inline-flex; align-items: center; gap: 8px;
@@ -180,8 +181,10 @@ a:hover { text-decoration: underline; }
   color: var(--link); padding: 2px 0; border-bottom: 2px solid transparent;
 }
 .theme-toggle__opt:hover { color: var(--ink); }
-html:not([data-theme="dark"]) .theme-toggle__opt[data-set-theme="light"],
-html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
+html[data-theme-mode="dark"]  .theme-toggle__opt[data-set-theme="dark"],
+html[data-theme-mode="light"] .theme-toggle__opt[data-set-theme="light"],
+html[data-theme-mode="auto"]  .theme-toggle__opt[data-set-theme="auto"],
+html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   color: var(--ink); font-weight: 700; border-bottom-color: var(--sage);
 }
 
@@ -398,7 +401,17 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
   .thread:has(.thread__rail) { grid-template-columns: minmax(0, 1fr) var(--rail); }
 }
 .thread__rail { display: flex; flex-direction: column; gap: 14px; }
-@media (min-width: 1000px) { .thread__rail { position: sticky; top: 18px; } }   /* rail follows as the tree scrolls */
+@media (min-width: 1000px) {       /* rail follows as the tree scrolls and caps to the viewport. Rather than
+                                      scrolling the whole rail, only the branch-index list scrolls inside its
+                                      own box, so the context legend below stays visible however long the index
+                                      gets (a sticky rail taller than the viewport would pin its top and hide
+                                      its tail). The branch-index box is the one allowed to shrink; the legend
+                                      holds its full height. */
+  .thread__rail { position: sticky; top: 18px; max-height: calc(100vh - 36px); }
+  .thread__rail .rail-box[data-rail-box="branch-index"] { display: flex; flex-direction: column; min-height: 0; }
+  .thread__rail .rail-box[data-rail-box="branch-index"] .branch-index { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .thread__rail .rail-box[data-rail-box="context-legend"] { flex-shrink: 0; }
+}
 
 /* rail box — the shared card chrome for side-rail occupants (branch index is the first) */
 .rail-box {

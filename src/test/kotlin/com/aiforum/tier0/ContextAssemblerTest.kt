@@ -36,6 +36,23 @@ class ContextAssemblerTest {
     }
 
     @Test
+    fun `context carries the reply target so the prompt can mark which node to answer`() {
+        // The owner's reply target flows through as targetId; renderPrompt uses it to point the persona
+        // at the exact node (vs guessing "the most recent line", which misfires in whole-thread scope).
+        val ctx = ContextAssembler.assemble(
+            "sys",
+            listOf(comment("owner", "the question"), comment("vex", "a tangent")),
+            targetId = "id-the question",
+        )
+        assertEquals("id-the question", ctx.targetId)
+    }
+
+    @Test
+    fun `target defaults to null when none is given so opening a thread takes the fallback`() {
+        assertEquals(null, ContextAssembler.assemble("sys", listOf(comment("sol", "hi"))).targetId)
+    }
+
+    @Test
     fun `firewall - the assembled context has no structural place for a vote`() {
         // ContextComment only exposes authorId + body — there is no vote field to leak through.
         // This is the structural guarantee behind the +1 firewall (the acceptance suite proves the

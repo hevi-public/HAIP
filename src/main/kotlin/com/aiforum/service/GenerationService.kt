@@ -181,7 +181,7 @@ class GenerationService(
                     persona = persona,
                     depth = leaf.depth + 1,
                     budget = DepthBudget.childBudget(leaf.depthBudget),
-                    context = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(threadId, context)),
+                    context = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(threadId, context), targetId = leaf.id),
                 )
                 created += settleOne(plan, CancellationToken())
             }
@@ -192,7 +192,7 @@ class GenerationService(
     fun retry(replyId: String): ReplyView {
         val existing = comments.findById(replyId) ?: error("no reply $replyId")
         val persona = personas.find(existing.authorId) ?: error("unknown persona ${existing.authorId}")
-        val ctx = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(existing.threadId, comments.threadComments(existing.threadId)))
+        val ctx = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(existing.threadId, comments.threadComments(existing.threadId)), targetId = existing.parentId)
         val updated = try {
             val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name, persona.model), timeout), CancellationToken())
             existing.copy(body = resp.text, state = GenerationState.POSTED, failureCategory = null, reason = null, retryAfterSeconds = null)
@@ -303,7 +303,7 @@ class GenerationService(
                 persona = persona,
                 depth = baseDepth,
                 budget = baseBudget,
-                context = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(threadId, contextComments)),
+                context = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(threadId, contextComments), targetId = parentId),
             )
         }
     }

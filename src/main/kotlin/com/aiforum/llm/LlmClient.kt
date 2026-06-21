@@ -30,9 +30,16 @@ data class PersonaRef(val id: String, val name: String, val model: String = "")
  * deliberately ABSENT here — the firewall lives at this prompt boundary, not in storage (§7/§13). The
  * acceptance suite asserts the firewall by spying on what an LlmClient actually received.
  */
+// `targetId` is the comment the persona is being summoned to reply to — the owner's freshly-posted
+// message, the leaf being auto-grown, or (on retry) the original parent. It is the id of one of the
+// [comments], used by renderPrompt to mark "← reply to this" and name the ref explicitly, so the model
+// answers the intended node rather than guessing "the most recent line" (which, in whole-thread scope,
+// is whatever sorts last by depth/created_at — not the node the owner clicked). Null only when there is
+// no specific target (opening a new thread), in which case renderPrompt falls back to "most recent".
 data class PromptContext(
     val personaSystemPrompt: String,
     val comments: List<ContextComment>,
+    val targetId: String? = null,
 )
 
 // `parentId`/`depth` are structural-only: they let renderPrompt show the model the reply shape

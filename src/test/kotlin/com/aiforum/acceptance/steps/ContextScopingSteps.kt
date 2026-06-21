@@ -81,4 +81,14 @@ class ContextScopingSteps(
         val req = llm.received.lastOrNull() ?: error("the LLM was never called")
         assertTrue(req.context.comments.none { it.body == label }, "node \"$label\" should NOT be in context")
     }
+
+    // The reply-target marker (§5): in whole-thread scope the target is rarely the last transcript line, so
+    // the model must be told WHICH node it answers. Asserted on the spied PromptContext.targetId.
+    @Then("the model is told to reply to node {string}")
+    fun targetIsNode(label: String) {
+        val req = llm.received.lastOrNull() ?: error("the LLM was never called")
+        val target = req.context.comments.firstOrNull { it.id == req.context.targetId }
+            ?: error("no target node in context (targetId=${req.context.targetId})")
+        assertTrue(target.body == label, "expected reply target \"$label\" but was \"${target.body}\"")
+    }
 }
