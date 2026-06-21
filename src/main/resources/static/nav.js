@@ -367,6 +367,9 @@ function onKey(e) {
 // cursor, mirroring an editor's tap-to-place-caret; double-tap is deliberately NOT used (browsers
 // reserve it for zoom). We don't preventDefault, so buttons/links inside the comment still work.
 function onClick(e) {
+  // Clicks inside a composer (chips, Single/Roomful toggle, slash/@mention palette — PR #29) must NOT
+  // move the reading cursor or clear the Esc-return target. Agreed contract with the composer branch.
+  if (e.target.closest(".composer")) return;
   const el = e.target.closest(NAV);
   if (!el) return; // click landed outside the comment tree (overlay, header, empty space)
   const id = idOf(el); // closest() returns the innermost comment, so nested replies pick correctly

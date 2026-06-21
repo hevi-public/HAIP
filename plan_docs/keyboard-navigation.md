@@ -119,6 +119,21 @@ shareable permalink: copy the URL, reload, or send it, and the page reopens with
 - A genuine `hashchange` (clicking a branch-index entry or an "in reply to" link, or back/forward) moves
   the cursor to match. setCursor uses replaceState, so it never re-triggers `hashchange` (no loop).
 
+## Reconciliation with the composer affordances branch (PR #29)
+
+PR #29 adds composer-level keyboard handling (slash `/` palette, `@mention` menu, Single/Roomful, chips)
+in `app.js`. No file conflict — that work is in `app.js`; this is in `nav.js`/`nav-core.mjs` (only
+`app.css` is shared, additively). The agreed behavioral contract:
+
+- **Escape is tiered.** PR #29's composer `keydown` calls `e.stopPropagation()` *only when it dismissed
+  an open palette*, so this module's document-level Escape never fires in that case. Net: 1st Esc
+  dismisses the open palette (focus stays in the field), 2nd Esc (no palette) bubbles to nav.js and exits
+  the composer + restores the cursor. **No change needed here** — the existing Escape handler is correct.
+- **Composer focus keeps thread-nav inert** via the generic `TEXTAREA/INPUT/SELECT` guard — chosen over
+  `[data-composer-text]` because it also covers the chip checkboxes and the `routingScope` select.
+- **Clicks inside `.composer` don't move the reading cursor** (`onClick` early-returns on
+  `closest(".composer")`), so chip/toggle/palette interaction doesn't shift the selection.
+
 ## Guards & accessibility
 
 - When focus is in a `<textarea>`/`<input>`/`[contenteditable]` (a composer is open), the keymap is
