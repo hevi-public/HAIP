@@ -4,6 +4,7 @@ import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReplyView
+import com.aiforum.markdown.MarkdownRenderer
 
 /** Persisted comment-tree node. */
 data class Comment(
@@ -32,6 +33,7 @@ data class Comment(
         id = id,
         authorId = authorId,
         body = body,
+        bodyHtml = MarkdownRenderer.render(body),
         state = state,
         failureCategory = failureCategory,
         reason = reason,

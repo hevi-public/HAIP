@@ -26,6 +26,9 @@
         })();
     </script>
     <link rel="stylesheet" href="/app.css">
+    <%-- highlight.js token colours, scoped to the [data-theme] toggle. Derived from the vendored
+         highlightjs webjar themes (see hljs-theme.css header); served as a static asset, no CDN. --%>
+    <link rel="stylesheet" href="/hljs-theme.css">
     <%-- htmx served from the webjar (see build.gradle.kts); version-agnostic path via webjars-locator-lite --%>
     <script src="/webjars/htmx.org/dist/htmx.min.js"></script>
     <script src="/app.js" defer></script>

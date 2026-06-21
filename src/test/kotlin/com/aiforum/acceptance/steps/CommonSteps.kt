@@ -51,6 +51,11 @@ class CommonSteps(
     @Given("the LLM will respond with {string}")
     fun llmWillRespond(text: String) = llm.enqueue(Behavior.Respond(text))
 
+    // Docstring variant: a reply body spanning multiple lines (e.g. a fenced code block needs real
+    // newlines, which a one-line {string} can't carry).
+    @Given("the LLM will respond with the markdown:")
+    fun llmWillRespondMarkdown(markdown: String) = llm.enqueue(Behavior.Respond(markdown))
+
     @Given("the next save will fail")
     fun nextSaveWillFail() {
         failingRepo.failNextWrite = true
@@ -75,6 +80,11 @@ class CommonSteps(
     @Then("the reply body contains {string}")
     fun replyBodyContains(text: String) {
         assertTrue(Html.contains(body(), text), "expected body to contain \"$text\" in:\n${body()}")
+    }
+
+    @Then("the reply body does not contain {string}")
+    fun replyBodyDoesNotContain(text: String) {
+        assertFalse(Html.contains(body(), text), "expected body NOT to contain \"$text\" in:\n${body()}")
     }
 
     @Then("the reply author is {string}")

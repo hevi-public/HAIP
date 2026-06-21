@@ -7,6 +7,7 @@ import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReplyView
 import com.aiforum.dto.ScopeMode
 import com.aiforum.dto.Snippet
+import com.aiforum.markdown.MarkdownRenderer
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.ThreadReadRepository
@@ -99,6 +100,7 @@ class ThreadController(
         model.addAttribute("threadId", id)
         model.addAttribute("title", title)
         model.addAttribute("body", body)
+        model.addAttribute("bodyHtml", MarkdownRenderer.render(body))
         // Nest replies under their parents so the page reflects the comment tree (a persona reply sits
         // under the message it answered). replyNode.kte renders reply.children recursively; the flat
         // list it gets here was rendering every node at level 0. Children keep their repository order
