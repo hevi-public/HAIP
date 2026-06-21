@@ -32,6 +32,13 @@ open class ProcessLlmClient(
     @Value("\${aiforum.llm.working-dir:}") private val workingDir: String,
     @Value("\${aiforum.llm.rate-limit-retry-after-seconds:300}") private val rateLimitRetryAfterSeconds: Long,
     @Value("\${aiforum.llm.poll-millis:100}") private val pollMillis: Long,
+    // Headless `claude -p` cannot prompt for tool permission, so any tool that needs approval (WebFetch
+    // among them) is silently denied — a persona asked to check the web just reports it can't reach the
+    // network. These pre-authorise WebFetch for the spawned CLI. Off by default; toggled per-profile via
+    // application-{dev,prod}.yml. Kotlin defaults so direct (test) construction needn't pass them; Spring
+    // still injects the @Value either way.
+    @Value("\${aiforum.llm.web-fetch-enabled:false}") private val webFetchEnabled: Boolean = false,
+    @Value("\${aiforum.llm.web-fetch-allowed-domains:}") private val webFetchAllowedDomains: String = "",
 ) : LlmClient {
 
     private companion object {
@@ -115,6 +122,24 @@ open class ProcessLlmClient(
         val model = personaModel.ifBlank { defaultModel }
         if (model.isNotBlank()) {
             add("--model"); add(model)
+        }
+        // Pre-authorise tools that headless mode would otherwise deny. `--allowedTools` takes a
+        // comma-separated list of permission rules; an empty list means we send no flag at all.
+        val allowed = allowedTools()
+        if (allowed.isNotEmpty()) {
+            add("--allowedTools"); add(allowed.joinToString(","))
+        }
+    }
+
+    /**
+     * Permission rules to pass through `--allowedTools`. WebFetch is gated by [webFetchEnabled]: a blank
+     * domain list grants bare `WebFetch` (any host), otherwise one scoped `WebFetch(domain:<host>)` rule
+     * per configured host, so personas can only reach the allowlist.
+     */
+    private fun allowedTools(): List<String> = buildList {
+        if (webFetchEnabled) {
+            val domains = webFetchAllowedDomains.split(",").map(String::trim).filter(String::isNotEmpty)
+            if (domains.isEmpty()) add("WebFetch") else domains.forEach { add("WebFetch(domain:$it)") }
         }
     }
 

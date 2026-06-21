@@ -8,3 +8,7 @@ spring:
 aiforum:
   backups:
     enabled: true
+  llm:
+    # Off in prod by default — turn on (and ideally scope web-fetch-allowed-domains) only once you're
+    # comfortable letting personas reach the network from the production host.
+    web-fetch-enabled: false

@@ -72,3 +72,9 @@ aiforum:
     working-dir: ""            # blank => system temp, so the project CLAUDE.md doesn't leak into personas
     rate-limit-retry-after-seconds: 300
     poll-millis: 100           # how often the wait loop checks the deadline and cancellation token
+    # Headless `claude -p` can't prompt for tool permission, so WebFetch is denied unless pre-authorised
+    # here (a persona asked to check the web otherwise just reports it can't reach the network). Off by
+    # default; turned on per-profile (see application-dev.yml / application-prod.yml).
+    web-fetch-enabled: false
+    web-fetch-allowed-domains: ""   # blank => any host; else comma-separated allowlist, e.g.
+                                    # "news.ycombinator.com,github.com" → personas can only fetch those

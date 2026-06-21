@@ -35,8 +35,20 @@ class ProcessLlmClientTest {
      * returning a well-formed success so generate() completes. The configured `defaultModel` is the
      * fallback when the persona doesn't pin one.
      */
-    private class CapturingClient(defaultModel: String) :
-        ProcessLlmClient(command = "claude", defaultModel = defaultModel, workingDir = "", rateLimitRetryAfterSeconds = 300, pollMillis = 5) {
+    private class CapturingClient(
+        defaultModel: String,
+        webFetchEnabled: Boolean = false,
+        webFetchAllowedDomains: String = "",
+    ) :
+        ProcessLlmClient(
+            command = "claude",
+            defaultModel = defaultModel,
+            workingDir = "",
+            rateLimitRetryAfterSeconds = 300,
+            pollMillis = 5,
+            webFetchEnabled = webFetchEnabled,
+            webFetchAllowedDomains = webFetchAllowedDomains,
+        ) {
         var argv: List<String> = emptyList()
         override fun spawn(argv: List<String>): Process {
             this.argv = argv
@@ -53,6 +65,10 @@ class ProcessLlmClientTest {
     /** The flag value that follows `--model` in argv, or null when the flag is absent. */
     private fun modelArg(argv: List<String>): String? =
         argv.indexOf("--model").takeIf { it >= 0 }?.let { argv.getOrNull(it + 1) }
+
+    /** The flag value that follows `--allowedTools` in argv, or null when the flag is absent. */
+    private fun allowedToolsArg(argv: List<String>): String? =
+        argv.indexOf("--allowedTools").takeIf { it >= 0 }?.let { argv.getOrNull(it + 1) }
 
     @Test
     fun `a persona's pinned model is passed as --model and wins over the configured default`() {
@@ -73,6 +89,31 @@ class ProcessLlmClientTest {
         val client = CapturingClient(defaultModel = "")
         client.generate(request(Duration.ofSeconds(10), personaModel = ""), CancellationToken())
         assertEquals(null, modelArg(client.argv))
+    }
+
+    @Test
+    fun `with web-fetch disabled no --allowedTools flag is sent so headless mode keeps WebFetch denied`() {
+        val client = CapturingClient(defaultModel = "", webFetchEnabled = false)
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals(null, allowedToolsArg(client.argv))
+    }
+
+    @Test
+    fun `web-fetch enabled with no domain allowlist pre-authorises bare WebFetch for any host`() {
+        val client = CapturingClient(defaultModel = "", webFetchEnabled = true)
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals("WebFetch", allowedToolsArg(client.argv))
+    }
+
+    @Test
+    fun `web-fetch enabled with a domain allowlist scopes WebFetch to one rule per host`() {
+        val client = CapturingClient(
+            defaultModel = "",
+            webFetchEnabled = true,
+            webFetchAllowedDomains = "news.ycombinator.com, github.com",
+        )
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals("WebFetch(domain:news.ycombinator.com),WebFetch(domain:github.com)", allowedToolsArg(client.argv))
     }
 
     @Test
