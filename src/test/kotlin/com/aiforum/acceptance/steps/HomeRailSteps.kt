@@ -69,4 +69,15 @@ class HomeRailSteps(
             "expected the $rail rail empty state ($attr=\"true\") in:\n${body()}",
         )
     }
+
+    @Then("the front page shows the ask-the-room composer")
+    fun frontPageShowsAskComposer() {
+        // The composer is a <details data-ask-room> disclosure in the main column; the new-thread form
+        // (data-new-thread) lives inside it, present in the DOM even while collapsed, so it still posts
+        // with JS off. We assert both hooks; the reveal-on-click is a <details> behaviour the HTTP suite
+        // can't drive.
+        val html = body()
+        assertTrue(Html.contains(html, "data-ask-room"), "expected the ask-the-room composer (data-ask-room) in:\n$html")
+        assertTrue(Html.contains(html, "data-new-thread"), "expected the new-thread form (data-new-thread) inside it in:\n$html")
+    }
 }

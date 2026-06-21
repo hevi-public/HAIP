@@ -46,3 +46,7 @@ Feature: The front page shows the side-rail boxes
     When the owner opens the front page
     Then the front page shows the "recent-comments" rail box
     And the "recent-comments" rail shows an empty state
+
+  Scenario: The main column carries the ask-the-room composer
+    When the owner opens the front page
+    Then the front page shows the ask-the-room composer
