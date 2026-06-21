@@ -64,10 +64,22 @@
                     hx-target="closest article" hx-swap="outerHTML">Cancel</button>
         </div>
     @endif
-    <%-- Action bar: +1 sits on the left; Delete is pushed to the far right of the same row
-         (.reply__delete { margin-left:auto }). /more and Retry, when present, sit beside +1 on the
-         left. The vote area stays its own htmx swap target, so a +1 swaps it in place untouched. --%>
+    <%-- Action bar: a single footer line — Reply, then +1, then the rest; Delete is pushed to the far
+         right of the same row (.reply__delete { margin-left:auto }). /more and Retry, when present, sit
+         beside +1. The vote area stays its own htmx swap target, so a +1 swaps it in place untouched. --%>
     <div class="reply__actionbar">
+        <%-- Inline composer leads the footer as a collapsed disclosure (one reply box open at a time, §4),
+             only on a POSTED node whose thread context is known (full page / generate / auto-grow);
+             fragments re-rendered without threadId (retry/drafting/failed) omit it. When opened it spans
+             the full row width so the composer drops below the footer buttons. Generation scope defaults
+             to WHOLE_THREAD (matches the visible "looking at: whole topic" control); a branch-only default
+             silently hid sibling branches from the model. Placement is still this node (parentId). --%>
+        @if(threadId != null && reply.state == GenerationState.POSTED)
+            <details class="reply__compose">
+                <summary>Reply</summary>
+                @template.fragments.composer(placement = "inline", targetId = reply.id, parentId = reply.id, scope = "WHOLE_THREAD", threadId = threadId, personas = personas)
+            </details>
+        @endif
         @template.fragments.voteArea(reply = reply)
         <%-- Star — the owner's navigation bookmark (firewalled like +1). Its own swap target so a toggle
              replaces just the control; the branch-index rail mirrors it client-side (nav.js). --%>
@@ -123,19 +135,6 @@
             </details>
         @endif
     </div>
-    <%-- Inline composer only on a POSTED node whose thread context is known (full page / generate /
-         auto-grow); fragments rendered without it (e.g. retry, drafting, failed) re-render without a
-         composer. It is a collapsed disclosure so only one reply box opens at a time (§4). --%>
-    @if(threadId != null && reply.state == GenerationState.POSTED)
-        <details class="reply__compose">
-            <summary>Reply</summary>
-            <%-- Generation scope defaults to WHOLE_THREAD so the summoned persona reads the whole topic —
-                 matching the visible "looking at: whole topic" control. A branch-only default silently
-                 hid sibling branches from the model (it would answer "I can't see that post"); the owner
-                 narrows to this branch explicitly via /branch. Placement is still this node (parentId). --%>
-            @template.fragments.composer(placement = "inline", targetId = reply.id, parentId = reply.id, scope = "WHOLE_THREAD", threadId = threadId, personas = personas)
-        </details>
-    @endif
     @for(child in reply.children)
         @template.fragments.replyNode(reply = child, threadId = threadId, personas = personas)
     @endfor

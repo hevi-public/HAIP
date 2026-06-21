@@ -128,7 +128,7 @@ body {
   color: var(--ink);
   font-family: var(--sans);
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.45;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -225,14 +225,14 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 /* ghost = neutral, low-emphasis action (e.g. Cancel an in-flight draft — a choice, not a failure) */
 .btn--ghost {
   background: transparent; color: var(--muted);
-  border-color: var(--sage-2); font-weight: 400; padding: 4px 12px; font-size: 12px;
+  border-color: var(--sage-2); font-weight: 400; padding: 2px 9px; font-size: 11.5px;
 }
 .btn--ghost:hover { background: var(--grey-bg); color: var(--ink); filter: none; }
 
 .monogram {
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px;
+  width: 24px; height: 24px;
   /* Pastel tint per author: --mono-h is set inline from the author's avatar hue (AuthorColor); fixed
      lightness + saturation keep every avatar in the same soft register. Falls back to sage if unset. */
   background: hsl(var(--mono-h, 75) 42% 84%);
@@ -463,6 +463,12 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 /* the starred toggle on a comment: a filled star reads "bookmarked" at a glance */
 .reply__star-btn.is-starred { color: hsl(45 90% 42%); }
 .reply__star-icon { width: 14px; height: 14px; vertical-align: text-bottom; }
+/* In the baseline-aligned action row, a flex button reports its FIRST child as its baseline — for the
+   Star chip that's the icon, not the text, so it rode a touch high next to the text-only +1 / /more.
+   Align the button's own items to the text baseline (so the chip reports the text baseline like the
+   others) while re-centering the icon so it still sits visually middled. */
+.reply__star-btn { align-items: baseline; }
+.reply__star-btn .reply__star-icon { align-self: center; }
 
 /* context legend — static key for the tree's spine/dimming convention */
 .context-legend { list-style: none; margin: 0; padding: 0; }
@@ -478,32 +484,32 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   border: 1px solid var(--line);
   border-radius: var(--r);
   box-shadow: var(--shadow);
-  padding: 18px 22px 16px;
-  margin-bottom: 14px;
+  padding: 13px 18px 12px;
+  margin-bottom: 10px;
 }
-.thread__title { font-size: 21px; font-weight: 700; line-height: 1.25; margin: 0; max-width: var(--prose); }
+.thread__title { font-size: 19px; font-weight: 700; line-height: 1.2; margin: 0; max-width: var(--prose); }
 /* The OP body: the post's own content, sitting under the title (the comment tree is the room's reply). */
 .thread__body {
-  margin: 11px 0 0; max-width: var(--prose);
-  font-size: 13.5px; line-height: 1.65; color: var(--ink);
+  margin: 8px 0 0; max-width: var(--prose);
+  font-size: 13.5px; line-height: 1.5; color: var(--ink);
 }
 
 /* reply tree -------------------------------------------------------------- */
-.reply-list { display: flex; flex-direction: column; gap: 8px; }
+.reply-list { display: flex; flex-direction: column; gap: 6px; }
 
 .reply {
   background: var(--card);
   border: 1px solid var(--line-node);
   border-left: 3px solid var(--spine);
   border-radius: 0 var(--r) var(--r) 0;
-  padding: 11px 14px;
+  padding: 8px 13px 9px;
 }
 /* DOM nesting === tree depth (replyNode renders children inside the parent <article>) */
-.reply .reply { margin-top: 8px; margin-left: 20px; }
+.reply .reply { margin-top: 6px; margin-left: 18px; }
 
 .reply__head {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin-bottom: 7px;
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin-bottom: 4px;
 }
 .reply__author { font-weight: 700; font-size: 13px; }
 .reply__handle { font-family: var(--mono); font-size: 11px; color: var(--faint-2); }
@@ -512,17 +518,17 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
    without scrolling up. Light indent + quote bar, the affordance Dana asked for. */
 .reply__inreplyto {
   display: block; max-width: var(--prose);
-  margin: 0 0 8px; padding: 3px 0 3px 9px;
+  margin: 0 0 5px; padding: 2px 0 2px 9px;
   border-left: 2px solid var(--sage-2);
-  font-size: 12px; line-height: 1.45; color: var(--muted);
+  font-size: 12px; line-height: 1.4; color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .reply__inreplyto:hover { text-decoration: none; border-left-color: var(--spine-live); color: var(--ink); }
 .reply__inreplyto-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
 .reply__inreplyto-quote { font-style: italic; }
 
-.reply .body { font-size: 13.5px; line-height: 1.6; color: var(--ink); max-width: var(--prose); }
-.reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
+.reply .body { font-size: 13.5px; line-height: 1.5; color: var(--ink); max-width: var(--prose); }
+.reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 5px; }
 
 /* Markdown-rendered body content (reply bodies + the OP). Now structured HTML, not pre-wrapped text:
    reset block margins at the edges so the card padding owns the outer gap, and give inner blocks rhythm.
@@ -568,11 +574,13 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   font-family: var(--mono); font-size: 11.5px; color: var(--faint-2);
 }
 
-/* action row: +1 (and /more / Retry) on the left, Delete pushed to the far right. flex-start keeps the
-   +1 anchored to the top of the row even when the delete disclosure opens and grows tall. */
+/* action row: Reply, +1, Star (and /more / Retry) on the left, Delete pushed to the far right.
+   baseline alignment lines up the borderless "Reply" link with the bordered ghost chips on one text
+   baseline (flex-start left their tops aligned but baselines off — the "weird" stagger); it also keeps
+   every item anchored to the top line when the delete disclosure opens and grows tall below. */
 .reply__actionbar {
-  display: flex; align-items: flex-start; flex-wrap: wrap;
-  gap: 8px; margin-top: 9px;
+  display: flex; align-items: baseline; flex-wrap: wrap;
+  gap: 6px; margin-top: 6px;
 }
 
 /* state badge ------------------------------------------------------------- */
@@ -698,17 +706,21 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 .monogram--sm { width: 22px; height: 22px; font-size: 9px; }
 .monogram--xs { width: 18px; height: 18px; font-size: 8px; border-radius: var(--r-sm); }
 
-/* inline reply as a disclosure — collapsed until the owner opens it (one composer at a time) */
-.reply__compose { margin-top: 10px; }
+/* Inline reply — leads the footer action row as a collapsed disclosure (one composer at a time).
+   Closed: it's a plain "↩ Reply" text trigger, first in the row. Open: it spans the full row width
+   (flex-basis:100%) so the composer drops onto its own line below the footer buttons. */
+.reply__compose { order: -1; }                 /* keep Reply first even if markup order shifts */
+.reply__compose[open] { flex-basis: 100%; }
 .reply__compose > summary {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: 5px;
   list-style: none; cursor: pointer;
+  padding: 2px 0;                              /* nudge baseline to match the bordered ghost buttons */
   font-size: 11.5px; font-weight: 700; color: var(--link);
   width: max-content;
 }
 .reply__compose > summary::-webkit-details-marker { display: none; }
 .reply__compose > summary::before { content: "↩"; }
-.reply__compose[open] > summary { margin-bottom: 10px; }
+.reply__compose[open] > summary { margin-bottom: 9px; }
 
 /* delete — destructive, so gated behind an inline "are you sure" panel (the clay = error/warning hue,
    which re-skins itself in dark mode via the --clay-* tokens). Trigger is a ghost-button-shaped
@@ -765,7 +777,7 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 
 /* ------------------------------------------------------------ thread controls */
 .thread__controls {
-  display: flex; align-items: center; gap: 10px; margin-top: 14px;
+  display: flex; align-items: center; gap: 10px; margin-top: 10px;
 }
 
 /* htmx-indicator: hidden by default, shown (inline-flex) when htmx-request is added */
