@@ -9,6 +9,6 @@ aiforum:
   backups:
     enabled: true
   llm:
-    # Off in prod by default — turn on (and ideally scope web-fetch-allowed-domains) only once you're
-    # comfortable letting personas reach the network from the production host.
-    web-fetch-enabled: false
+    # Personas reach the network in prod too. Leave the allowlist blank for any host, or scope it via
+    # web-fetch-allowed-domains (see application.yml) to keep production fetches tight.
+    web-fetch-enabled: true
