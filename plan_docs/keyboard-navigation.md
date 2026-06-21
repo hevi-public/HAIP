@@ -149,5 +149,19 @@ in `app.js`. No file conflict — that work is in `app.js`; this is in `nav.js`/
 - **Manual for now:** the DOM glue (cursor, scroll, overlay, htmx re-hook, compose wiring) is verified
   by driving the running app in a browser. The stable hooks a future browser-level test would assert
   on: `[data-nav-item]`, `.is-current` / `[data-cursor]`.
-</content>
-</invoke>
+
+## Deferred follow-ups
+
+Shipped in the first cut (PR #31). These were consciously left out — collected here so they're not lost:
+
+- **Cross-page rollout (index / members / profile).** The engine is markup-driven, so each page becomes
+  navigable just by emitting `[data-nav-item]` on its rows/cards (flat lists leave h/l/J/K inert). Only
+  the thread page emits the hook today. See *Cross-page consistency* above.
+- **Dedicated "reply as sibling from here" composer.** `a` currently reuses the *parent's* inline
+  composer (and collapses to `o` at top level). A composer that targets the parent directly from a child
+  node would make sibling replies first-class. See the `a` note under *Compose semantics*.
+- **Search results-list mode.** The stretch UI described under *Search* — filter to a list of matches,
+  `Enter` exits the input, `j`/`k` pick among them. `nav-core.matches(model, query)` already backs it.
+- **`.nav-cmdline` dark-surface contrast.** The command-line bar hardcodes `--dark` / `--dark-ink`, which
+  reads flat on the dark theme (landed in PR #26). Give it a dark-mode variant so it stays legible. The
+  cursor highlight, search `mark`, and help panel already use semantic tokens and re-skin automatically.
