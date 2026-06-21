@@ -57,19 +57,6 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
     fun threadComments(threadId: String): List<Comment> =
         jdbc.query("SELECT * FROM comment WHERE thread_id = ? ORDER BY depth, created_at", mapper, threadId)
 
-    /**
-     * The tail of a branch: descend from [nodeId] through the most-recent child at each level until a
-     * leaf. An owner reply continues HERE so the conversation extends the branch rather than forking off
-     * whatever node the owner clicked Reply on (the deeper replies are the live edge of that subthread).
-     * Only persisted nodes are seen, so an in-flight draft never diverts the tail.
-     */
-    fun branchTail(nodeId: String): String {
-        var current = nodeId
-        while (true) {
-            current = childrenOf(current).lastOrNull()?.id ?: return current
-        }
-    }
-
     /** Direct children of a node (its replies' siblings) — null parent = the thread's top-level nodes. */
     fun childrenOf(parentId: String?): List<Comment> =
         if (parentId == null)
