@@ -1,5 +1,6 @@
 package com.aiforum.llm
 
+import com.aiforum.domain.context.TranscriptRenderer
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
@@ -147,7 +148,7 @@ open class ProcessLlmClient(
     }
 
     private fun renderPrompt(context: PromptContext, personaName: String): String {
-        val transcript = renderTranscript(context.comments)
+        val transcript = TranscriptRenderer.render(context.comments)
         // Name the persona explicitly and point it at the most recent message: without this the model
         // sees its own past lines labelled "$name:" amid the transcript and gets meta about who it is
         // ("the framing got flipped"). The system prompt carries the character; this carries the task.
@@ -159,25 +160,6 @@ open class ProcessLlmClient(
                 "reply depth and \"↳ replying to #n\" marks which message it answers:\n\n$transcript\n\n---\n" +
                 "Write ${personaName}'s next reply, responding to the most recent message above. " +
                 "Reply with the message text only, in character as $personaName. $BREVITY"
-        }
-    }
-
-    /**
-     * Flat transcript carrying thread shape. Indentation (depth, normalised to the shallowest comment
-     * in scope so branch-only paths don't run off the page) gives the model an at-a-glance picture; the
-     * "↳ replying to #n" tag is the load-bearing, whitespace-independent signal — it survives even if a
-     * future CLI trims leading space. Bodies are flattened to one line so the grid stays legible.
-     */
-    private fun renderTranscript(comments: List<ContextComment>): String {
-        // Stable short ref per comment, in transcript order, so reply tags disambiguate repeated authors.
-        val refOf = comments.withIndex().associate { (i, c) -> c.id to (i + 1) }
-        val base = comments.minOfOrNull { it.depth } ?: 0
-        return comments.joinToString("\n") { c ->
-            val indent = "  ".repeat((c.depth - base).coerceAtLeast(0))
-            val ref = refOf.getValue(c.id)
-            val replyTag = c.parentId?.let { refOf[it] }?.let { " ↳ replying to #$it" } ?: ""
-            val body = c.body.replace("\n", " ").trim()
-            "$indent[#$ref$replyTag] ${c.authorId}: $body"
         }
     }
 
