@@ -86,7 +86,7 @@ class OwnerControlsController(
     }
 
     /**
-     * Delete a comment and its whole subtree (§7). The browser button outerHTML-swaps the closest
+     * Delete a comment and its whole subtree (§8 node operations). The browser button outerHTML-swaps the closest
      * <article> with this empty response, so the node — and its replies, which render nested inside it —
      * vanish from the DOM in one swap, mirroring the cascade the repository performs in the DB.
      */

@@ -85,7 +85,7 @@
                     hx-target="closest article"
                     hx-swap="outerHTML">Retry</button>
         @endif
-        <%-- Delete cascades to the whole subtree (§7), pushed to the bottom-right of the action row. The
+        <%-- Delete cascades to the whole subtree (§8 node operations), pushed to the bottom-right of the action row. The
              trash trigger opens an inline "are you sure" panel (a <details> disclosure) instead of the
              browser's plain native confirm. The real POST lives on the "Yes, delete" button, so it
              still outerHTML-swaps this <article> away — children, which render nested inside it, go with

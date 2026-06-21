@@ -105,7 +105,7 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
         ) ?: 0
 
     /**
-     * Delete [nodeId] and its entire subtree (§7) — a deleted parent takes its replies with it, so no
+     * Delete [nodeId] and its entire subtree (§8) — a deleted parent takes its replies with it, so no
      * child is ever left pointing at a gone parent. foreign_keys=on (every profile, see the datasource
      * URLs) means dependents must go first: `vote.node_id` and `comment.parent_id` both reference
      * `comment(id)`, so we clear the subtree's votes, then delete the comments deepest-first (a child is
