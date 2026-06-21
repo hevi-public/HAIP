@@ -206,6 +206,31 @@ a:hover { text-decoration: underline; }
 @media (min-width: 1000px) {       /* two columns only when there's room; rail stacks below on narrow screens */
   .thread:has(.thread__rail:not([hidden])) { grid-template-columns: minmax(0, 1fr) var(--rail); }
 }
+.thread__rail { display: flex; flex-direction: column; gap: 14px; }
+@media (min-width: 1000px) { .thread__rail { position: sticky; top: 18px; } }   /* rail follows as the tree scrolls */
+
+/* rail box — the shared card chrome for side-rail occupants (branch index is the first) */
+.rail-box {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+}
+.rail-box__title {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: #6b6e48;
+  margin: 0 0 8px;
+}
+
+.branch-index { list-style: none; margin: 0; padding: 0; }
+.branch-index__row { padding-left: calc(var(--bi-depth, 0) * 12px); }   /* light indent mirrors tree depth */
+.branch-index__link {
+  display: block; padding: 3px 0;
+  font-size: 12.5px; color: var(--link);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.branch-index__row + .branch-index__row { border-top: 1px dotted var(--line-dotted); }
 
 .thread__op {
   background: var(--card);

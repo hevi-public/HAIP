@@ -29,6 +29,10 @@ object Html {
     fun countAttr(html: String, name: String, value: String): Int =
         Regex("$name=\"${Regex.escape(value)}\"").findAll(html).count()
 
+    /** Every value carried by [name]="…" in document order — e.g. the reply id on each rail entry. */
+    fun attrValues(html: String, name: String): List<String> =
+        Regex("${Regex.escape(name)}=\"([^\"]*)\"").findAll(html).map { it.groupValues[1] }.toList()
+
     /** The data-reply-id of the first <article> whose data-author == [author], or null. */
     fun replyIdWithAuthor(html: String, author: String): String? {
         val tag = Regex("<article\\b[^>]*data-author=\"${Regex.escape(author)}\"[^>]*>").find(html)?.value ?: return null

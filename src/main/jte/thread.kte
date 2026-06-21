@@ -1,8 +1,10 @@
 @import com.aiforum.dto.ReplyView
+@import com.aiforum.dto.BranchIndexEntry
 @import com.aiforum.web.PersonaView
 @param threadId: String
 @param title: String
 @param replies: List<ReplyView>
+@param branchIndex: List<BranchIndexEntry>
 @param waitingOnRoom: Boolean
 @param personas: List<PersonaView>
 
@@ -31,9 +33,14 @@
         </div>
         @template.fragments.composer(placement = "bottom", targetId = threadId, parentId = null, scope = "WHOLE_THREAD", threadId = threadId, personas = personas)
       </div>
-      <%-- Reserved side rail. Empty + hidden for now, so the main column spans full width; the side
-           boxes (TOC, activity, persona presence…) land here later and the grid becomes two columns
-           automatically (see .thread:has(.thread__rail) in app.css). --%>
-      <aside class="thread__rail" data-thread-rail hidden></aside>
+      <%-- Side rail. Its first occupant is the branch index; it stays hidden (and the thread stays
+           single-column) until the room has posted, so an empty thread doesn't show a bare column.
+           The grid flips to two columns automatically once the rail is shown — see
+           .thread:has(.thread__rail:not([hidden])) in app.css. --%>
+      <aside class="thread__rail" data-thread-rail hidden="${branchIndex.isEmpty()}">
+          @if(!branchIndex.isEmpty())
+              @template.fragments.branchIndex(entries = branchIndex)
+          @endif
+      </aside>
     </div>
 `)

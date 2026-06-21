@@ -22,6 +22,7 @@
        "hx-get=\"/replies/${reply.id}\" hx-trigger=\"every 1s\" hx-target=\"this\" hx-swap=\"outerHTML\""
    else "" }
 <article class="reply" $unsafe{pollAttrs}
+         id="reply-${reply.id}"
          data-reply-id="${reply.id}"
          data-author="${reply.authorId}"
          data-state="${reply.state.name.lowercase()}"

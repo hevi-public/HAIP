@@ -1,6 +1,7 @@
 package com.aiforum.web
 
 import com.aiforum.domain.Comment
+import com.aiforum.dto.BranchIndexEntry
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ReplyView
 import com.aiforum.repo.CommentRepository
@@ -75,10 +76,26 @@ class ThreadController(
         // under the message it answered). replyNode.kte renders reply.children recursively; the flat
         // list it gets here was rendering every node at level 0. Children keep their repository order
         // (depth, created_at), so siblings stay chronological.
-        model.addAttribute("replies", assembleTree(all))
+        val tree = assembleTree(all)
+        model.addAttribute("replies", tree)
+        // Branch index for the side rail: the posted nodes flattened in the same depth-first order the
+        // page renders them, so the rail reads top-to-bottom alongside the thread. Empty until the room
+        // has spoken, which keeps a fresh thread single-column (the aside stays hidden).
+        model.addAttribute("branchIndex", branchIndex(tree))
         model.addAttribute("waitingOnRoom", all.none { it.state == GenerationState.POSTED })
         model.addAttribute("personas", personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug) })
         return "thread"
+    }
+
+    /** Flatten the reply tree depth-first into the rail's jump list, posted nodes only. */
+    private fun branchIndex(tree: List<ReplyView>): List<BranchIndexEntry> {
+        val out = mutableListOf<BranchIndexEntry>()
+        fun walk(node: ReplyView) {
+            if (node.state == GenerationState.POSTED) out += BranchIndexEntry(node.id, node.authorId, node.depth)
+            node.children.forEach(::walk)
+        }
+        tree.forEach(::walk)
+        return out
     }
 
     /** Build the top-level reply views with their descendants nested, from the flat thread list. */
