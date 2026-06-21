@@ -116,16 +116,23 @@ class ThreadController(
         val voteCounts = votes.countAll()
         val childrenByParent = all.groupBy { it.parentId }
         val byId = all.associateBy { it.id }
-        fun build(comment: Comment): ReplyView =
+        // The "in reply to" anchor only earns its place when a reply is visually separated from the
+        // comment it answers. A parent's FIRST child renders immediately under it (depth-first preorder),
+        // so the quote would just echo the line above — redundant clutter. Later siblings get pushed
+        // down past the first child's whole sub-thread, so the anchor re-establishes "who am I answering"
+        // (the owner's UX ask). isDirect = "renders right under its parent" = is the parent's first child.
+        fun build(comment: Comment, isDirect: Boolean): ReplyView =
             comment.toReplyView(
                 voteCount = voteCounts[comment.id] ?: 0,
-                children = childrenByParent[comment.id].orEmpty().map(::build),
-                // "In reply to" anchor: a literal truncated quote of the parent comment. Null for
-                // top-level nodes (parentId null) — they answer the post, which has no comment node.
-                parent = comment.parentId?.let { byId[it] }?.let {
+                children = childrenByParent[comment.id].orEmpty()
+                    .mapIndexed { index, child -> build(child, isDirect = index == 0) },
+                // Null for top-level nodes (parentId null — they answer the post, which has no comment
+                // node) and for direct replies (the parent is the line directly above).
+                parent = if (isDirect) null else comment.parentId?.let { byId[it] }?.let {
                     ParentRef(it.id, it.authorId, ParentRef.previewOf(it.body))
                 },
             )
-        return childrenByParent[null].orEmpty().map(::build)
+        // Top-level nodes answer the post, not a comment — treat them as direct so they carry no anchor.
+        return childrenByParent[null].orEmpty().map { build(it, isDirect = true) }
     }
 }
