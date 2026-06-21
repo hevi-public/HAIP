@@ -282,6 +282,14 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 .active-threads__link:hover .active-threads__title { text-decoration: underline; }
 .active-threads__time { flex: none; font-family: var(--mono); font-size: 10px; color: var(--muted); }
 
+/* Recent-comments box — right-rail feed of the newest posted replies. Shares .rail-box card chrome. */
+.recent-comments { list-style: none; margin: 0; padding: 0; }
+.recent-comments__row { padding: 7px 0; }
+.recent-comments__row + .recent-comments__row { border-top: 1px dotted var(--line-dotted); }
+.recent-comments__quote { display: block; color: var(--ink); font-size: 12px; line-height: 1.4; }
+.recent-comments__quote:hover { text-decoration: underline; }
+.recent-comments__meta { margin-top: 3px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+
 /* Ask-the-room box — right-rail CTA. Shares .rail-box card chrome; the button reuses .btn. */
 .ask-room__lead { margin: 0 0 9px; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
 .btn--block { display: flex; justify-content: center; width: 100%; }
