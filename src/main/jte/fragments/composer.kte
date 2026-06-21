@@ -1,4 +1,5 @@
 @import com.aiforum.web.PersonaView
+@import com.aiforum.web.AuthorColor
 @param threadId: String
 @param targetId: String
 @param parentId: String?
@@ -9,7 +10,10 @@
 <%-- The data-* targeting hooks and the hx-* wiring live on the SAME opening tag: the acceptance
      probe (Html.composerScope/composerAttr) reads attributes from the single tag carrying
      data-target-id, so the composer is one <form>, not a wrapper div around a form (§4). The
-     class= styling hook rides along on that same tag and is ignored by the probe. --%>
+     class= styling hook rides along on that same tag and is ignored by the probe. The affordances
+     below (Single/Roomful toggle, persona chips, slash palette, @mention menu — §4) are progressive
+     enhancement driven by app.js: with JS off the checkbox-backed chips still bind personaIds, the
+     textarea still posts text, and the hidden roomMode default still submits. --%>
 <form class="composer composer--${placement}"
       data-composer="${placement}" data-target-id="${targetId}" data-scope="${scope}"
       hx-post="/threads/${threadId}/generate"
@@ -22,8 +26,16 @@
       hx-on::after-request="if(event.detail.successful){this.reset();this.closest('details')?.removeAttribute('open')}">
     <div class="composer__head">
         <span class="composer__tag">${if (placement == "bottom") "↳ level 0" else "↳ inline"}</span>
-        <span>${if (placement == "bottom") "New reply to the post" else "Reply in this branch"}</span>
+        <span class="composer__head-label">${if (placement == "bottom") "New reply to the post" else "Reply in this branch"}</span>
+        <%-- Single ↔ Roomful: how many voices answer. The buttons drive the hidden roomMode input
+             (app.js) and gate chip multi-select; the server caps an "Anyone"/@mention pick to one when
+             roomMode=single. Defaults to Single per the composer-states comp. --%>
+        <div class="seg" data-roomful-toggle role="group" aria-label="how many reply">
+            <button type="button" class="seg__opt is-active" data-room-mode="single">Single</button>
+            <button type="button" class="seg__opt" data-room-mode="roomful">Roomful</button>
+        </div>
     </div>
+
     @if(parentId != null)
         <input type="hidden" name="parentId" value="${parentId}">
     @endif
@@ -33,30 +45,71 @@
          node and seeds the room with it (otherwise the owner's words never appear and the personas only
          ever see a blank transcript, emitting a generic opener). --%>
     <input type="hidden" name="postAsOwner" value="true">
-    <textarea name="text" placeholder="Ask the room…   write a question — anyone can answer"></textarea>
-    <div class="composer__row">
-        <label>who answers</label>
-        <%-- Default to "Anyone": the value "auto" hands the pick to the AI dispatcher, which reads the
-             topic and decides which persona(s) should chime in. Selecting a name instead summons just
-             that persona. The sentinel "auto" matches GenerationService.AUTO_PERSONA. --%>
-        <select name="personaIds">
-            <option value="auto" selected>Anyone (the room decides)</option>
+    <%-- Mirrors the Single/Roomful toggle; the controller reads it for the breadth cap (default single,
+         matching the toggle's default highlighted state). --%>
+    <input type="hidden" name="roomMode" value="single" data-room-mode-input>
+
+    <div class="composer__editor" data-composer-editor>
+        <textarea name="text" data-composer-text
+                  placeholder="Write a reply…   type / for commands, @ to summon a persona"></textarea>
+
+        <%-- Slash palette (app.js shows + filters it while the line starts with "/"). Each command just
+             flips one of the existing controls, so it works the same as clicking them. --%>
+        <div class="palette" data-slash-menu hidden>
+            <div class="palette__cap">commands · control how the reply is generated</div>
+            <button type="button" class="palette__row" data-slash-cmd="branch"><span class="palette__key">/branch</span><span class="palette__desc">context = this branch</span></button>
+            <button type="button" class="palette__row" data-slash-cmd="topic"><span class="palette__key">/topic</span><span class="palette__desc">context = whole topic</span></button>
+            <button type="button" class="palette__row" data-slash-cmd="roomful"><span class="palette__key">/roomful</span><span class="palette__desc">several reply in parallel</span></button>
+            <button type="button" class="palette__row" data-slash-cmd="single"><span class="palette__key">/single</span><span class="palette__desc">one voice replies</span></button>
+        </div>
+
+        <%-- @mention menu (app.js shows + filters it while typing an @handle). Picking a row inserts the
+             handle into the textarea AND selects that persona's chip; the mention is also parsed
+             server-side (MentionParser), so summoning by @name works even with JS off. --%>
+        <div class="palette" data-mention-menu hidden>
+            <div class="palette__cap">summon a persona</div>
             @for(p in personas)
-                <option value="${p.id}">${p.name}</option>
+                !{ val handle = if (p.slug.isNullOrBlank()) p.name else p.slug }
+                <button type="button" class="palette__row" data-mention-pick="${p.id}" data-mention-handle="${handle}" data-mention-name="${p.name.lowercase()}">
+                    <span class="monogram monogram--sm" aria-hidden="true" style="--mono-h: ${AuthorColor.hue(p.id, personas)}">${p.name.take(2).uppercase()}</span>
+                    <span class="palette__key">@${handle}</span>
+                    <span class="palette__desc">${p.name} · ${p.descriptor}</span>
+                </button>
             @endfor
-        </select>
-        <%-- When "Anyone" is chosen, this scopes what the dispatcher reads to decide WHO replies:
-             the whole topic (default) or just this branch. Ignored when a specific persona is named.
-             Values match ScopeMode; it's independent of the hidden generation `scope` above. Inline only:
-             the bottom composer is top-level (no ancestor path), so "this branch" == "whole topic" there
-             — omitting it (the controller defaults routingScope to WHOLE_THREAD) keeps that placement clean. --%>
+        </div>
+    </div>
+
+    <%-- Persona chips are the picker (name="personaIds", asserted by composer_reply_targeting). "Anyone"
+         hands the choice to the AI dispatcher (value "auto" = GenerationService.AUTO_PERSONA); selecting
+         persona chips names who replies. Checkbox-backed so the form still binds with JS off; app.js
+         enforces Anyone↔named exclusivity and the Single→one-chip rule. --%>
+    <div class="chips" data-persona-picker>
+        <label class="chip chip--anyone is-selected" data-anyone-chip>
+            <input type="checkbox" name="personaIds" value="auto" checked>
+            <span>✦ Anyone</span>
+        </label>
+        @for(p in personas)
+            <label class="chip" data-persona-chip="${p.id}">
+                <input type="checkbox" name="personaIds" value="${p.id}">
+                <span class="monogram monogram--xs" aria-hidden="true" style="--mono-h: ${AuthorColor.hue(p.id, personas)}">${p.name.take(2).uppercase()}</span>
+                <span>${p.name}</span>
+            </label>
+        @endfor
+    </div>
+
+    <div class="composer__row">
+        <%-- When "Anyone" is chosen, this scopes what the dispatcher reads to decide WHO replies: the
+             whole topic (default) or just this branch. Ignored when a specific persona is named. Inline
+             only: the bottom composer is top-level (no ancestor path), so "this branch" == "whole topic"
+             — omitting it (the controller defaults routingScope to WHOLE_THREAD) keeps it clean. --%>
         @if(placement != "bottom")
-            <label>looking at</label>
-            <select name="routingScope">
+            <span class="composer__ctx-label">looking at</span>
+            <select name="routingScope" class="composer__select">
                 <option value="WHOLE_THREAD" selected>whole topic</option>
                 <option value="BRANCH_ONLY">this branch</option>
             </select>
         @endif
+        <span class="composer__hint"><b>/</b> commands · <b>@</b> summon</span>
         <button class="btn" type="submit">Ask ▸</button>
     </div>
 </form>

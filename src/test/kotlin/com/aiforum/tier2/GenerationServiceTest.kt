@@ -103,4 +103,59 @@ class GenerationServiceTest {
         assertEquals(1, comments.saved.size, "the cancelled node is persisted exactly once")
         assertNull(service.inFlightView(draft.id), "the in-flight entry is evicted once settled")
     }
+
+    /** A roster of more than one persona so the "Anyone" dispatcher actually runs (it short-circuits a
+     *  single-member roster). [find]/[findAll] are all the service needs of the repo here. */
+    private fun roster(vararg ids: String) = object : PersonaRepository(JdbcTemplate()) {
+        private val all = ids.map { Persona(it, it, "", "You are $it.") }
+        override fun find(id: String) = all.firstOrNull { it.id == id }
+        override fun findAll() = all
+    }
+
+    /** Replays scripted bodies through the single seam and records every request, so a test can assert
+     *  both the outputs and HOW MANY calls were made (e.g. that the dispatcher was skipped). */
+    private class ScriptedLlm(responses: List<String>) : LlmClient {
+        private val deque = ArrayDeque(responses)
+        val requests = mutableListOf<LlmRequest>()
+        override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
+            requests += request
+            return LlmResponse(deque.removeFirst())
+        }
+    }
+
+    @Test
+    fun `Single caps an Anyone pick to one voice even when the dispatcher names several`() {
+        // First call is the dispatcher (names two), second is the one persona that survives the cap.
+        val llm = ScriptedLlm(listOf("Sol, Paul", "Sol's take"))
+        val service = GenerationService(llm, RecordingComments(), roster("Sol", "Paul"))
+
+        val replies = service.generate("t1", null, listOf("auto"), "make these faster?", single = true)
+
+        assertEquals(1, replies.size, "Single must collapse a multi-persona route to one reply")
+        assertEquals("Sol", replies.single().authorId)
+        assertEquals("Sol's take", replies.single().body)
+    }
+
+    @Test
+    fun `Roomful leaves a multi-persona Anyone pick at full breadth`() {
+        val llm = ScriptedLlm(listOf("Sol, Paul", "Sol's take", "Paul's take"))
+        val service = GenerationService(llm, RecordingComments(), roster("Sol", "Paul"))
+
+        val replies = service.generate("t1", null, listOf("auto"), "make these faster?", single = false)
+
+        assertEquals(listOf("Sol", "Paul"), replies.map { it.authorId }, "Roomful keeps everyone the dispatcher named")
+    }
+
+    @Test
+    fun `an at-mention on the Anyone path summons that persona and skips the dispatcher`() {
+        // Only one scripted body: if the dispatcher were consulted the deque would underflow.
+        val llm = ScriptedLlm(listOf("Paul's take"))
+        val service = GenerationService(llm, RecordingComments(), roster("Sol", "Paul"))
+
+        val replies = service.generate("t1", null, listOf("auto"), "@Paul what do you think?")
+
+        assertEquals(1, llm.requests.size, "an @mention pre-empts the dispatcher — no routing call")
+        assertEquals("Paul", replies.single().authorId)
+        assertEquals("Paul's take", replies.single().body)
+    }
 }
