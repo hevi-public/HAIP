@@ -1,0 +1,26 @@
+@import com.aiforum.dto.BranchIndexEntry
+@param entries: List<BranchIndexEntry>
+
+<%-- Branch index: the rail's table of contents (design "Branch index"). Each entry jumps to its
+     comment via the anchor replyNode emits (id="reply-<id>"). data-rail-box / data-branch-index-entry
+     are the stable hooks the acceptance suite reads — the entry hook carries the reply id so the test
+     can confirm every jump target actually exists on the page. --%>
+<section class="rail-box" data-rail-box="branch-index">
+    <h2 class="rail-box__title">Branch index</h2>
+    @if(entries.isEmpty())
+        <p class="rail-box__empty" data-branch-index-empty="true">No comments yet.</p>
+    @else
+        <ol class="branch-index">
+            @for(entry in entries)
+                <li class="branch-index__row" style="--bi-depth: ${entry.depth};">
+                    <a class="branch-index__link" href="#reply-${entry.id}"
+                       data-branch-index-entry="${entry.id}">
+                        <span class="branch-index__dot" aria-hidden="true" style="--mono-h: ${entry.hue}"></span>
+                        <span class="branch-index__author">${entry.author}</span>
+                        <span class="branch-index__snippet">${entry.snippet}</span>
+                    </a>
+                </li>
+            @endfor
+        </ol>
+    @endif
+</section>

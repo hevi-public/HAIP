@@ -57,8 +57,10 @@
   --r-sm:        2px;
   --shadow:      0 1px 4px rgba(0, 0, 0, .09);
   --shadow-pop:  0 6px 22px rgba(0, 0, 0, .24);
-  --maxw:        1080px;
-  --prose:       680px;
+  --maxw:        1280px;   /* index/members working width (HUP-lineage comps frame at 1280) */
+  --prose:       680px;    /* line-length cap — keeps prose readable however wide the column gets */
+  --gutter:      24px;     /* gap between thread main column and the future side rail */
+  --rail:        300px;    /* reserved width for side boxes added later (design comp rail ≈ 268px) */
 
   --sans: Verdana, "DejaVu Sans", Geneva, Tahoma, sans-serif;
   --mono: "DejaVu Sans Mono", ui-monospace, "SF Mono", "Courier New", monospace;
@@ -110,7 +112,10 @@ a:hover { text-decoration: underline; }
 .site-header__spacer { margin-left: auto; }
 .site-header__crumb { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
 
-.container { max-width: var(--maxw); margin: 0 auto; padding: 20px 18px 40px; }
+.container { max-width: var(--maxw); margin: 0 auto; padding: 20px clamp(16px, 2.5vw, 36px) 40px; }
+/* The thread view runs full-bleed — it wants every horizontal pixel for the reply tree. Prose stays
+   capped at --prose, so widening only buys room for depth, not unreadable line lengths. */
+.container:has(.thread) { max-width: none; }
 
 .site-footer {
   border-top: 1px solid var(--line);
@@ -152,7 +157,10 @@ a:hover { text-decoration: underline; }
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 30px;
-  background: var(--sage-2); color: var(--sage-ink-2);
+  /* Pastel tint per author: --mono-h is set inline from the author's avatar hue (AuthorColor); fixed
+     lightness + saturation keep every avatar in the same soft register. Falls back to sage if unset. */
+  background: hsl(var(--mono-h, 75) 42% 84%);
+  color: hsl(var(--mono-h, 75) 32% 32%);
   font-family: var(--mono); font-weight: 700; font-size: 12px;
   border-radius: var(--r-sm);
 }
@@ -192,6 +200,53 @@ a:hover { text-decoration: underline; }
 .member-row .reply__handle { margin-left: auto; color: var(--muted); }
 
 /* ---------------------------------------------------------------- thread */
+/* Two-region scaffold: main reply column + a reserved side rail. The rail is `hidden` until it gets
+   content, so today the main column spans the full width. Dropping boxes into .thread__rail (and
+   dropping the `hidden` attr) flips it to two columns with zero further layout work — the future
+   side boxes are "factored in" here. */
+.thread { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gutter); align-items: start; }
+.thread__main { min-width: 0; }   /* let the grid track shrink the tree instead of overflowing */
+@media (min-width: 1000px) {       /* two columns when there's room; rail stacks below on narrow screens */
+  .thread:has(.thread__rail) { grid-template-columns: minmax(0, 1fr) var(--rail); }
+}
+.thread__rail { display: flex; flex-direction: column; gap: 14px; }
+@media (min-width: 1000px) { .thread__rail { position: sticky; top: 18px; } }   /* rail follows as the tree scrolls */
+
+/* rail box — the shared card chrome for side-rail occupants (branch index is the first) */
+.rail-box {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+}
+.rail-box__title {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: #6b6e48;
+  margin: 0 0 8px;
+}
+
+.rail-box__empty { margin: 0; font-size: 12px; color: var(--faint); }
+
+.branch-index { list-style: none; margin: 0; padding: 0; }
+.branch-index__row { padding-left: calc(var(--bi-depth, 0) * 12px); }   /* light indent mirrors tree depth */
+.branch-index__link {
+  display: block; padding: 3px 0;
+  font-size: 12.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;   /* clip preview, never wrap */
+}
+/* mini-avatar dot: same hue as the author's monogram, deeper than the 84%-light box so it reads at 8px */
+.branch-index__dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 6px; vertical-align: baseline;
+  background: hsl(var(--mono-h, 75) 48% 70%);
+}
+.branch-index__author { color: var(--link); font-weight: 700; }
+.branch-index__snippet { color: var(--muted); }
+.branch-index__snippet::before { content: " — "; color: var(--faint-2); }
+.branch-index__link:hover .branch-index__author { text-decoration: underline; }
+.branch-index__row + .branch-index__row { border-top: 1px dotted var(--line-dotted); }
+
 .thread__op {
   background: var(--card);
   border: 1px solid var(--line);
@@ -221,6 +276,19 @@ a:hover { text-decoration: underline; }
 }
 .reply__author { font-weight: 700; font-size: 13px; }
 .reply__handle { font-family: var(--mono); font-size: 11px; color: var(--faint-2); }
+
+/* "in reply to" anchor — a literal truncated quote of the parent, so deep replies stay legible
+   without scrolling up. Light indent + quote bar, the affordance Dana asked for. */
+.reply__inreplyto {
+  display: block; max-width: var(--prose);
+  margin: 0 0 8px; padding: 3px 0 3px 9px;
+  border-left: 2px solid var(--sage-2);
+  font-size: 12px; line-height: 1.45; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reply__inreplyto:hover { text-decoration: none; border-left-color: var(--spine-live); color: var(--ink); }
+.reply__inreplyto-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
+.reply__inreplyto-quote { font-style: italic; }
 
 .reply .body { font-size: 13.5px; line-height: 1.6; color: var(--ink); max-width: var(--prose); white-space: pre-wrap; }
 .reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }

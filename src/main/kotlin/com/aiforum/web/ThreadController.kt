@@ -1,8 +1,11 @@
 package com.aiforum.web
 
 import com.aiforum.domain.Comment
+import com.aiforum.dto.BranchIndexEntry
 import com.aiforum.dto.GenerationState
+import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReplyView
+import com.aiforum.dto.Snippet
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.ThreadReadRepository
@@ -16,6 +19,9 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import java.util.UUID
+
+/** How many characters of a comment to preview in a branch-index entry (CSS ellipsis caps the rest). */
+private const val BRANCH_SNIPPET_LEN = 48
 
 /** Request body for POST /threads. */
 data class CreateThreadRequest(
@@ -75,20 +81,50 @@ class ThreadController(
         // under the message it answered). replyNode.kte renders reply.children recursively; the flat
         // list it gets here was rendering every node at level 0. Children keep their repository order
         // (depth, created_at), so siblings stay chronological.
-        model.addAttribute("replies", assembleTree(all))
+        val tree = assembleTree(all)
+        model.addAttribute("replies", tree)
+        // Persona views carry each persona's stored colour slot, so the branch-index dots resolve to the
+        // same hue as the reply monograms (see AuthorColor).
+        val personaViews = personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug, colorIndex = it.colorIndex) }
+        // Branch index for the side rail: the posted nodes flattened in the same depth-first order the
+        // page renders them, so the rail reads top-to-bottom alongside the thread. Empty until the room
+        // has spoken, which keeps a fresh thread single-column (the aside stays hidden).
+        model.addAttribute("branchIndex", branchIndex(tree, personaViews))
         model.addAttribute("waitingOnRoom", all.none { it.state == GenerationState.POSTED })
-        model.addAttribute("personas", personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug) })
+        model.addAttribute("personas", personaViews)
         return "thread"
+    }
+
+    /** Flatten the reply tree depth-first into the rail's jump list, posted nodes only. */
+    private fun branchIndex(tree: List<ReplyView>, personas: List<PersonaView>): List<BranchIndexEntry> {
+        val out = mutableListOf<BranchIndexEntry>()
+        fun walk(node: ReplyView) {
+            if (node.state == GenerationState.POSTED) {
+                out += BranchIndexEntry(
+                    node.id, node.authorId, node.depth,
+                    Snippet.oneLine(node.body, BRANCH_SNIPPET_LEN), AuthorColor.hue(node.authorId, personas),
+                )
+            }
+            node.children.forEach(::walk)
+        }
+        tree.forEach(::walk)
+        return out
     }
 
     /** Build the top-level reply views with their descendants nested, from the flat thread list. */
     private fun assembleTree(all: List<Comment>): List<ReplyView> {
         val voteCounts = votes.countAll()
         val childrenByParent = all.groupBy { it.parentId }
+        val byId = all.associateBy { it.id }
         fun build(comment: Comment): ReplyView =
             comment.toReplyView(
                 voteCount = voteCounts[comment.id] ?: 0,
                 children = childrenByParent[comment.id].orEmpty().map(::build),
+                // "In reply to" anchor: a literal truncated quote of the parent comment. Null for
+                // top-level nodes (parentId null) — they answer the post, which has no comment node.
+                parent = comment.parentId?.let { byId[it] }?.let {
+                    ParentRef(it.id, it.authorId, ParentRef.previewOf(it.body))
+                },
             )
         return childrenByParent[null].orEmpty().map(::build)
     }

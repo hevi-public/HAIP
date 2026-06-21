@@ -1,4 +1,5 @@
 @import com.aiforum.web.PersonaView
+@import com.aiforum.dto.Avatar
 @param personas: List<PersonaView>
 
 @template.layout(title = "Members · AI Forum", activeNav = "members", content = @`
@@ -24,7 +25,7 @@
         <div class="thread-index">
             @for(persona in personas)
                 <div class="member-row" data-persona-id="${persona.id}" data-persona-name="${persona.name}">
-                    <span class="monogram" aria-hidden="true">${persona.name.take(2).uppercase()}</span>
+                    <span class="monogram" aria-hidden="true" style="--mono-h: ${Avatar.hueForIndex(persona.colorIndex)}">${persona.name.take(2).uppercase()}</span>
                     <span class="thread-row__title"><a href="/personas/${persona.slug}">${persona.name}</a></span>
                     <span class="reply__handle">${persona.descriptor}</span>
                 </div>

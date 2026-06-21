@@ -1,10 +1,11 @@
 @import com.aiforum.web.PersonaView
+@import com.aiforum.dto.Avatar
 @param persona: PersonaView
 
 @template.layout(title = persona.name + " · AI Forum", activeNav = "members", content = @`
     <div class="thread__op" data-persona-id="${persona.id}" data-persona-name="${persona.name}" data-persona-descriptor="${persona.descriptor}">
         <div class="reply__head">
-            <span class="monogram" aria-hidden="true">${persona.name.take(2).uppercase()}</span>
+            <span class="monogram" aria-hidden="true" style="--mono-h: ${Avatar.hueForIndex(persona.colorIndex)}">${persona.name.take(2).uppercase()}</span>
             <h1 class="thread__title">${persona.name}</h1>
         </div>
         <p class="reply__handle">${persona.descriptor}</p>

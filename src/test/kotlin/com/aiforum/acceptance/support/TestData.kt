@@ -18,9 +18,11 @@ class TestData(private val jdbc: JdbcTemplate, private val clock: Clock) {
     fun newId(): String = UUID.randomUUID().toString()
 
     fun insertPersona(id: String, name: String, systemPrompt: String = "You are $name.") {
+        // Mirror the repo: assign the next free colour slot so seeded personas get distinct avatars.
+        val colorIndex = jdbc.queryForObject("SELECT COALESCE(MAX(color_index), -1) + 1 FROM persona", Int::class.java) ?: 0
         jdbc.update(
-            "INSERT INTO persona(id, name, handle, descriptor, system_prompt, signature, slug) VALUES (?,?,?,?,?,?,?)",
-            id, name, name.lowercase(), "$name descriptor", systemPrompt, "— $name", PersonaRepository.slugFor(name),
+            "INSERT INTO persona(id, name, handle, descriptor, system_prompt, signature, slug, color_index) VALUES (?,?,?,?,?,?,?,?)",
+            id, name, name.lowercase(), "$name descriptor", systemPrompt, "— $name", PersonaRepository.slugFor(name), colorIndex,
         )
     }
 
