@@ -1,3 +1,8 @@
+server:
+  # Dev runs on 8081 so it doesn't collide with a prod instance (prod keeps the 8080 default — no
+  # server.port override there). Change with `--server.port=` or SERVER_PORT if 8081 is also taken.
+  port: 8081
+
 spring:
   datasource:
     url: jdbc:sqlite:data/aiforum-dev.db?journal_mode=WAL&busy_timeout=5000&foreign_keys=on
