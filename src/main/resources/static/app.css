@@ -473,7 +473,6 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 .thread__body {
   margin: 11px 0 0; max-width: var(--prose);
   font-size: 13.5px; line-height: 1.65; color: var(--ink);
-  white-space: pre-wrap;
 }
 
 /* reply tree -------------------------------------------------------------- */
@@ -509,8 +508,47 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
 .reply__inreplyto-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
 .reply__inreplyto-quote { font-style: italic; }
 
-.reply .body { font-size: 13.5px; line-height: 1.6; color: var(--ink); max-width: var(--prose); white-space: pre-wrap; }
+.reply .body { font-size: 13.5px; line-height: 1.6; color: var(--ink); max-width: var(--prose); }
 .reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
+
+/* Markdown-rendered body content (reply bodies + the OP). Now structured HTML, not pre-wrapped text:
+   reset block margins at the edges so the card padding owns the outer gap, and give inner blocks rhythm.
+   Token colour for code lives in hljs-theme.css; everything here is layout/chrome. */
+.reply .body > :first-child, .thread__body > :first-child { margin-top: 0; }
+.reply .body > :last-child, .thread__body > :last-child { margin-bottom: 0; }
+.reply .body p, .thread__body p { margin: 0 0 9px; }
+.reply .body ul, .reply .body ol,
+.thread__body ul, .thread__body ol { margin: 0 0 9px; padding-left: 1.4em; }
+.reply .body blockquote, .thread__body blockquote {
+  margin: 0 0 9px; padding: 2px 0 2px 11px;
+  border-left: 2px solid var(--sage-2); color: var(--muted);
+}
+
+/* Fenced code blocks. hljs-theme.css sets the token colours, background, inner padding and the
+   horizontal scroll on `pre code.hljs`; this is just the block chrome around it. */
+.reply .body pre, .thread__body pre {
+  margin: 0 0 10px; max-width: var(--prose);
+  border: 1px solid var(--line-node); border-radius: var(--r);
+  overflow: hidden; /* clip the inner scroll area to the rounded corners */
+}
+.reply .body pre code.hljs, .thread__body pre code.hljs {
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+}
+/* Inline code (a `span` of code, never inside a <pre>). */
+.reply .body :not(pre) > code, .thread__body :not(pre) > code {
+  font-family: var(--mono); font-size: 12px;
+  padding: 1px 5px; border-radius: 4px; background: rgba(127, 127, 127, 0.14);
+}
+
+/* Markdown (GFM) tables. */
+.reply .body table, .thread__body table {
+  border-collapse: collapse; margin: 0 0 10px; font-size: 12.5px; max-width: 100%;
+}
+.reply .body th, .reply .body td,
+.thread__body th, .thread__body td {
+  border: 1px solid var(--line-node); padding: 4px 9px; text-align: left;
+}
+.reply .body th, .thread__body th { background: rgba(127, 127, 127, 0.10); font-weight: 700; }
 
 .reply__vote {
   display: inline-block; margin-top: 8px;

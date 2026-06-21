@@ -52,7 +52,9 @@
     @if(reply.reason != null)
         <div class="reason">${reply.reason}</div>
     @endif
-    <div class="body">${reply.body}</div>
+    <%-- bodyHtml is markdown rendered to trusted HTML (MarkdownRenderer): raw HTML in a body is escaped
+         there, so $unsafe{} here is safe — the only live HTML is commonmark's + our highlighted code. --%>
+    <div class="body">$unsafe{reply.bodyHtml}</div>
     @if(reply.state == GenerationState.DRAFTING)
         <%-- in-flight affordance: a neutral Cancel that trips the shared CancellationToken (§4); the
              drafting indicator itself rides on the state badge above. --%>

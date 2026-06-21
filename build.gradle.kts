@@ -25,6 +25,9 @@ repositories { mavenCentral() }
 val jteVersion = "3.2.4"
 val cucumberVersion = "7.34.3"
 val flywayVersion = "12.4.0"   // matches the Spring Boot 4.1 BOM
+val commonmarkVersion = "0.24.0"
+val graalVersion = "24.1.2"
+val highlightjsWebjarVersion = "11.11.1"
 
 dependencies {
     // --- web + SSR (JTE) — note the Spring Boot 4 starter ---
@@ -38,6 +41,21 @@ dependencies {
     // at /webjars/htmx.org/dist/htmx.min.js, so an htmx bump doesn't churn the <script src> in layout.kte.
     implementation("org.webjars.npm:htmx.org:2.0.6")
     implementation("org.webjars:webjars-locator-lite")
+
+    // --- markdown rendering: commonmark + GFM tables, with server-side syntax highlighting ---
+    // commonmark parses reply/post bodies to HTML. escapeHtml(true) at the renderer makes raw HTML in a
+    // body inert (LLM output is untrusted — prompt-injection XSS), so tables come via the GFM extension,
+    // not raw <table>. See MarkdownRenderer.
+    implementation("org.commonmark:commonmark:$commonmarkVersion")
+    implementation("org.commonmark:commonmark-ext-gfm-tables:$commonmarkVersion")
+    // GraalJS (Truffle) runs highlight.js' core highlight() — string in, <span class=hljs-*> HTML out, no
+    // DOM. Runs interpreted on this stock JDK 21 toolchain (no GraalVM JDK needed); fine for short snippets.
+    implementation("org.graalvm.polyglot:polyglot:$graalVersion")
+    implementation("org.graalvm.polyglot:js-community:$graalVersion")
+    // highlight.js itself, vendored as a webjar (hermetic, like htmx): the browser IIFE bundle
+    // highlight.min.js is read off the classpath and eval'd in GraalJS; the theme CSS is served to the
+    // client at /webjars/highlightjs/styles/... via webjars-locator-lite.
+    implementation("org.webjars:highlightjs:$highlightjsWebjarVersion")
 
     // --- persistence: spring-jdbc + SQLite + Flyway (NOT Hibernate) ---
     implementation("org.springframework.boot:spring-boot-starter-jdbc")

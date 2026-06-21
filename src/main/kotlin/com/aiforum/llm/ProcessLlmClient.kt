@@ -64,6 +64,18 @@ open class ProcessLlmClient(
                 "length to what you genuinely have to say. Most replies are a sentence or two; reach " +
                 "for a short paragraph only when the point really needs it, and avoid long bullet " +
                 "lists or essays. Don't restate the question or pad — make your point and stop."
+
+        /**
+         * Formatting steer for the renderer (MarkdownRenderer: commonmark + GraalJS highlight.js). This is
+         * best-effort quality only — the renderer stays correct if the model ignores it: a fence with no
+         * language degrades to a plain block, and raw HTML is escaped, not executed. Declaring the fence
+         * language is what lets a block come back syntax-highlighted; markdown tables (not raw HTML) are
+         * what render as real tables, since raw HTML in a body is deliberately inert.
+         */
+        const val FORMATTING =
+            "Write in GitHub-flavoured markdown. When you include code, always put it in a fenced block " +
+                "with the language on the opening fence (```kotlin, ```yaml, ```bash, …). Use markdown " +
+                "tables, not raw HTML."
     }
 
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
@@ -154,12 +166,12 @@ open class ProcessLlmClient(
         // ("the framing got flipped"). The system prompt carries the character; this carries the task.
         return if (transcript.isBlank()) {
             "You are opening a new thread in the forum. Post the first message as $personaName, in " +
-                "character. $BREVITY"
+                "character. $BREVITY $FORMATTING"
         } else {
             "The forum discussion so far. Each line is \"[#ref] author: message\"; indentation shows " +
                 "reply depth and \"↳ replying to #n\" marks which message it answers:\n\n$transcript\n\n---\n" +
                 "Write ${personaName}'s next reply, responding to the most recent message above. " +
-                "Reply with the message text only, in character as $personaName. $BREVITY"
+                "Reply with the message text only, in character as $personaName. $BREVITY $FORMATTING"
         }
     }
 

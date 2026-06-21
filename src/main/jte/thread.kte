@@ -4,6 +4,7 @@
 @param threadId: String
 @param title: String
 @param body: String
+@param bodyHtml: String
 @param replies: List<ReplyView>
 @param branchIndex: List<BranchIndexEntry>
 @param waitingOnRoom: Boolean
@@ -17,7 +18,9 @@
         <div class="thread__op" data-nav-item="post" data-nav-id="${threadId}" id="reply-${threadId}">
             <h1 class="thread__title">${title}</h1>
             @if(!body.isBlank())
-                <div class="thread__body" data-op-body>${body}</div>
+                <%-- bodyHtml is the OP body rendered from markdown (MarkdownRenderer escapes raw HTML), so
+                     $unsafe{} is safe here. Gate on the raw body so an all-whitespace OP stays hidden. --%>
+                <div class="thread__body" data-op-body>$unsafe{bodyHtml}</div>
             @endif
         </div>
         @if(waitingOnRoom)
