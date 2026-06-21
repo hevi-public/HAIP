@@ -48,11 +48,11 @@
 })();
 
 /*
- * Composer affordances (ux brief §4): the Single↔Roomful toggle, persona chips, the slash command
- * palette, and the @mention summon menu. All pure progressive enhancement, layered over the plain form
- * — with JS off the checkbox chips still bind personaIds, the textarea still posts text, and the hidden
- * roomMode default still submits. Everything is event-delegated on the document, so composers htmx swaps
- * into the tree (inline replies, re-rendered nodes) are wired with no re-binding.
+ * Composer affordances (ux brief §4): the persona chips, the slash command palette, and the @mention
+ * summon menu. All pure progressive enhancement, layered over the plain form — with JS off the checkbox
+ * chips still bind personaIds and the textarea still posts text. Everything is event-delegated on the
+ * document, so composers htmx swaps into the tree (inline replies, re-rendered nodes) are wired with no
+ * re-binding.
  */
 (function () {
   function composerOf(el) { return el && el.closest(".composer"); }
@@ -63,10 +63,6 @@
     hide(form.querySelector("[data-slash-menu]"));
     hide(form.querySelector("[data-mention-menu]"));
   }
-  function roomMode(form) {
-    var input = form.querySelector("[data-room-mode-input]");
-    return input ? input.value : "roomful";
-  }
   function chipInputFor(form, id) {
     var chips = form.querySelectorAll("[data-persona-chip]");
     for (var i = 0; i < chips.length; i++) {
@@ -75,9 +71,10 @@
     return null;
   }
 
-  // Reflect every checkbox into .is-selected, enforce Anyone↔named exclusivity, and (in single mode)
-  // keep at most one persona selected. A summon always needs a target, so if nothing is left checked we
-  // fall back to "Anyone". [changed] is the input the user just toggled, if any.
+  // Reflect every checkbox into .is-selected and enforce Anyone↔named exclusivity (named chips are
+  // multi-select — naming several is a roomful summon, breadth follows who you tag). A summon always
+  // needs a target, so if nothing is left checked we fall back to "Anyone". [changed] is the input the
+  // user just toggled, if any.
   function syncChips(form, changed) {
     var anyone = form.querySelector("[data-anyone-chip] input");
     var personas = form.querySelectorAll("[data-persona-chip] input");
@@ -86,9 +83,6 @@
         personas.forEach(function (p) { p.checked = false; });
       } else if (changed !== anyone && changed.checked) {
         if (anyone) anyone.checked = false;
-        if (roomMode(form) === "single") {
-          personas.forEach(function (p) { if (p !== changed) p.checked = false; });
-        }
       }
     }
     var anyChecked = !!(anyone && anyone.checked);
@@ -98,20 +92,6 @@
       var input = chip.querySelector("input");
       chip.classList.toggle("is-selected", !!(input && input.checked));
     });
-  }
-
-  function setRoomMode(form, mode) {
-    form.querySelectorAll("[data-roomful-toggle] [data-room-mode]").forEach(function (b) {
-      b.classList.toggle("is-active", b.getAttribute("data-room-mode") === mode);
-    });
-    var input = form.querySelector("[data-room-mode-input]");
-    if (input) input.value = mode;
-    if (mode === "single") {
-      // Collapse any extra persona selections down to one voice.
-      var checked = form.querySelectorAll("[data-persona-chip] input:checked");
-      for (var i = 0; i < checked.length - 1; i++) checked[i].checked = false;
-      syncChips(form);
-    }
   }
 
   // The "/" or "@" token the caret currently sits in — null if the caret isn't in one. The token must
@@ -213,13 +193,8 @@
     }
   });
 
-  // ---- clicks: toggle, chips, slash commands, mention picks ----
+  // ---- clicks: chips, slash commands, mention picks ----
   document.body.addEventListener("click", function (e) {
-    var modeBtn = e.target.closest("[data-room-mode]");
-    if (modeBtn && modeBtn.closest("[data-roomful-toggle]")) {
-      setRoomMode(composerOf(modeBtn), modeBtn.getAttribute("data-room-mode"));
-      return;
-    }
     var slashCmd = e.target.closest("[data-slash-cmd]");
     if (slashCmd) {
       e.preventDefault();
@@ -237,8 +212,6 @@
         sForm.setAttribute("data-scope", val);
         var routingSel = sForm.querySelector('select[name="routingScope"]');
         if (routingSel) routingSel.value = val;
-      } else if (cmd === "roomful" || cmd === "single") {
-        setRoomMode(sForm, cmd);
       }
       hide(sForm.querySelector("[data-slash-menu]"));
       return;
