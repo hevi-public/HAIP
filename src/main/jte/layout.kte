@@ -23,6 +23,9 @@
     <%-- htmx served from the webjar (see build.gradle.kts); version-agnostic path via webjars-locator-lite --%>
     <script src="/webjars/htmx.org/dist/htmx.min.js"></script>
     <script src="/app.js" defer></script>
+    <%-- Vim-style keyboard navigation (plan_docs/keyboard-navigation.md). ES module → deferred by
+         default; activates only where [data-nav-item] exists (thread page for now), no-ops elsewhere. --%>
+    <script type="module" src="/nav.js"></script>
 </head>
 <body>
     <header class="site-header">
