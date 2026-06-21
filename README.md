@@ -50,7 +50,13 @@ browser at **http://localhost:8080**:
 ```
 
 The port is Spring's default; nothing pins it, so a Docker deployment remaps the host side
-(`-p 9000:8080`) or sets `SERVER_PORT` without a code change.
+(`-p 9000:8080`) or sets `SERVER_PORT` without a code change. The `data/` directory is created
+automatically on startup, so a fresh checkout boots without any manual setup.
+
+On first launch the app seeds a small default team of personas — **Sol** (backend), **Saul**
+(frontend), **Paul** (QA), **Mira** (PM), **Dana** (design) — so the forum is usable immediately;
+edit the roster under `aiforum.seed.personas` in `application.yml`, or manage personas at `/personas`.
+Seeding is idempotent (skips any that already exist) and disabled under the `test` profile.
 
 **Discovery mode** — let a sea of red run without failing the build (useful while scaffolding):
 
@@ -102,7 +108,8 @@ src/main/kotlin/com/aiforum/
   repo/       JdbcTemplate repositories (recursive CTEs)
   service/    GenerationService (orchestration)
   web/        controllers (generation, owner controls, diagnostics)
-  config/     ClockConfig, ProfileGuard
+  config/     ClockConfig, ProfileGuard, DataDirectoryInitializer (auto-creates the SQLite data dir
+              at startup), PersonaSeeder + PersonaSeedProperties (seeds the default persona team)
 src/main/jte/ layout.kte (page shell + htmx) · fragments/ (composer, replyNode, replyList) — stable data-* hooks
 src/main/resources/static/ app.css + app.js — hand-written styling layer (sage HUP aesthetic, htmx-aware auto-grow)
 src/test/kotlin/com/aiforum/

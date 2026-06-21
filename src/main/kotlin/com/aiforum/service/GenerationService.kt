@@ -76,9 +76,8 @@ class GenerationService(
     ): List<ReplyView> {
         // The composer authors the owner's message: persist it as the owner's node first, then summon
         // BENEATH it, so the personas reply to it and it flows into their context (§4/§5).
-        val target = replyTarget(parentId, postAsOwner)
-        val owner = ownerComment(threadId, target, text, postAsOwner)
-        val started = planGeneration(threadId, owner?.id ?: target, personaIds, scope, includeSiblings).map { plan ->
+        val owner = ownerComment(threadId, parentId, text, postAsOwner)
+        val started = planGeneration(threadId, owner?.id ?: parentId, personaIds, scope, includeSiblings).map { plan ->
             val draft = draftView(plan)
             val token = inFlight.register(plan.id, draft)
             Triple(plan, token, draft)
@@ -119,9 +118,8 @@ class GenerationService(
         includeSiblings: Boolean = false,
         postAsOwner: Boolean = false,
     ): List<ReplyView> {
-        val target = replyTarget(parentId, postAsOwner)
-        val owner = ownerComment(threadId, target, text, postAsOwner)
-        val replies = planGeneration(threadId, owner?.id ?: target, personaIds, scope, includeSiblings)
+        val owner = ownerComment(threadId, parentId, text, postAsOwner)
+        val replies = planGeneration(threadId, owner?.id ?: parentId, personaIds, scope, includeSiblings)
             .map { settleOne(it, CancellationToken()) }
         return owner?.let { listOf(it.toReplyView(children = replies)) } ?: replies
     }
@@ -185,16 +183,6 @@ class GenerationService(
      * (mirrors a seeded owner comment / `/more`). Returns null when there is nothing to author (a bare
      * summon, or an empty message), leaving the summon parented exactly as before.
      */
-    /**
-     * Where a composer reply actually attaches. When the owner writes into a node's inline composer
-     * (postAsOwner, with a parent), the message continues at the END of that branch — its last node —
-     * not as a fork off the clicked node, so the conversation extends rather than splits. A bare API
-     * summon (no owner authoring) targets exactly the node it named, preserving deliberate branch
-     * targeting and the per-branch context-scoping contract (§5).
-     */
-    private fun replyTarget(parentId: String?, postAsOwner: Boolean): String? =
-        if (postAsOwner && parentId != null) comments.branchTail(parentId) else parentId
-
     private fun ownerComment(threadId: String, parentId: String?, text: String, postAsOwner: Boolean): Comment? {
         if (!postAsOwner || text.isBlank()) return null
         val parent = parentId?.let { comments.findById(it) }

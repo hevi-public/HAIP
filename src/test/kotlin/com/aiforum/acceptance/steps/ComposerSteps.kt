@@ -118,8 +118,8 @@ class ComposerSteps(
 
     @When("the owner replies inline on {string} with text {string} selecting {string}")
     fun replyInline(targetLabel: String, text: String, persona: String) {
-        // The inline composer's path: BRANCH_ONLY, postAsOwner, parented at the clicked node. The server
-        // resolves the actual attach point to that branch's tail.
+        // The inline composer's path: BRANCH_ONLY, postAsOwner, parented at the clicked node. The owner's
+        // message attaches directly under that node — where they clicked Reply — not the branch's tail.
         val parentId = world.replyIds[targetLabel] ?: error("no remembered node $targetLabel")
         val resp = http.postJson(
             "/threads/${world.threadId}/generate",
