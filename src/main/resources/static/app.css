@@ -324,14 +324,16 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 .ask-card__lead { font-size: 12px; color: var(--muted); }
 /* Once open, the form below is the action — the CTA has done its job, so retire it. */
 .ask-card[open] .ask-card__cta { display: none; }
-.ask-card .new-thread {
+.ask-card .new-thread,
+.ask-card .new-persona {
   margin-top: 12px; padding: 0; background: none; border: none; box-shadow: none;   /* no nested card */
 }
 
-/* New-thread composer — a card below the thread list. Stacked: a small label, the title line, then a
-   roomier body box, with the Create button right-aligned below. Shares the card chrome of the thread
-   index it sits under. */
-.new-thread {
+/* New-thread / new-member composers — a card below the index list. Stacked fields with the submit button
+   right-aligned below; the new-member card adds a model picker beside its button. Shares the card chrome
+   of the index it sits under (dropped when nested in an .ask-card, above). */
+.new-thread,
+.new-persona {
   display: flex; flex-direction: column; gap: 9px;
   background: var(--card);
   border: 1px solid var(--line);
@@ -344,20 +346,31 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   font-family: var(--mono); font-size: 10px; font-weight: 700;
   letter-spacing: .04em; text-transform: uppercase; color: #6b6e48;
 }
-.new-thread__title, .new-thread__body {
+.new-thread__title, .new-thread__body,
+.new-persona__name, .new-persona__descriptor {
   width: 100%; box-sizing: border-box;
   background: var(--input); color: var(--ink);
   border: 1px solid var(--sage-2); border-radius: var(--r);
   font-family: var(--sans);
   padding: 9px 11px;
 }
-.new-thread__title { font-size: 15px; font-weight: 700; }
-.new-thread__body {
+.new-thread__title, .new-persona__name { font-size: 15px; font-weight: 700; }
+.new-thread__body, .new-persona__descriptor {
   font-size: 13.5px; line-height: 1.6;
   resize: vertical; min-height: 70px;
 }
-.new-thread__title:focus, .new-thread__body:focus { outline: none; border-color: #9aa882; }
+.new-thread__title:focus, .new-thread__body:focus,
+.new-persona__name:focus, .new-persona__descriptor:focus { outline: none; border-color: #9aa882; }
 .new-thread__actions { display: flex; justify-content: flex-end; }
+/* The member form pairs a model picker (left) with the submit button (right). */
+.new-persona__actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.new-persona__model {
+  background: var(--input); color: var(--ink);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  font-family: var(--sans); font-size: 13px;
+  padding: 8px 10px;
+}
+.new-persona__model:focus { outline: none; border-color: #9aa882; }
 
 .thread-index {
   background: var(--card);
