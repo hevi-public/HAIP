@@ -157,7 +157,10 @@ a:hover { text-decoration: underline; }
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 30px;
-  background: var(--sage-2); color: var(--sage-ink-2);
+  /* Pastel tint per author: --mono-h is set inline from Avatar.hue(authorId); fixed lightness +
+     saturation keep every avatar in the same soft register. Falls back to sage if no hue is set. */
+  background: hsl(var(--mono-h, 75) 42% 84%);
+  color: hsl(var(--mono-h, 75) 32% 32%);
   font-family: var(--mono); font-weight: 700; font-size: 12px;
   border-radius: var(--r-sm);
 }

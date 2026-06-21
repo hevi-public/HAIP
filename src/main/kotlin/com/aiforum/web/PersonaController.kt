@@ -18,6 +18,8 @@ class PersonaController(private val personas: PersonaRepository) {
     fun profile(@PathVariable slug: String, model: Model): String {
         val persona = personas.findBySlug(slug) ?: return "redirect:/personas"
         model.addAttribute("persona", PersonaView(persona.id, persona.name, persona.descriptor, persona.slug, persona.model))
+        // Registry order (by name) so the avatar hue here matches the members list / threads.
+        model.addAttribute("order", personas.findAll().map { it.name })
         return "persona"
     }
 

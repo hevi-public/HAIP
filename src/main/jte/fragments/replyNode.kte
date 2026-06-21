@@ -1,6 +1,7 @@
 @import com.aiforum.dto.ReplyView
 @import com.aiforum.dto.GenerationState
 @import com.aiforum.dto.FailureCategory
+@import com.aiforum.dto.Avatar
 @import com.aiforum.web.PersonaView
 @param reply: ReplyView
 @param threadId: String? = null
@@ -32,7 +33,7 @@
          data-vote-count="${reply.voteCount.toString()}"
          data-depth="${reply.depth.toString()}">
     <header class="reply__head">
-        <span class="monogram" aria-hidden="true">${reply.authorId.take(2).uppercase()}</span>
+        <span class="monogram" aria-hidden="true" style="--mono-h: ${Avatar.hue(reply.authorId, personas.map { it.name })}">${reply.authorId.take(2).uppercase()}</span>
         <span class="reply__author">${reply.authorId}</span>
         @if(reply.state != GenerationState.POSTED)
             <span class="reply__badge reply__badge--${reply.state.name.lowercase()}">${badge}</span>
