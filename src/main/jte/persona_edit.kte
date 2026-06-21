@@ -30,6 +30,16 @@
                 <option value="claude-opus-4-8" selected="${persona.model == "claude-opus-4-8"}">Opus 4.8</option>
                 <option value="claude-fable-5" selected="${persona.model == "claude-fable-5"}">Fable 5</option>
             </select>
+            <%-- Prefilled with the current prompt. "Regenerate" re-composes from the (edited) inputs
+                 against the previous values, swapping the result in; Save persists exactly what's shown. --%>
+            <div class="new-persona__prompt-row">
+                <button type="button" class="btn btn--ghost" data-preview-prompt
+                        hx-post="/personas/${persona.slug}/compose" hx-include="closest form"
+                        hx-target="#edit-persona-prompt" hx-swap="innerHTML">
+                    Regenerate prompt
+                </button>
+                <textarea id="edit-persona-prompt" class="new-persona__prompt" name="systemPrompt" data-prompt-field>${persona.systemPrompt}</textarea>
+            </div>
             <button class="btn" type="submit">Save changes ▸</button>
         </form>
     </div>

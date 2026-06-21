@@ -43,3 +43,21 @@ Feature: Personas & admin
   Scenario: The create form offers abilities and dial controls
     When the owner opens the members list
     Then the members page offers an abilities field and dial controls
+
+  # Preview before save: composing is a paid LLM call, so the owner PREVIEWS (and can regenerate) the
+  # prompt before committing. Previewing composes but persists nothing.
+  Scenario: Previewing composes the prompt without creating the persona
+    Given the LLM will respond with "PREVIEW: a terse poet."
+    When the owner previews a new persona "ghost" with abilities "kotlin" and dials agreeableness 2, verbosity 1
+    Then the preview shows "PREVIEW: a terse poet."
+    And the persona "ghost" does not exist
+
+  # Save persists exactly the prompt the owner saw — no second, wasteful compose.
+  Scenario: Saving an already-composed prompt does not re-compose
+    When the owner adds a persona "muse" with prompt "HAND-PICKED: a warm muse." and abilities "poetry"
+    Then the persona "muse" has system prompt "HAND-PICKED: a warm muse."
+    And no composition call was made
+
+  Scenario: The create form offers a preview control and an editable prompt
+    When the owner opens the members list
+    Then the members page offers a preview control and a prompt field

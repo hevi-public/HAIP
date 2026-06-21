@@ -165,4 +165,58 @@ class PersonaSteps(
         assertTrue(Html.contains(body, "name=\"abilities\""), "expected a name=\"abilities\" field in:\n$body")
         assertTrue(Html.contains(body, "name=\"dial_agreeableness\""), "expected a name=\"dial_agreeableness\" control in:\n$body")
     }
+
+    @When("the owner previews a new persona {string} with abilities {string} and dials agreeableness {int}, verbosity {int}")
+    fun previewNewPersona(name: String, abilities: String, agreeableness: Int, verbosity: Int) {
+        val resp = http.postForm(
+            "/personas/compose",
+            mapOf(
+                "name" to name,
+                "abilities" to abilities,
+                "dial_agreeableness" to agreeableness,
+                "dial_verbosity" to verbosity,
+            ),
+        )
+        world.lastStatus = resp.statusCode.value()
+        world.lastBody = resp.body
+    }
+
+    @Then("the preview shows {string}")
+    fun previewShows(text: String) {
+        assertTrue(Html.contains(world.lastBody ?: "", text), "expected the preview to contain \"$text\" in:\n${world.lastBody}")
+    }
+
+    @Then("the persona {string} does not exist")
+    fun personaDoesNotExist(name: String) {
+        val body = http.get("/personas").body ?: ""
+        assertTrue(
+            !Html.hasAttr(body, "data-persona-id", name),
+            "expected \"$name\" to be absent from the members list, but found it in:\n$body",
+        )
+    }
+
+    @When("the owner adds a persona {string} with prompt {string} and abilities {string}")
+    fun addPersonaWithPrompt(name: String, systemPrompt: String, abilities: String) {
+        val resp = http.postForm(
+            "/personas",
+            mapOf("name" to name, "systemPrompt" to systemPrompt, "abilities" to abilities),
+        )
+        world.lastStatus = resp.statusCode.value()
+        world.lastBody = resp.body
+    }
+
+    @Then("no composition call was made")
+    fun noCompositionCall() {
+        assertTrue(
+            composerCalls().isEmpty(),
+            "expected NO composition call, but the composer was invoked: ${composerCalls().map { it.allText() }}",
+        )
+    }
+
+    @Then("the members page offers a preview control and a prompt field")
+    fun membersPageOffersPreview() {
+        val body = world.lastBody ?: ""
+        assertTrue(Html.contains(body, "/personas/compose"), "expected a preview control posting to /personas/compose in:\n$body")
+        assertTrue(Html.contains(body, "name=\"systemPrompt\""), "expected a name=\"systemPrompt\" field in:\n$body")
+    }
 }

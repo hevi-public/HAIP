@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.ResponseBody
 
 data class PersonaView(
     val id: String,
@@ -53,14 +54,28 @@ class PersonaController(
         @RequestParam(defaultValue = "") descriptor: String,
         @RequestParam(defaultValue = "") model: String,
         @RequestParam(defaultValue = "") abilities: String,
+        @RequestParam(defaultValue = "") systemPrompt: String,
         @RequestParam allParams: Map<String, String>,
     ): String {
-        // The abilities + dials are the structured inputs; the LLM composes the system prompt from them.
+        // The abilities + dials are the structured inputs the prompt is composed from. Save-what-you-see:
+        // a prompt the owner already previewed/edited is persisted as-is; we only compose (a paid call)
+        // when none was supplied — the one-shot create path.
         val spec = PersonaSpec(name, descriptor, Abilities.parse(abilities), dialsFrom(allParams))
-        val systemPrompt = composer.compose(spec)
-        personas.insert(name, name, descriptor, model, systemPrompt = systemPrompt, abilities = spec.abilities, dials = spec.dials)
+        val prompt = systemPrompt.ifBlank { composer.compose(spec) }
+        personas.insert(name, name, descriptor, model, systemPrompt = prompt, abilities = spec.abilities, dials = spec.dials)
         return "redirect:/personas/${PersonaRepository.slugFor(name)}"
     }
+
+    /** Compose a prompt from the form inputs WITHOUT persisting — backs the "Preview / Regenerate"
+     *  button so the owner can see (and then tweak) the prompt before paying to save it. */
+    @PostMapping("/personas/compose")
+    @ResponseBody
+    fun composePreview(
+        @RequestParam name: String,
+        @RequestParam(defaultValue = "") descriptor: String,
+        @RequestParam(defaultValue = "") abilities: String,
+        @RequestParam allParams: Map<String, String>,
+    ): String = composer.compose(PersonaSpec(name, descriptor, Abilities.parse(abilities), dialsFrom(allParams)))
 
     @GetMapping("/personas/{slug}/edit")
     fun editForm(@PathVariable slug: String, model: Model): String {
@@ -76,19 +91,37 @@ class PersonaController(
         @RequestParam(defaultValue = "") descriptor: String,
         @RequestParam(defaultValue = "") model: String,
         @RequestParam(defaultValue = "") abilities: String,
+        @RequestParam(defaultValue = "") systemPrompt: String,
         @RequestParam allParams: Map<String, String>,
     ): String {
         val existing = personas.findBySlug(slug) ?: return "redirect:/personas"
-        // Hand the model the PREVIOUS values + prompt so it adjusts rather than regenerates (continuity).
-        val prior = PriorComposition(
+        val nextSpec = PersonaSpec(existing.name, descriptor, Abilities.parse(abilities), dialsFrom(allParams))
+        // Save-what-you-see: persist a previewed/edited prompt as-is; recompose only if none was supplied.
+        val prompt = systemPrompt.ifBlank { composer.compose(nextSpec, priorOf(existing)) }
+        personas.update(existing.id, existing.name, descriptor, model, prompt, nextSpec.abilities, nextSpec.dials)
+        return "redirect:/personas/${existing.slug}"
+    }
+
+    /** Re-compose from the form inputs against the persona's PREVIOUS values + prompt, without saving. */
+    @PostMapping("/personas/{slug}/compose")
+    @ResponseBody
+    fun composeEditPreview(
+        @PathVariable slug: String,
+        @RequestParam(defaultValue = "") descriptor: String,
+        @RequestParam(defaultValue = "") abilities: String,
+        @RequestParam allParams: Map<String, String>,
+    ): String {
+        val existing = personas.findBySlug(slug) ?: return ""
+        val nextSpec = PersonaSpec(existing.name, descriptor, Abilities.parse(abilities), dialsFrom(allParams))
+        return composer.compose(nextSpec, priorOf(existing))
+    }
+
+    // Hand the model the PREVIOUS values + prompt so an edit adjusts rather than regenerates (continuity).
+    private fun priorOf(existing: PersonaRepository.Persona) =
+        PriorComposition(
             PersonaSpec(existing.name, existing.descriptor, existing.abilities, existing.dials),
             existing.systemPrompt,
         )
-        val nextSpec = PersonaSpec(existing.name, descriptor, Abilities.parse(abilities), dialsFrom(allParams))
-        val systemPrompt = composer.compose(nextSpec, prior)
-        personas.update(existing.id, existing.name, descriptor, model, systemPrompt, nextSpec.abilities, nextSpec.dials)
-        return "redirect:/personas/${existing.slug}"
-    }
 
     // Pull the fixed-schema dials out of the form (each rendered as a `dial_<key>` range input);
     // missing/blank fall back to the neutral default and PersonaRepository normalizes on the way in.

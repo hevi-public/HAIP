@@ -35,6 +35,18 @@
                 <option value="claude-opus-4-8">Opus 4.8</option>
                 <option value="claude-fable-5">Fable 5</option>
             </select>
+            <%-- Preview is a paid LLM call, so it's an explicit action: compose into the textarea (no
+                 persist), let the owner tweak, then Save persists exactly what's shown. Leaving the
+                 prompt blank on submit composes once on the server (the one-shot path). --%>
+            <div class="new-persona__prompt-row">
+                <button type="button" class="btn btn--ghost" data-preview-prompt
+                        hx-post="/personas/compose" hx-include="closest form"
+                        hx-target="#new-persona-prompt" hx-swap="innerHTML">
+                    Preview / regenerate prompt
+                </button>
+                <textarea id="new-persona-prompt" class="new-persona__prompt" name="systemPrompt" data-prompt-field
+                          placeholder="Composed system prompt appears here — preview, tweak, then save"></textarea>
+            </div>
             <button class="btn" type="submit">Add member ▸</button>
         </form>
         <div class="thread-index">
