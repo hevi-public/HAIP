@@ -21,6 +21,33 @@ import java.time.Duration
  * in prose ("I'd let Sol and Paul take this") rather than a strict format. Anything unparseable, an
  * empty pick, or a generation failure falls back to the whole room — "Anyone" must never silently pick
  * no one.
+ *
+ * ## Known failure mode: name-matching honours the model only when it *names* members
+ *
+ * The routing decision is the model's, but we recover it by string-matching roster names in free text.
+ * So the model's judgement is honoured ONLY insofar as it spells a roster member's name. If it answers
+ * "the backend folks should take this" or "ask the Kotlin person" without writing "Sol", nothing matches
+ * and we fall back to the WHOLE room — silently widening a decision the model may have meant to narrow.
+ * In effect a thin slice of "who decides" is really "did the model phrase it in a way we can parse." The
+ * system prompt asks for names-only and the tests cover the prose/unparseable paths, but the coupling is
+ * real and the fallback hides it (you can't tell a deliberate "everyone" from a parse miss).
+ *
+ * Ideas to harden this, cheapest first — none implemented yet, ordered by effort/robustness trade-off:
+ *  1. **Make fallbacks observable.** Log/meter when a pick is empty vs. a generation failure, so the
+ *     parse-miss RATE is measurable instead of invisible. Cheapest, and tells us whether 2–5 are worth it.
+ *  2. **Numbered menu.** Present the roster as a numbered list and ask the model to reply with the
+ *     number(s); digits are far less ambiguous than names and don't collide with ordinary prose.
+ *  3. **Match descriptors too, not just names.** Fall back to keyword/semantic matching on each persona's
+ *     descriptor ("backend" -> Sol) when no name hits. More forgiving, but risks false positives.
+ *  4. **Reprompt once on a miss** before widening — "Reply with ONLY the exact names" — trading one extra
+ *     call for a tighter answer; only then fall back.
+ *  5. **Constrained/tool output (the principled fix).** Have the model select from an enum of valid
+ *     persona ids via tool-use/structured output, so an invalid pick is impossible by construction. This
+ *     needs the LlmClient seam to grow a structured-call shape (today it returns free text only), so it's
+ *     the biggest change — but it removes the parse step, and with it this whole failure mode.
+ *  6. **Embedding-based routing (different trade-off).** Rank personas by similarity between the question
+ *     and their descriptors with no LLM call at all — deterministic and parse-free, but loses the model's
+ *     reasoning about the topic.
  */
 @Component
 class PersonaRouter(private val llm: LlmClient) {
