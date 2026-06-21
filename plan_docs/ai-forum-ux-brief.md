@@ -30,7 +30,7 @@ A locally-hosted web forum that looks and feels like a long-lived technical disc
 
 **Type:** a readable humanist **sans or classic serif** for body and long threads; **monospace** for code and the system/nav chrome. **Code blocks must render with syntax highlighting.**
 
-**Dark mode:** nice-to-have, not required for v1.
+**Dark mode:** shipped (2026-06-21) — header switcher with a `prefers-color-scheme` default, persisted via localStorage; a token-only override layer in `app.css`.
 
 ---
 
