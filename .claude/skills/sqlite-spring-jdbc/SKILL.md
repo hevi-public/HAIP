@@ -1,6 +1,6 @@
 ---
 name: sqlite-spring-jdbc
-description: SQLite persistence for the AI Forum Spring Boot + Kotlin app using spring-jdbc (JdbcTemplate), Flyway, and recursive CTEs — deliberately NOT Hibernate. Use this whenever working with the database layer — datasource config, profile isolation (prod/dev/test), the xerial sqlite-jdbc + WAL/busy-timeout setup, Flyway migrations on SQLite, writing the recursive-CTE branch/ancestor/subtree queries for the comment tree, JdbcTemplate RowMappers, or per-scenario test-DB reset. Reach for it before adding repositories, migrations, or datasource beans so the tree queries and profile guardrails stay correct.
+description: SQLite persistence for the AI Forum Spring Boot + Kotlin app using spring-jdbc (JdbcTemplate), Flyway, and recursive CTEs — deliberately NOT Hibernate. Use this whenever working with the database layer — datasource config, profile isolation (prod/dev/test), the xerial sqlite-jdbc + WAL/busy-timeout setup, Flyway migrations on SQLite (incl. editing/repairing migrations and checksum-mismatch failures, SQLite ALTER TABLE limits), writing the recursive-CTE branch/ancestor/subtree queries for the comment tree, JdbcTemplate RowMappers, or per-scenario test-DB reset. Reach for it before adding repositories, migrations, or datasource beans so the tree queries and profile guardrails stay correct.
 ---
 
 # SQLite + spring-jdbc for AI Forum
@@ -53,6 +53,52 @@ Apply pragmas via the JDBC URL so every connection gets them:
 ```
 jdbc:sqlite:build/aiforum-test.db?journal_mode=WAL&busy_timeout=5000&foreign_keys=on
 ```
+
+## Flyway migrations — never edit an applied one (checksum mismatches)
+
+Flyway records a **checksum** of every applied migration in `flyway_schema_history`. Change a
+migration file's body after it has run *anywhere* and that DB fails **validate-on-migrate at startup**:
+
+```
+Migration checksum mismatch for migration version 7
+-> Applied to database : -1923931933
+-> Resolved locally    : 1416662186
+```
+
+Rules, all verified the hard way:
+
+- **Never edit a migration that may have been applied** (locally, in CI, or in prod) — add a new
+  `V(n+1)__….sql` instead. Editing `Vn` is only safe before it has ever run.
+- **A checksum mismatch CANNOT be healed by a forward migration.** Validation runs *before* any pending
+  migration, so a new `V(n+1)` never executes on the broken DB — the app won't start. The only fixes are
+  to revert the file to its applied form, or **`flyway.repair()`**, which realigns the *recorded*
+  checksum to the current file (it does **not** re-run migrations and does **not** touch table data).
+- **Automatic repair = a temporary `FlywayMigrationStrategy`** bean that runs `repair()` then
+  `migrate()`. It disables validate-on-migrate's edit-protection, so treat it as a one-off heal and
+  **remove it once every live DB has booted past the fix** (we did exactly this for a V7 split, then
+  deleted the bean). Default Spring Boot behaviour is migrate-only with validation on.
+- **Parallel branches are a checksum trap.** Two branches each adding "V7" produce two different bodies
+  for one version; whichever a DB applied first wins, and the merge silently loses the other. **`git
+  fetch` + scan `db/migration/` before claiming a version number**, and reconcile deliberately on merge.
+- **Stale test/dev DB symptom.** After you legitimately change a not-yet-released migration during dev,
+  the persistent `build/aiforum-test.db` (or `data/aiforum-dev.db`) still holds the OLD checksum and
+  fails. Delete the db **plus its `-wal`/`-shm` sidecars** to reset (same WAL rule as above).
+
+### SQLite `ALTER TABLE` is narrow — get the column right the first time
+
+SQLite supports only `ADD COLUMN` (plus limited rename/drop on newer versions). You **cannot** change an
+existing column's type or constraints in place — adding `NOT NULL` to a populated column needs a full
+**table rebuild** (create new table → `INSERT … SELECT` → drop → rename). So a column's definition is
+effectively one-shot. The two `ADD COLUMN` forms differ in how they treat existing rows:
+
+- `ADD COLUMN body TEXT` — nullable; **existing rows read `NULL`**.
+- `ADD COLUMN body TEXT NOT NULL DEFAULT ''` — **existing rows backfill to `''`** (a `NOT NULL` add
+  *requires* a DEFAULT).
+
+If two lineages of the same migration disagree (nullable vs `NOT NULL DEFAULT`), one carries `NULL`s the
+other can't produce — and a non-null Kotlin field reading that column NPEs. Coalesce forward with a
+follow-up data migration (`UPDATE t SET col='' WHERE col IS NULL`); it's a harmless no-op on the
+canonical lineage (whose column is `NOT NULL`, so no `NULL`s exist).
 
 ## Profile-isolated datasource
 

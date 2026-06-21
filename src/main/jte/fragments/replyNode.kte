@@ -124,7 +124,11 @@
     @if(threadId != null && reply.state == GenerationState.POSTED)
         <details class="reply__compose">
             <summary>Reply</summary>
-            @template.fragments.composer(placement = "inline", targetId = reply.id, parentId = reply.id, scope = "BRANCH_ONLY", threadId = threadId, personas = personas)
+            <%-- Generation scope defaults to WHOLE_THREAD so the summoned persona reads the whole topic —
+                 matching the visible "looking at: whole topic" control. A branch-only default silently
+                 hid sibling branches from the model (it would answer "I can't see that post"); the owner
+                 narrows to this branch explicitly via /branch. Placement is still this node (parentId). --%>
+            @template.fragments.composer(placement = "inline", targetId = reply.id, parentId = reply.id, scope = "WHOLE_THREAD", threadId = threadId, personas = personas)
         </details>
     @endif
     @for(child in reply.children)

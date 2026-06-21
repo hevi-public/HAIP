@@ -15,6 +15,7 @@ import com.aiforum.llm.PersonaRef
 import com.aiforum.llm.PromptContext
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
+import com.aiforum.repo.ThreadRepository
 import org.springframework.stereotype.Service
 import java.time.Duration
 import java.util.UUID
@@ -40,6 +41,10 @@ class GenerationService(
     // The "Anyone" dispatcher (defaulted for the same reason; Spring injects the @Component). Shares the
     // single LlmClient seam, so routing is just another call through the same boundary the tests fake.
     private val router: PersonaRouter = PersonaRouter(llm),
+    // The opening post lives on the thread (thread.body), not as a comment, so the context-assembly path
+    // needs to read it to seed the room. Nullable-defaulted so the 3/4-arg Tier-2 constructions (which
+    // don't exercise OP context) keep compiling; Spring injects the real bean.
+    private val threads: ThreadRepository? = null,
 ) {
     private val timeout = Duration.ofSeconds(120)
 
@@ -168,7 +173,7 @@ class GenerationService(
                     persona = persona,
                     depth = leaf.depth + 1,
                     budget = DepthBudget.childBudget(leaf.depthBudget),
-                    context = ContextAssembler.assemble(persona.systemPrompt, context),
+                    context = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(threadId, context)),
                 )
                 created += settleOne(plan, CancellationToken())
             }
@@ -179,7 +184,7 @@ class GenerationService(
     fun retry(replyId: String): ReplyView {
         val existing = comments.findById(replyId) ?: error("no reply $replyId")
         val persona = personas.find(existing.authorId) ?: error("unknown persona ${existing.authorId}")
-        val ctx = ContextAssembler.assemble(persona.systemPrompt, comments.threadComments(existing.threadId))
+        val ctx = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(existing.threadId, comments.threadComments(existing.threadId)))
         val updated = try {
             val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name, persona.model), timeout), CancellationToken())
             existing.copy(body = resp.text, state = GenerationState.POSTED, failureCategory = null, reason = null, retryAfterSeconds = null)
@@ -256,7 +261,7 @@ class GenerationService(
         } else {
             comments.threadComments(threadId)
         }
-        return router.pick(roster, context).map { it.id }.capped()
+        return router.pick(roster, withOpeningPost(threadId, context)).map { it.id }.capped()
     }
 
     /** Resolve personas and assemble the (shared) context once, minting a cancellable id per persona. */
@@ -293,10 +298,29 @@ class GenerationService(
                 persona = persona,
                 depth = baseDepth,
                 budget = baseBudget,
-                context = ContextAssembler.assemble(persona.systemPrompt, contextComments),
+                context = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(threadId, contextComments)),
             )
         }
     }
+
+    /**
+     * The opening post is the topic itself — it lives on the thread (thread.body), rendered as the post
+     * node (id == threadId), NOT as a persisted comment. Inject it at the HEAD of every persona's context
+     * so the room engages with the question instead of a blank transcript (the "dropped on the way in"
+     * bug). Null when the thread has no body (title-only quick-create) or when [threads] isn't wired (the
+     * Tier-2 construction). The synthetic node carries the post's canonical id (threadId), depth 0, no
+     * parent — exactly how the page models the OP. Owner-authored, like any composer message already in
+     * context: the firewall is about VOTES, not the "owner" label.
+     */
+    private fun openingPost(threadId: String): Comment? =
+        threads?.find(threadId)?.body?.takeIf { it.isNotBlank() }?.let {
+            Comment(threadId, threadId, null, OWNER_AUTHOR, it, GenerationState.POSTED, null, 0)
+        }
+
+    /** Prepend the opening post to [comments] (deduped) so it heads the context handed to the model. */
+    private fun withOpeningPost(threadId: String, comments: List<Comment>): List<Comment> =
+        openingPost(threadId)?.takeIf { op -> comments.none { it.id == op.id } }
+            ?.let { listOf(it) + comments } ?: comments
 
     /** The transient view shown while a node drafts — never persisted (no DRAFTING DB row). */
     private fun draftView(plan: GenPlan): ReplyView =
