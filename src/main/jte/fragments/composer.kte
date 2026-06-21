@@ -19,6 +19,11 @@
       hx-post="/threads/${threadId}/generate"
       hx-target="${if (placement == "bottom") ".reply-list" else "closest article"}"
       hx-swap="beforeend"
+      <%-- While the generation request is in flight, disable the Ask button (so a second submit can't
+           race) and reveal the inline spinner (htmx toggles .htmx-request on the indicator). Mirrors the
+           auto-grow pattern in thread.kte. --%>
+      hx-disabled-elt="find button[type='submit']"
+      hx-indicator="find [data-composer-spinner]"
       <%-- Once the post succeeds, clear the editor and collapse it: the owner's message has been swapped
            in as a real comment box, so the open textarea should get out of the way. reset() empties the
            textarea for both placements; the inline composer additionally closes its <details> disclosure
@@ -110,6 +115,9 @@
             </select>
         @endif
         <span class="composer__hint"><b>/</b> commands · <b>@</b> summon</span>
+        <span class="htmx-indicator composer__spinner" data-composer-spinner aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>Asking…
+        </span>
         <button class="btn" type="submit">Ask ▸</button>
     </div>
 </form>
