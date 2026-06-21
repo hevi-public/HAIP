@@ -44,6 +44,7 @@
            grid is two columns whenever the rail is there — see .thread:has(.thread__rail) in app.css. --%>
       <aside class="thread__rail" data-thread-rail>
           @template.fragments.branchIndex(entries = branchIndex)
+          @template.fragments.contextLegend()
       </aside>
     </div>
 `)

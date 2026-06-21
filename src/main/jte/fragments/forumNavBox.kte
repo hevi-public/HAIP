@@ -1,0 +1,24 @@
+@param threadCount: Int
+@param personaCount: Int
+
+<%-- Forum nav: the left-rail "ls -1 ~/forum" listing (design left rail, top box). Trimmed to the
+     routes that exist today — threads (home) and personas (members) — rather than shipping the comp's
+     /bookmarks ·/admin ·/search dead links; rows return as those pages land. Each row shows a live
+     count. data-rail-box / data-nav-entry are the stable hooks. --%>
+<section class="rail-box" data-rail-box="forum-nav">
+    <h2 class="rail-box__title rail-box__title--path">~/forum</h2>
+    <ul class="forum-nav">
+        <li class="forum-nav__row">
+            <a class="forum-nav__link" href="/" data-nav-entry="threads">
+                <span class="forum-nav__path">/threads</span>
+                <span class="forum-nav__count">${threadCount}</span>
+            </a>
+        </li>
+        <li class="forum-nav__row">
+            <a class="forum-nav__link" href="/personas" data-nav-entry="personas">
+                <span class="forum-nav__path">/personas</span>
+                <span class="forum-nav__count">${personaCount}</span>
+            </a>
+        </li>
+    </ul>
+</section>

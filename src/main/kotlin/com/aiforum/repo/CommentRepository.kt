@@ -13,6 +13,15 @@ import java.time.Clock
  * Hibernate). Branch context is read with the recursive-CTE ancestorPath; whole-thread context uses a
  * flat select.
  */
+/** A recently-posted comment for the front-page rail; createdAt is the stored UTC ISO instant. */
+data class RecentComment(
+    val id: String,
+    val threadId: String,
+    val authorId: String,
+    val body: String,
+    val createdAt: String,
+)
+
 @Repository
 class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock) {
 
@@ -56,6 +65,24 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
 
     fun threadComments(threadId: String): List<Comment> =
         jdbc.query("SELECT * FROM comment WHERE thread_id = ? ORDER BY depth, created_at", mapper, threadId)
+
+    /**
+     * The newest POSTED comments across all threads, for the front-page "Recent comments" rail. Drafts,
+     * failures and cancelled nodes are excluded (only settled, visible replies). created_at is a UTC
+     * ISO instant ('…Z'), so ORDER BY on the text column sorts chronologically.
+     */
+    fun recentPosted(limit: Int): List<RecentComment> =
+        jdbc.query(
+            """SELECT id, thread_id, author_id, body, created_at FROM comment
+               WHERE state = 'POSTED' ORDER BY created_at DESC LIMIT ?""",
+            { rs, _ ->
+                RecentComment(
+                    rs.getString("id"), rs.getString("thread_id"), rs.getString("author_id"),
+                    rs.getString("body"), rs.getString("created_at"),
+                )
+            },
+            limit,
+        )
 
     /** Direct children of a node (its replies' siblings) — null parent = the thread's top-level nodes. */
     fun childrenOf(parentId: String?): List<Comment> =
