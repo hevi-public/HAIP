@@ -1,28 +1,36 @@
 package com.aiforum.dto
 
 /**
- * Stable pastel colour per author for the monogram (initials box). A hue is derived deterministically
- * from the author id, so each persona — and "owner" / "system" — keeps the same colour everywhere,
- * which makes a branch easier to follow at a glance. Templates emit the hue as the `--mono-h` custom
- * property; app.css builds the pastel `hsl()` (one fixed lightness/saturation) from it.
+ * Pastel avatar colours. Each persona owns a stable colour SLOT (Persona.colorIndex, assigned once at
+ * creation and stored), so a persona's colour is bound to it for life and adding others never shifts
+ * it. Templates emit the resolved hue as the `--mono-h` custom property; app.css builds the pastel
+ * `hsl()` at one fixed lightness/saturation.
  */
 object Avatar {
-    /** Curated, well-spaced pastel hues — distinct, and all legible at the same lightness/saturation. */
-    val HUES = listOf(8, 28, 45, 92, 140, 168, 200, 222, 260, 292, 320, 342)
-
-    /** Non-persona authors, placed AFTER the registry so they don't steal a persona's colour. */
-    val SPECIALS = listOf("owner", "system")
-
     /**
-     * The hue for [authorId]. Authors are coloured by POSITION in the persona registry [order] (by
-     * name), with the special authors appended after it — so the whole cast (team + owner + system)
-     * gets DISTINCT colours rather than hash collisions. Anyone still unplaced falls back to a stable
-     * hash. Deterministic across runs/JVMs, so a colour never shifts for a given registry.
+     * 20-colour pastel palette, as hues. The FIRST 10 are spaced ~36° apart so a typical roster is
+     * maximally distinguishable; 11–20 fill the midpoints for larger rosters (colours then wrap).
      */
-    fun hue(authorId: String, order: List<String> = emptyList()): Int {
-        val placed = order + SPECIALS.filter { it !in order }
-        val i = placed.indexOf(authorId)
-        return if (i >= 0) HUES[i % HUES.size] else HUES[Math.floorMod(stableHash(authorId), HUES.size)]
+    val PALETTE = listOf(
+        // first 10 — evenly spread around the wheel, maximally distinct
+        8, 44, 80, 116, 152, 188, 224, 260, 296, 332,
+        // 11–20 — the midpoints between the first ten
+        26, 62, 98, 134, 170, 206, 242, 278, 314, 350,
+    )
+
+    // Non-persona voices get their own reserved hues (deliberately NOT in PALETTE) so they stay
+    // distinct from the roster and never change.
+    const val OWNER_HUE = 215
+    const val SYSTEM_HUE = 320
+
+    /** Hue for a persona's stored colour slot; wraps past the palette for very large rosters. */
+    fun hueForIndex(colorIndex: Int): Int = PALETTE[Math.floorMod(colorIndex, PALETTE.size)]
+
+    /** Stable hue for a non-persona author: owner/system reserved, anything else hashed into PALETTE. */
+    fun reservedHue(authorId: String): Int = when (authorId) {
+        "owner" -> OWNER_HUE
+        "system" -> SYSTEM_HUE
+        else -> hueForIndex(stableHash(authorId))
     }
 
     private fun stableHash(s: String): Int {

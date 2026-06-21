@@ -77,7 +77,7 @@ class GenerationController(
     }
 
     private fun personaViews(): List<PersonaView> =
-        personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug) }
+        personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug, colorIndex = it.colorIndex) }
 
     private fun validationError(req: GenerateRequest): ReplyView? {
         val reason = when {
