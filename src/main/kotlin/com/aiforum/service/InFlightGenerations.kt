@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicLong
 class InFlightGenerations {
 
     private class Holder(
+        val threadId: String,
         @Volatile var view: ReplyView,
         val token: CancellationToken,
         val done: CountDownLatch = CountDownLatch(1),
@@ -43,9 +44,9 @@ class InFlightGenerations {
     }
 
     /** Mark [id] in flight with its DRAFTING view; returns the token the worker hands to the LlmClient. */
-    fun register(id: String, draftView: ReplyView): CancellationToken {
+    fun register(id: String, threadId: String, draftView: ReplyView): CancellationToken {
         val token = CancellationToken()
-        inFlight[id] = Holder(draftView, token)
+        inFlight[id] = Holder(threadId, draftView, token)
         return token
     }
 
@@ -56,6 +57,15 @@ class InFlightGenerations {
 
     /** The transient DRAFTING view while in flight — the poll's fallback before the settle row exists. */
     fun view(id: String): ReplyView? = inFlight[id]?.view
+
+    /**
+     * The DRAFTING views still in flight for [threadId]. The async summon's drafts live ONLY here until
+     * they settle (there is no DRAFTING DB row), so a plain thread-page load reads this to show the room
+     * responding — each surfaced node self-polls /replies/{id} and settles in place. Snapshot of the
+     * current entries; a node that settles and is evicted simply drops out of the next load.
+     */
+    fun viewsFor(threadId: String): List<ReplyView> =
+        inFlight.values.filter { it.threadId == threadId }.map { it.view }
 
     /**
      * Settle [id]: release any cancel waiter, then evict. Called from the worker's `finally`, so it runs

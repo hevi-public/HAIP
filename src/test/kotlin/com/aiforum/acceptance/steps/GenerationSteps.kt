@@ -78,9 +78,22 @@ class GenerationSteps(
         Html.allReplyIds(resp.body ?: "").firstOrNull()?.let { world.lastBody = settle.awaitSettled(it) }
     }
 
+    @Then("the room was summoned")
+    fun roomWasSummoned() =
+        // Creating a thread fires a "Whole Topic + Anyone" summon: the dispatcher's routing call is
+        // synchronous on the create request, so the spy carries it by the time this asserts (used by the
+        // browser/form paths, which don't capture draft ids to settle).
+        assertTrue(llm.received.isNotEmpty(), "expected creating the thread to summon the room (an LLM call)")
+
     @Then("the dispatcher considered node {string}")
     fun dispatcherConsidered(label: String) =
         assertTrue(routingCall().context.comments.any { it.body == label }, "expected the dispatcher to see node \"$label\"")
+
+    // Substring match against the dispatcher's context, for the opening post (title + body joined as one
+    // post node — an exact-body assertion doesn't fit). Proves the topic reaches the "Anyone" router.
+    @Then("the dispatcher's context mentions {string}")
+    fun dispatcherMentions(text: String) =
+        assertTrue(routingCall().context.comments.any { it.body.contains(text) }, "expected the dispatcher's context to mention \"$text\"")
 
     @Then("the dispatcher ignored node {string}")
     fun dispatcherIgnored(label: String) =

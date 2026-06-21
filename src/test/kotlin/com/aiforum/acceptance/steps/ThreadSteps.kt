@@ -1,5 +1,6 @@
 package com.aiforum.acceptance.steps
 
+import com.aiforum.acceptance.support.GenerationSettle
 import com.aiforum.acceptance.support.Html
 import com.aiforum.acceptance.support.HttpClient
 import com.aiforum.acceptance.support.ScenarioWorld
@@ -8,12 +9,15 @@ import io.cucumber.java.en.When
 import org.junit.jupiter.api.Assertions.assertTrue
 
 /**
- * Step definitions for thread-level operations (create, view, empty-state assertion).
- * The When step POSTs to /threads; the Then steps assert against the rendered thread page.
+ * Step definitions for thread-level operations (create, view). The When step POSTs to /threads; the Then
+ * steps assert against the rendered thread page. Creating a thread now auto-summons the room (§2), so the
+ * create step settles the drafted reply/replies (mirroring the browser's htmx poll) before the Then steps
+ * read the spy / page.
  */
 class ThreadSteps(
     private val world: ScenarioWorld,
     private val http: HttpClient,
+    private val settle: GenerationSettle,
 ) {
     @When("the owner creates a thread {string} asking {string} of {string}")
     fun createThread(title: String, text: String, personaList: String) {
@@ -27,6 +31,10 @@ class ThreadSteps(
         world.threadId = resp.body?.let {
             Regex("""data-thread-id="([^"]+)"""").find(it)?.groupValues?.get(1)
         }
+        // Creating a thread auto-summons the room (Whole Topic + Anyone): the create response surfaces the
+        // in-flight DRAFTING node(s). Settle them so the dispatcher + persona calls land in the LlmClient
+        // spy and the thread page shows the posted replies the Then steps assert on.
+        settle.awaitAllSettled(Html.allReplyIds(resp.body ?: ""))
     }
 
     @When("the owner starts a thread titled {string} from the browser")

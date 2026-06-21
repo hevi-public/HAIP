@@ -5,12 +5,14 @@ import com.aiforum.dto.BranchIndexEntry
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReplyView
+import com.aiforum.dto.ScopeMode
 import com.aiforum.dto.Snippet
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.ThreadReadRepository
 import com.aiforum.repo.ThreadRepository
 import com.aiforum.repo.VoteRepository
+import com.aiforum.service.GenerationService
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -31,8 +33,10 @@ data class CreateThreadRequest(
 )
 
 /**
- * Thread-level endpoints: create a thread and view its page. Generation is triggered separately
- * via GenerationController; the fresh thread shows the "waiting on the room" empty state (§2).
+ * Thread-level endpoints: create a thread and view its page. Creating a thread immediately summons the
+ * room — a "Whole Topic + Anyone" call: the AI dispatcher reads the opening post and picks who weighs in,
+ * then the chosen persona(s) reply (§2). The summon is async, so the page surfaces the in-flight drafts
+ * (which self-poll to settle) rather than the old "waiting on the room" empty state.
  */
 @Controller
 class ThreadController(
@@ -41,6 +45,7 @@ class ThreadController(
     private val personas: PersonaRepository,
     private val votes: VoteRepository,
     private val threadReads: ThreadReadRepository,
+    private val generation: GenerationService,
 ) {
 
     // Two bindings, one creation path: the browser's new-thread form posts form-urlencoded and wants a
@@ -56,7 +61,7 @@ class ThreadController(
     fun createForm(req: CreateThreadRequest): String {
         val id = newThread(req.title, req.text)
         // Post/Redirect/Get: land the browser on the new thread (correct URL, refresh-safe), where the
-        // bottom composer is waiting to ask the room.
+        // room — summoned on create (see newThread) — is already drafting its replies.
         return "redirect:/threads/$id"
     }
 
@@ -65,6 +70,20 @@ class ThreadController(
     private fun newThread(title: String, body: String): String {
         val id = UUID.randomUUID().toString()
         threads.insert(id, title, body)
+        // Summon the room on creation: a "Whole Topic + Anyone" call. AUTO_PERSONA is the "Anyone"
+        // sentinel (the AI dispatcher picks who replies); WHOLE_THREAD for both scopes is "Whole Topic"
+        // — the dispatcher reads the whole topic (the opening post) to route, and the chosen persona then
+        // reads the whole topic too. No owner message to post (the opening post lives on the thread body
+        // and seeds context via the OP node), so postAsOwner stays false. Async — settles on a worker
+        // thread while the request returns; the drafts surface on the thread page and self-poll.
+        generation.startGeneration(
+            threadId = id,
+            parentId = null,
+            personaIds = listOf(GenerationService.AUTO_PERSONA),
+            text = "",
+            scope = ScopeMode.WHOLE_THREAD,
+            routingScope = ScopeMode.WHOLE_THREAD,
+        )
         return id
     }
 
@@ -85,17 +104,38 @@ class ThreadController(
         // list it gets here was rendering every node at level 0. Children keep their repository order
         // (depth, created_at), so siblings stay chronological.
         val tree = assembleTree(all)
-        model.addAttribute("replies", tree)
+        // The room is summoned on creation (async); its DRAFTING replies live only in the in-flight
+        // registry until they settle — no DRAFTING DB row exists. Surface them at the top level so a plain
+        // page load (e.g. the PRG redirect after create) shows the room responding: each drafting node
+        // self-polls /replies/{id} and settles in place. Dedupe by id against the DB tree to avoid a double
+        // render in the brief window after a draft's settle-write but before it's evicted from in-flight.
+        val rendered = collectIds(tree)
+        val drafting = generation.inFlightViews(id).filter { it.id !in rendered }
+        model.addAttribute("replies", tree + drafting)
         // Persona views carry each persona's stored colour slot, so the branch-index dots resolve to the
         // same hue as the reply monograms (see AuthorColor).
         val personaViews = personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug, colorIndex = it.colorIndex) }
         // Branch index for the side rail: the posted nodes flattened in the same depth-first order the
-        // page renders them, so the rail reads top-to-bottom alongside the thread. Empty until the room
-        // has spoken, which keeps a fresh thread single-column (the aside stays hidden).
+        // page renders them, so the rail reads top-to-bottom alongside the thread. Drafting nodes are not
+        // posted, so they stay out of the rail until they settle.
         model.addAttribute("branchIndex", branchIndex(tree, personaViews))
-        model.addAttribute("waitingOnRoom", all.none { it.state == GenerationState.POSTED })
+        // "Waiting on the room" only when nothing has posted AND nothing is drafting — i.e. the room
+        // hasn't been summoned (no personas to route to). With the create-time summon there are normally
+        // drafts in flight, so a fresh thread shows the room responding rather than an empty wait.
+        model.addAttribute("waitingOnRoom", all.none { it.state == GenerationState.POSTED } && drafting.isEmpty())
         model.addAttribute("personas", personaViews)
         return "thread"
+    }
+
+    /** Every reply id in the rendered tree (all depths) — so surfaced in-flight drafts aren't double-rendered. */
+    private fun collectIds(tree: List<ReplyView>): Set<String> {
+        val ids = mutableSetOf<String>()
+        fun walk(node: ReplyView) {
+            ids += node.id
+            node.children.forEach(::walk)
+        }
+        tree.forEach(::walk)
+        return ids
     }
 
     /** Flatten the reply tree depth-first into the rail's jump list, posted nodes only. */

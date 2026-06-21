@@ -38,6 +38,9 @@
              the full new-thread form below. Built on <details> so the form still posts with JS off —
              the form (form-urlencoded POST to /threads → PRG redirect onto the fresh thread, title +
              optional body = the opening post, §2) is always in the DOM, just visually collapsed.
+             Creating the thread auto-summons the room (a "Whole Topic + Anyone" call, §2), so the fresh
+             thread page shows the room already drafting its replies. Enter submits the form (Shift+Enter
+             = newline; app.js, [data-new-thread]).
              On an empty forum there's nothing to browse, so it starts open — the form is the one
              thing a first-time visitor is here to do, no click required. --%>
         <details class="ask-card" id="new-thread" data-ask-room open="${threads.isEmpty()}">
