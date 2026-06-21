@@ -329,6 +329,7 @@ html[data-theme="dark"]       .theme-toggle__opt[data-set-theme="dark"] {
   margin-bottom: 14px;
 }
 .thread__title { font-size: 21px; font-weight: 700; line-height: 1.25; margin: 0; max-width: var(--prose); }
+.thread__op-body { margin: 10px 0 0; max-width: var(--prose); line-height: 1.5; color: var(--ink); white-space: pre-wrap; }
 
 /* reply tree -------------------------------------------------------------- */
 .reply-list { display: flex; flex-direction: column; gap: 8px; }

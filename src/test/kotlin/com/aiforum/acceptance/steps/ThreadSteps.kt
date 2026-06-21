@@ -59,6 +59,22 @@ class ThreadSteps(
         world.lastBody = resp.body
     }
 
+    @Then("the thread shows the opening post {string}")
+    fun threadShowsOpeningPost(text: String) {
+        // The opening question renders on the post node itself (data-op-body), under the title — not as a
+        // persona reply, not dropped. Re-fetch so this asserts the persisted+rendered page, not the create
+        // response.
+        val body = http.get("/threads/${world.threadId}").body ?: ""
+        assertTrue(
+            Html.contains(body, "data-op-body"),
+            "expected an opening-post body element (data-op-body) in:\n$body",
+        )
+        assertTrue(
+            Html.contains(body, text),
+            "expected the opening post \"$text\" on the thread page:\n$body",
+        )
+    }
+
     @Then("the thread shows the waiting-on-the-room empty state")
     fun threadShowsWaitingState() {
         assertTrue(

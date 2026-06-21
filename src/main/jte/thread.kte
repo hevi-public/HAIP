@@ -3,6 +3,7 @@
 @import com.aiforum.web.PersonaView
 @param threadId: String
 @param title: String
+@param body: String? = null
 @param replies: List<ReplyView>
 @param branchIndex: List<BranchIndexEntry>
 @param waitingOnRoom: Boolean
@@ -15,6 +16,11 @@
              id="reply-<threadId>" give it a permalink in the same #reply-<id> scheme replies use. --%>
         <div class="thread__op" data-nav-item="post" data-nav-id="${threadId}" id="reply-${threadId}">
             <h1 class="thread__title">${title}</h1>
+            @if(body != null && body.isNotBlank())
+                <%-- The opening question is the post's body (the OP node's content). data-op-body is the
+                     stable hook the acceptance probe reads; a regression that drops the text fails it. --%>
+                <div class="thread__op-body" data-op-body>${body}</div>
+            @endif
         </div>
         @if(waitingOnRoom)
             <div data-empty-state="waiting">Waiting on the room…</div>
