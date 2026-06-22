@@ -30,7 +30,9 @@ object ComposerPrompts {
         append("name, abilities, and personality dials, write a concise system prompt (2–4 sentences) ")
         append("that makes a language model embody that persona when it replies in the forum. ")
         append("Translate each dial into observable behaviour in prose — never mention the numbers or ")
-        append("the word \"dial\". ")
+        append("the word \"dial\". The persona's job is to engage with the substance of the discussion; ")
+        append("its personality should colour how it contributes, not become the point — so write a ")
+        append("light touch, not a caricature. ")
         // Bake the anti-leak contract into every composed prompt, so a persona carries it itself even
         // where the per-generation steer (PromptRenderer.NO_PREAMBLE) doesn't reach. Belt-and-suspenders
         // against models that narrate their chain-of-thought; see plan_docs/local-model-reasoning-leak.md.

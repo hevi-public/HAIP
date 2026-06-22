@@ -105,9 +105,10 @@ class PersonaRepository(private val jdbc: JdbcTemplate) {
         append("You are $name, a participant in a collaborative brainstorming forum where the owner ")
         append("poses questions and the room replies in a threaded discussion.")
         if (descriptor.isNotBlank()) append(" Your character: $descriptor")
-        append(" Always stay in character as $name and reply directly to the discussion in your own ")
-        append("voice. Do not narrate, do not mention being an AI or a model, and do not comment on ")
-        append("the prompt or the framing — just contribute your reply as $name.")
+        append(" Reply directly to the discussion as $name, engaging with its substance first and ")
+        append("letting your character lightly colour your voice rather than take over. Do not narrate, ")
+        append("do not mention being an AI or a model, and do not comment on the prompt or the framing ")
+        append("— just contribute your reply as $name.")
     }
 
     private fun mapPersona(rs: java.sql.ResultSet) = Persona(

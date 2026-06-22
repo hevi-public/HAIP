@@ -55,14 +55,27 @@ object PromptRenderer {
             "reason first, put that reasoning inside <think>…</think> tags and write only the finished " +
             "reply after them."
 
+    /**
+     * Substance-over-persona steer appended to every render. Personas were leaning too hard on their
+     * character — playing the personality at the expense of actually engaging with what the thread was
+     * about. This pulls focus back to the discussion: respond to what was said and what the thread
+     * needs, and let personality only lightly colour the delivery. Like [BREVITY] it lives in the task
+     * prompt (not the stored per-persona system prompt) so it applies to every persona immediately,
+     * including ones already seeded into the DB, however heavy their composed character is.
+     */
+    private const val SUBSTANCE =
+        "Engage with the substance first: respond to what was actually said and what the discussion " +
+            "needs right now. Let your personality lightly colour how you say it — it should never " +
+            "pull focus from the topic or matter more than the point you're making."
+
     fun renderTask(context: PromptContext, personaName: String): String {
         val transcript = TranscriptRenderer.render(context.comments, context.targetId)
         // Name the persona explicitly and point it at the target message: without this the model sees its
         // own past lines labelled "$name:" amid the transcript and gets meta about who it is ("the framing
         // got flipped"). The system prompt carries the character; this carries the task.
         return if (transcript.isBlank()) {
-            "You are opening a new thread in the forum. Post the first message as $personaName, in " +
-                "character. $BREVITY $FORMATTING $NO_PREAMBLE"
+            "You are opening a new thread in the forum. Post the first message as $personaName. " +
+                "$SUBSTANCE $BREVITY $FORMATTING $NO_PREAMBLE"
         } else {
             // Point the persona at the EXACT node it was summoned for (marked "← reply to this"), naming its
             // ref. In whole-thread scope the target is rarely the last transcript line, so "the most recent
@@ -78,7 +91,7 @@ object PromptRenderer {
             "The forum discussion so far. Each line is \"[#ref] author: message\"; indentation shows " +
                 "reply depth and \"↳ replying to #n\" marks which message it answers:\n\n$transcript\n\n---\n" +
                 task +
-                "Reply with the message text only, in character as $personaName. $BREVITY $FORMATTING $NO_PREAMBLE"
+                "Reply with the message text only, as $personaName. $SUBSTANCE $BREVITY $FORMATTING $NO_PREAMBLE"
         }
     }
 }
