@@ -166,7 +166,9 @@ function scrollCommentIntoView(el) {
 
 function openInlineComposer(id) {
   const el = elById.get(id);
-  const det = el && el.querySelector(":scope > details.reply__compose");
+  // The composer lives inside this node's own action bar (article > .reply__actionbar > details).
+  // Scope through .reply__actionbar so we open THIS node's reply box, never a nested child's.
+  const det = el && el.querySelector(":scope > .reply__actionbar > details.reply__compose");
   if (!det) return false;
   det.open = true;
   const ta = det.querySelector("textarea");
