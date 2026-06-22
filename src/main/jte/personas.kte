@@ -67,9 +67,13 @@
                         <button type="reset" class="btn btn--ghost" data-cancel-create>Cancel</button>
                         <button type="button" class="btn btn--ghost" data-preview-prompt
                                 hx-post="/personas/compose" hx-include="closest form"
-                                hx-target="#new-persona-prompt" hx-swap="innerHTML">
+                                hx-target="#new-persona-prompt" hx-swap="innerHTML"
+                                hx-disabled-elt="this" hx-indicator="next .regen-spinner">
                             Preview / regenerate prompt
                         </button>
+                        <span class="htmx-indicator regen-spinner" aria-live="polite">
+                            <span class="spinner" aria-hidden="true"></span>Composing…
+                        </span>
                         <button class="btn" type="submit">Add member ▸</button>
                     </span>
                 </div>

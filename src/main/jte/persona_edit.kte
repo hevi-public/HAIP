@@ -39,9 +39,13 @@
                 <span class="form-actions__spacer"></span>
                 <button type="button" class="btn btn--ghost" data-preview-prompt
                         hx-post="/personas/${persona.slug}/compose" hx-include="closest form"
-                        hx-target="#edit-persona-prompt" hx-swap="innerHTML">
+                        hx-target="#edit-persona-prompt" hx-swap="innerHTML"
+                        hx-disabled-elt="this" hx-indicator="next .regen-spinner">
                     Regenerate prompt
                 </button>
+                <span class="htmx-indicator regen-spinner" aria-live="polite">
+                    <span class="spinner" aria-hidden="true"></span>Composing…
+                </span>
                 <button class="btn" type="submit">Save changes ▸</button>
             </div>
         </form>
