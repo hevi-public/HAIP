@@ -1,8 +1,10 @@
 package com.aiforum.acceptance.steps
 
 import com.aiforum.acceptance.support.Html
+import com.aiforum.acceptance.support.HttpClient
 import com.aiforum.acceptance.support.ScenarioWorld
 import io.cucumber.java.en.Then
+import io.cucumber.java.en.When
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 
@@ -13,9 +15,21 @@ import org.junit.jupiter.api.Assertions.assertTrue
  */
 class BranchIndexSteps(
     private val world: ScenarioWorld,
+    private val http: HttpClient,
 ) {
     private fun body(): String = world.lastBody ?: ""
     private fun entries(): List<String> = Html.attrValues(body(), "data-branch-index-entry")
+
+    // Post a /note — the synchronous "owner comments, no AI summon" path. It returns the reply-list
+    // fragment the browser swaps in, which now carries a fresh branch index as an out-of-band swap; we
+    // stash that fragment as lastBody so the branch-index Then-steps assert on the rail the browser would
+    // actually receive (not a fresh full-page render), pinning the OOB refresh that fixes the stale rail.
+    @When("the owner posts a note {string}")
+    fun ownerPostsNote(text: String) {
+        val resp = http.postForm("/threads/${world.threadId}/note", mapOf("text" to text))
+        world.lastStatus = resp.statusCode.value()
+        world.lastBody = resp.body
+    }
 
     @Then("the thread rail shows a branch index")
     fun railShowsBranchIndex() {
