@@ -49,6 +49,7 @@ class GenerationController(
     private val generation: GenerationService,
     private val personas: PersonaRepository,
     private val comments: CommentRepository,
+    private val branchIndex: BranchIndexBuilder,
 ) {
 
     // Two handlers, one body type each: the browser composer posts application/x-www-form-urlencoded
@@ -81,6 +82,10 @@ class GenerationController(
         // Hand the fragment what its composers need so freshly-rendered nodes can be replied to.
         model.addAttribute("threadId", threadId)
         model.addAttribute("personas", personaViews())
+        // The owner's own message (postAsOwner) posts immediately, so refresh the rail's branch index as
+        // an out-of-band swap alongside the appended nodes. (The summoned personas are still DRAFTING, so
+        // they enter the index later, when each settles via the poll endpoint.)
+        model.addAttribute("branchIndex", branchIndex.forThread(threadId))
         return "fragments/replyList"
     }
 
@@ -150,6 +155,8 @@ class GenerationController(
         model.addAttribute("replies", listOf(node.toReplyView()))
         model.addAttribute("threadId", threadId)
         model.addAttribute("personas", personaViews())
+        // The note posts immediately — refresh the rail's branch index as an out-of-band swap.
+        model.addAttribute("branchIndex", branchIndex.forThread(threadId))
         return "fragments/replyList"
     }
 
@@ -162,6 +169,8 @@ class GenerationController(
         model.addAttribute("replies", generation.autoGrow(threadId))
         model.addAttribute("threadId", threadId)
         model.addAttribute("personas", personaViews())
+        // Newly-grown nodes are posted — refresh the rail's branch index as an out-of-band swap.
+        model.addAttribute("branchIndex", branchIndex.forThread(threadId))
         return "fragments/replyList"
     }
 
@@ -212,12 +221,15 @@ class GenerationController(
     }
 
     // Single-node fragment for an htmx outerHTML swap. threadId (+ personas) only for a settled node, so
-    // the inline composer renders once it's posted; a drafting node renders without one.
+    // the inline composer renders once it's posted; a drafting node renders without one. A settle can
+    // change the posted set (a draft polling to POSTED, a retry succeeding), so carry a fresh branch
+    // index as an out-of-band swap too — this is how a persona reply lands in the rail when it settles.
     private fun renderNode(model: Model, reply: ReplyView, threadId: String?): String {
         model.addAttribute("reply", reply)
         if (threadId != null) {
             model.addAttribute("threadId", threadId)
             model.addAttribute("personas", personaViews())
+            model.addAttribute("branchIndex", branchIndex.forThread(threadId))
         }
         return "fragments/replyNode"
     }

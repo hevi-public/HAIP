@@ -1,10 +1,8 @@
 package com.aiforum.web
 
-import com.aiforum.dto.BranchIndexEntry
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ReplyView
 import com.aiforum.dto.ScopeMode
-import com.aiforum.dto.Snippet
 import com.aiforum.markdown.MarkdownRenderer
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
@@ -21,9 +19,6 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
 import java.util.UUID
-
-/** How many characters of a comment to preview in a branch-index entry (CSS ellipsis caps the rest). */
-private const val BRANCH_SNIPPET_LEN = 48
 
 /** Request body for POST /threads. */
 data class CreateThreadRequest(
@@ -47,6 +42,7 @@ class ThreadController(
     private val generation: GenerationService,
     private val railFeeds: RailFeeds,
     private val replyTree: ReplyTreeAssembler,
+    private val branchIndex: BranchIndexBuilder,
 ) {
 
     // Two bindings, one creation path: the browser's new-thread form posts form-urlencoded and wants a
@@ -177,7 +173,7 @@ class ThreadController(
         // Branch index for the side rail: the posted nodes flattened in the same depth-first order the
         // page renders them, so the rail reads top-to-bottom alongside the thread. Drafting nodes are not
         // posted, so they stay out of the rail until they settle.
-        model.addAttribute("branchIndex", branchIndex(tree, personaViews))
+        model.addAttribute("branchIndex", branchIndex.fromTree(tree, personaViews))
         // "Waiting on the room" only when nothing has posted, nothing is drafting, AND no summon is
         // routing — i.e. the room was never summoned (no personas to route to). With the create-time
         // summon a fresh thread normally shows the summoning poller (then the drafts), so this empty state
@@ -200,22 +196,5 @@ class ThreadController(
         }
         tree.forEach(::walk)
         return ids
-    }
-
-    /** Flatten the reply tree depth-first into the rail's jump list, posted nodes only. */
-    private fun branchIndex(tree: List<ReplyView>, personas: List<PersonaView>): List<BranchIndexEntry> {
-        val out = mutableListOf<BranchIndexEntry>()
-        fun walk(node: ReplyView) {
-            if (node.state == GenerationState.POSTED) {
-                out += BranchIndexEntry(
-                    node.id, node.authorId, node.depth,
-                    Snippet.oneLine(node.body, BRANCH_SNIPPET_LEN), AuthorColor.hue(node.authorId, personas),
-                    starred = node.starred,
-                )
-            }
-            node.children.forEach(::walk)
-        }
-        tree.forEach(::walk)
-        return out
     }
 }
