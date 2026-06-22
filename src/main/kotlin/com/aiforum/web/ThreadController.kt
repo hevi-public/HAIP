@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.ResponseBody
 import java.util.UUID
 
 /** How many characters of a comment to preview in a branch-index entry (CSS ellipsis caps the rest). */
@@ -87,6 +88,21 @@ class ThreadController(
             routingScope = ScopeMode.WHOLE_THREAD,
         )
         return id
+    }
+
+    /**
+     * Delete a thread and everything that hangs off it (§8): its comments (and their votes), the owner's
+     * read marker, then the thread row. The home-page button outerHTML-swaps the thread row away with this
+     * empty response, mirroring the cascade in the DB. Dependents go first — comment.thread_id and
+     * thread_read.thread_id both reference thread(id).
+     */
+    @PostMapping("/threads/{id}/delete")
+    @ResponseBody
+    fun delete(@PathVariable id: String): String {
+        comments.deleteByThread(id)
+        threadReads.delete(id)
+        threads.delete(id)
+        return ""
     }
 
     @GetMapping("/threads/{id}")

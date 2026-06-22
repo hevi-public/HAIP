@@ -108,6 +108,38 @@ class CommentRepositoryTest {
     }
 
     @Test
+    fun `deleteByThread removes every comment and vote in the thread — other threads are untouched`() {
+        // doomed thread:  R ─┬─ A ── A1
+        //                    └─ B
+        val doomed = data.insertThread("Scaling SQLite")
+        val r = data.insertComment(doomed, authorId = "owner", body = "R", parentId = null, depth = 0)
+        val a = data.insertComment(doomed, authorId = "vex", body = "A", parentId = r)
+        val b = data.insertComment(doomed, authorId = "pike", body = "B", parentId = r)
+        val a1 = data.insertComment(doomed, authorId = "sol", body = "A1", parentId = a, depth = 2)
+        listOf(r, a, b, a1).forEach { jdbc.update("INSERT INTO vote(node_id, voter_id) VALUES (?, 'owner')", it) }
+        // a separate thread that must survive intact
+        val keep = data.insertThread("io_uring vs epoll")
+        val k = data.insertComment(keep, authorId = "owner", body = "K", parentId = null, depth = 0)
+        jdbc.update("INSERT INTO vote(node_id, voter_id) VALUES (?, 'owner')", k)
+
+        val removed = comments.deleteByThread(doomed)
+
+        assertEquals(setOf(r, a, b, a1), removed.toSet())
+        // every comment + vote in the doomed thread is gone, no FK violation (deepest-first)
+        assertEquals(emptyList<com.aiforum.domain.Comment>(), comments.threadComments(doomed))
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM vote v JOIN comment c ON c.id = v.node_id WHERE c.thread_id = ?", Int::class.java, doomed))
+        // the other thread and its vote survive
+        assertEquals(setOf("K"), comments.threadComments(keep).map { it.body }.toSet())
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM vote WHERE node_id = ?", Int::class.java, k))
+    }
+
+    @Test
+    fun `deleteByThread on a thread with no comments is a no-op`() {
+        val thread = data.insertThread("empty")
+        assertEquals(emptyList<String>(), comments.deleteByThread(thread))
+    }
+
+    @Test
     fun `recentPosted returns the newest POSTED comments across threads, newest first, capped`() {
         // Two threads; insert in a deliberately jumbled time order, then assert the query re-sorts.
         val t1 = data.insertThread("io_uring vs epoll")
