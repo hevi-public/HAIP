@@ -15,6 +15,12 @@ Feature: Regenerating an AI persona's reply, keeping every version
     Then the regenerate button is present on "sol"'s reply
     And the regenerate button shows a processing state while it runs
 
+  Scenario: A freshly summoned reply offers regenerate the moment it settles
+    Given the LLM will respond with "A considered take"
+    When the owner summons "sol"
+    Then the reply is "posted"
+    And the just-settled reply offers the regenerate button
+
   Scenario: An owner note offers no regenerate button — there is nothing to regenerate
     Given a posted reply from "owner" saying "My own note"
     When the owner views the thread page

@@ -152,15 +152,14 @@ class GenerationController(
         )
     }
 
-    // Re-generate a FAILED/CANCELLED draft, then render the single node via the shared [renderNode]: the
-    // browser Retry button outerHTML-swaps the closest <article>, which needs a lone <article> root —
-    // replyList would nest a stray <div class="reply-list"> inside the parent. Pass the thread id (like
-    // poll/cancel) so a node that retries to POSTED re-renders WITH its inline composer; a re-failed node
-    // stays composer-less via the template's POSTED guard and just offers Retry again.
+    // Re-generate a FAILED/CANCELLED draft, then render the single node via the enriched subtree path (a
+    // lone <article> root for the Retry button's outerHTML swap). Going through the assembler means a node
+    // that retries to POSTED re-renders WITH its inline composer AND its Regenerate control + revision
+    // state; a re-failed node stays composer-less via the template's POSTED guard and just offers Retry.
     @PostMapping("/replies/{id}/retry")
     fun retry(@PathVariable id: String, model: Model): String {
-        val reply = generation.retry(id)
-        return renderNode(model, reply, comments.findById(id)?.threadId)
+        generation.retry(id)
+        return renderSubtree(model, id)
     }
 
     /**
@@ -306,7 +305,11 @@ class GenerationController(
      */
     @GetMapping("/replies/{id}")
     fun poll(@PathVariable id: String, model: Model): String {
-        comments.findById(id)?.let { return renderNode(model, it.toReplyView(), it.threadId) }
+        // A settled row renders through the enriched subtree path (same as the full page), so a freshly
+        // settled persona reply carries its Regenerate control + revision/attachment state at once — the
+        // bare view omitted them, so they only appeared after a reload. Fall back to the transient
+        // in-flight view (no DB row yet) while the node still drafts.
+        if (comments.findById(id) != null) return renderSubtree(model, id)
         generation.inFlightView(id)?.let { return renderNode(model, it, threadId = null) }
         return emptyNode(model)
     }
@@ -319,14 +322,13 @@ class GenerationController(
     @PostMapping("/replies/{id}/cancel")
     fun cancel(@PathVariable id: String, model: Model): String {
         generation.cancel(id)
-        val node = comments.findById(id) ?: return emptyNode(model)
-        return renderNode(model, node.toReplyView(), node.threadId)
+        if (comments.findById(id) == null) return emptyNode(model)
+        return renderSubtree(model, id)
     }
 
-    // Single-node fragment for an htmx outerHTML swap. threadId (+ personas) only for a settled node, so
-    // the inline composer renders once it's posted; a drafting node renders without one. A settle can
-    // change the posted set (a draft polling to POSTED, a retry succeeding), so carry a fresh branch
-    // index as an out-of-band swap too — this is how a persona reply lands in the rail when it settles.
+    // Single-node fragment for the transient in-flight DRAFTING view only (no DB row yet, so it can't go
+    // through the assembler). Persisted nodes render via [renderSubtree], which enriches them. Called with
+    // threadId=null, so no composer/rail wiring — a drafting node has nothing to reply to or index.
     private fun renderNode(model: Model, reply: ReplyView, threadId: String?): String {
         model.addAttribute("reply", reply)
         if (threadId != null) {

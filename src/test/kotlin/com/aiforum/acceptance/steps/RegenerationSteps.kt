@@ -56,6 +56,17 @@ class RegenerationSteps(
         assertTrue(body.contains("regen-spinner"), "expected an inline 'Regenerating…' spinner (regen-spinner):\n$body")
     }
 
+    @Then("the just-settled reply offers the regenerate button")
+    fun settledReplyOffersRegenerate() {
+        // The summon settles via the poll path (GET /replies/{id}); that fragment must already carry the
+        // Regenerate control, not wait for a full-page reload to be enriched by the assembler.
+        val id = world.lastReplyId ?: error("no settled reply id remembered")
+        assertTrue(
+            (world.lastBody ?: "").contains("hx-post=\"/replies/$id/regenerate\""),
+            "expected the freshly-settled reply ($id) to offer regenerate (hx-post=/replies/$id/regenerate) in:\n${world.lastBody}",
+        )
+    }
+
     @Then("the regenerate button is not present on {string}'s reply")
     fun regenerateButtonAbsent(persona: String) {
         val id = replyId(persona)
