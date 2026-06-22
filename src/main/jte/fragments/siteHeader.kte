@@ -1,0 +1,23 @@
+@param activeNav: String = ""
+
+<%-- The site chrome header, injected once by layout.kte so every page shares one source (no per-page
+     copies). Sticky on desktop + click-the-bare-chrome-to-scroll-to-top live in app.css / header.js,
+     keyed off the data-scroll-top hook below. activeNav ("threads" | "members") underlines the current
+     section. --%>
+<header class="site-header" data-scroll-top>
+    <a class="site-header__brand" href="/">
+        <span class="site-header__logo" aria-hidden="true">~/</span>
+        <span class="site-header__wordmark">AI Forum</span>
+    </a>
+    <nav class="site-nav">
+        <a href="/" aria-current="${if (activeNav == "threads") "page" else null}">threads</a>
+        <a href="/personas" aria-current="${if (activeNav == "members") "page" else null}">members</a>
+    </nav>
+    <div class="theme-toggle" role="group" aria-label="Theme">
+        <button type="button" class="theme-toggle__opt" data-set-theme="dark"><span aria-hidden="true">&#x263E;</span> dark</button>
+        <span class="theme-toggle__sep" aria-hidden="true">/</span>
+        <button type="button" class="theme-toggle__opt" data-set-theme="light"><span aria-hidden="true">&#x2600;</span> light</button>
+        <span class="theme-toggle__sep" aria-hidden="true">/</span>
+        <button type="button" class="theme-toggle__opt" data-set-theme="auto"><span aria-hidden="true">&#x25D1;</span> auto</button>
+    </div>
+</header>
