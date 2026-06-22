@@ -5,7 +5,8 @@
       "name": "haip",
       "runtimeExecutable": "./gradlew",
       "runtimeArgs": ["bootRun"],
-      "port": 8080
+      "port": 8081,
+      "autoPort": false
     },
     {
       "name": "haip-8081",

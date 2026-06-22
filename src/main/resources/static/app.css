@@ -537,7 +537,7 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 .branch-index { list-style: none; margin: 0; padding: 0; }
 .branch-index__row { padding-left: calc(var(--bi-depth, 0) * 12px); }   /* light indent mirrors tree depth */
 .branch-index__link {
-  display: block; padding: 3px 0;
+  display: block; padding: 3px 0 3px 8px;
   font-size: 12.5px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;   /* clip preview, never wrap */
 }
@@ -563,7 +563,7 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 .branch-index__link[data-starred="true"] .branch-index__star { display: inline-block; }
 /* the selected comment, reflected in the rail — same cursor language as .reply.is-current */
 .branch-index__row.is-current { background: var(--wash); border-radius: var(--r-sm); }
-.branch-index__row.is-current .branch-index__link { box-shadow: inset 3px 0 0 0 var(--spine-live); padding-left: 4px; }
+.branch-index__row.is-current .branch-index__link { }
 
 /* the starred toggle on a comment: a filled star reads "bookmarked" at a glance */
 .reply__star-btn.is-starred { color: hsl(45 90% 42%); }
