@@ -22,6 +22,16 @@ data class RecentComment(
     val createdAt: String,
 )
 
+/** A starred POSTED comment with its thread title, for the starred rail box and the /starred page. */
+data class StarredComment(
+    val id: String,
+    val threadId: String,
+    val threadTitle: String,
+    val authorId: String,
+    val body: String,
+    val createdAt: String,
+)
+
 @Repository
 class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock) {
 
@@ -148,6 +158,33 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
         ) ?: 0
 
     /**
+     * Starred POSTED comments joined with their thread title, newest first. Pass a limit for the
+     * rail box; null for the /starred page (all of them).  The JOIN is safe here: every comment
+     * must have a thread_id that references an existing thread row.
+     */
+    fun starredPosted(limit: Int): List<StarredComment> = starredQuery(limit)
+
+    fun allStarredPosted(): List<StarredComment> = starredQuery(null)
+
+    private fun starredQuery(limit: Int?): List<StarredComment> {
+        val sql = buildString {
+            append(
+                """SELECT c.id, c.thread_id, t.title AS thread_title, c.author_id, c.body, c.created_at
+                   FROM comment c JOIN thread t ON c.thread_id = t.id
+                   WHERE c.starred = 1 AND c.state = 'POSTED'
+                   ORDER BY c.created_at DESC""",
+            )
+            if (limit != null) append(" LIMIT $limit")
+        }
+        return jdbc.query(sql) { rs, _ ->
+            StarredComment(
+                rs.getString("id"), rs.getString("thread_id"), rs.getString("thread_title"),
+                rs.getString("author_id"), rs.getString("body"), rs.getString("created_at"),
+            )
+        }
+    }
+
+    /**
      * Delete [nodeId] and its entire subtree (§8) — a deleted parent takes its replies with it, so no
      * child is ever left pointing at a gone parent. foreign_keys=on (every profile, see the datasource
      * URLs) means dependents must go first: `vote.node_id` and `comment.parent_id` both reference
@@ -160,6 +197,24 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
         val placeholders = ids.joinToString(",") { "?" }
         jdbc.update("DELETE FROM vote WHERE node_id IN ($placeholders)", *ids.toTypedArray())
         // Deepest-first so the self-referential parent_id FK is never momentarily violated.
+        ids.forEach { jdbc.update("DELETE FROM comment WHERE id = ?", it) }
+        return ids
+    }
+
+    /**
+     * Delete every comment in [threadId] (and their votes) — used when a whole thread is removed. Same
+     * FK ordering as [deleteSubtree]: votes first (`vote.node_id` references `comment`), then comments
+     * deepest-first so a child is always gone before the parent it points at (`comment.parent_id`).
+     * Returns the ids removed; empty if the thread has no comments.
+     */
+    fun deleteByThread(threadId: String): List<String> {
+        val ids = jdbc.query(
+            "SELECT id FROM comment WHERE thread_id = ? ORDER BY depth DESC",
+            { rs, _ -> rs.getString("id") }, threadId,
+        )
+        if (ids.isEmpty()) return emptyList()
+        val placeholders = ids.joinToString(",") { "?" }
+        jdbc.update("DELETE FROM vote WHERE node_id IN ($placeholders)", *ids.toTypedArray())
         ids.forEach { jdbc.update("DELETE FROM comment WHERE id = ?", it) }
         return ids
     }

@@ -1,0 +1,29 @@
+@import com.aiforum.web.StarredThreadSection
+@import com.aiforum.web.StarredPageItem
+@param sections: List<StarredThreadSection>
+@param isEmpty: Boolean
+
+@template.layout(title = "Starred", content = @`
+    <div class="starred" data-page="starred">
+        <h1 class="starred__title">Starred</h1>
+        @if(isEmpty)
+            <p class="starred__empty" data-starred-empty="true">Nothing starred yet — star a comment in a thread to bookmark it here.</p>
+        @else
+            @for(section in sections)
+                <section class="starred__thread" data-starred-thread="${section.threadId}">
+                    <h2 class="starred__thread-title">
+                        <a href="/threads/${section.threadId}">${section.threadTitle}</a>
+                    </h2>
+                    <ul class="starred__items">
+                        @for(item in section.items)
+                            <li class="starred__item" data-starred-item="${item.id}">
+                                <a class="starred__quote" href="/threads/${section.threadId}#reply-${item.id}">"${item.snippet}"</a>
+                                <div class="starred__meta">${item.authorId} · ${item.ago}</div>
+                            </li>
+                        @endfor
+                    </ul>
+                </section>
+            @endfor
+        @endif
+    </div>
+`)

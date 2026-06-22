@@ -1,0 +1,24 @@
+@import com.aiforum.web.StarredCommentRow
+@param starred: List<StarredCommentRow>
+
+<%-- Starred box: the right-rail cross-thread bookmark feed. Each row links to the comment in its
+     thread and shows the thread title as context. The "See all" link always renders so the owner
+     can navigate to /starred even before anything is starred. data-rail-box / data-starred-comment
+     / data-starred-comments-empty are the stable hooks the acceptance suite asserts on. --%>
+<section class="rail-box" data-rail-box="starred-comments">
+    <h2 class="rail-box__title">Starred</h2>
+    @if(starred.isEmpty())
+        <p class="rail-box__empty" data-starred-comments-empty="true">No starred comments yet.</p>
+    @else
+        <ul class="recent-comments">
+            @for(item in starred)
+                <li class="recent-comments__row">
+                    <a class="recent-comments__quote" href="/threads/${item.threadId}#reply-${item.id}"
+                       data-starred-comment="${item.id}">"${item.snippet}"</a>
+                    <div class="recent-comments__meta">${item.threadTitle} · ${item.author}</div>
+                </li>
+            @endfor
+        </ul>
+    @endif
+    <a class="rail-box__footer-link" href="/starred">See all starred →</a>
+</section>

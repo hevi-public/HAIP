@@ -22,6 +22,15 @@ class ThreadRepository(private val jdbc: JdbcTemplate, private val clock: Clock)
         )
     }
 
+    /**
+     * Remove the thread row itself (§8). Dependents must already be gone: `comment.thread_id` and
+     * `thread_read.thread_id` both reference `thread(id)` with foreign_keys=on, so callers clear the
+     * comments ([CommentRepository.deleteByThread]) and read marker ([ThreadReadRepository.delete]) first.
+     */
+    fun delete(id: String) {
+        jdbc.update("DELETE FROM thread WHERE id = ?", id)
+    }
+
     fun find(id: String): Thread? =
         jdbc.query("SELECT id, title, body FROM thread WHERE id = ?", ::mapThread, id).firstOrNull()
 

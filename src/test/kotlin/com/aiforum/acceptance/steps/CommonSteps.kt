@@ -27,6 +27,7 @@ class CommonSteps(
     @Given("a thread {string} exists")
     fun threadExists(title: String) {
         world.threadId = data.insertThread(title)
+        world.threadIds[title] = world.threadId!!
     }
 
     @Given("a persona {string} exists")

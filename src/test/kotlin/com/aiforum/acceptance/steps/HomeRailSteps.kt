@@ -23,11 +23,13 @@ class HomeRailSteps(
         "active-threads" to "data-active-thread",
         "recent-comments" to "data-recent-comment",
         "forum-nav" to "data-nav-entry",
+        "starred-comments" to "data-starred-comment",
     )
     private val emptyAttr = mapOf(
         "members" to "data-members-empty",
         "active-threads" to "data-active-threads-empty",
         "recent-comments" to "data-recent-comments-empty",
+        "starred-comments" to "data-starred-comments-empty",
     )
 
     private fun entries(rail: String): List<String> =
@@ -40,6 +42,10 @@ class HomeRailSteps(
             "expected a \"$rail\" rail box (data-rail-box=\"$rail\") in:\n${body()}",
         )
     }
+
+    // Generic alias used by thread-page and any-page assertions (both pages share world.lastBody).
+    @Then("the page shows the {string} rail box")
+    fun pageShowsRailBox(rail: String) = frontPageShowsRailBox(rail)
 
     @Then("the {string} rail lists {int} entries")
     fun railListsEntries(rail: String, count: Int) {

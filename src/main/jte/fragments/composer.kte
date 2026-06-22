@@ -56,6 +56,7 @@
             <div class="palette__cap">commands · control how the reply is generated</div>
             <button type="button" class="palette__row" data-slash-cmd="branch"><span class="palette__key">/branch</span><span class="palette__desc">context = this branch</span></button>
             <button type="button" class="palette__row" data-slash-cmd="topic"><span class="palette__key">/topic</span><span class="palette__desc">context = whole topic</span></button>
+            <button type="button" class="palette__row" data-slash-cmd="note"><span class="palette__key">/note</span><span class="palette__desc">post your comment · no AI reply</span></button>
         </div>
 
         <%-- @mention menu (app.js shows + filters it while typing an @handle). Picking a row inserts the
