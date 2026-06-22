@@ -1,9 +1,10 @@
 Feature: Editing a comment, an AI reply, and the opening post
 
   The owner can revise a posted body (§7): their own note, or an AI persona's reply when it misread the
-  context — the corrected text then seeds future summons in that branch. Editing stamps an "(edited)"
-  marker (data-edited) and never touches the author or the tree structure. Only posted nodes are
-  editable, and a blank body is rejected. The opening post (title + body) is editable the same way.
+  context — the corrected text then seeds future summons in that branch. An edit is kept as a NEW version
+  (V14): the original take stays reachable via the ‹ › switcher, and the "(edited)" marker (data-edited)
+  tracks whichever version is shown. Editing never touches the author or the tree structure. Only posted
+  nodes are editable, and a blank body is rejected. The opening post (title + body) is editable the same way.
 
   Background:
     Given a thread "Ideas" exists
@@ -37,6 +38,16 @@ Feature: Editing a comment, an AI reply, and the opening post
     When the owner edits "sol"'s reply to say "Parent revised"
     Then "sol"'s reply body shows "Parent revised"
     And the thread still shows "owner"'s reply
+
+  Scenario: An edit is kept as a new version, leaving the original take intact
+    Given a posted reply from "sol" saying "First take"
+    When the owner edits "sol"'s reply to say "Corrected take"
+    Then "sol"'s reply body shows "Corrected take"
+    And "sol"'s reply is marked edited
+    And "sol"'s reply shows version 2 of 2
+    When the owner switches "sol"'s reply to version 1
+    Then "sol"'s reply body shows "First take"
+    And "sol"'s reply is not marked edited
 
   Scenario: A blank edit is rejected — the body is left untouched
     Given a posted reply from "sol" saying "Keep me"

@@ -1,9 +1,11 @@
 package com.aiforum.web
 
 import com.aiforum.domain.Comment
+import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReplyView
 import com.aiforum.repo.CommentRepository
+import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.VoteRepository
 import org.springframework.stereotype.Component
 
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Component
 class ReplyTreeAssembler(
     private val comments: CommentRepository,
     private val votes: VoteRepository,
+    private val personas: PersonaRepository,
 ) {
 
     /** Build the top-level reply views with their descendants nested, from the flat thread list. */
@@ -23,6 +26,11 @@ class ReplyTreeAssembler(
         val voteCounts = votes.countAll()
         val childrenByParent = all.groupBy { it.parentId }
         val byId = all.associateBy { it.id }
+        // Regenerate is offered only on a POSTED reply authored by a persona (not the owner or the system
+        // /more directive). Revision counts are read once for the whole thread; a comment with no stored
+        // revisions is an implicit 1-of-1, so the node shows no switcher (template gates on count > 1).
+        val personaIds = personas.findAll().map { it.id }.toSet()
+        val revisionCounts = all.firstOrNull()?.let { comments.revisionCountsByComment(it.threadId) } ?: emptyMap()
         // The "in reply to" anchor only earns its place when a reply is visually separated from the
         // comment it answers. A parent's FIRST child renders immediately under it (depth-first preorder),
         // so the quote would just echo the line above — redundant clutter. Later siblings get pushed
@@ -38,6 +46,8 @@ class ReplyTreeAssembler(
                 parent = if (isDirect) null else comment.parentId?.let { byId[it] }?.let {
                     ParentRef(it.id, it.authorId, ParentRef.previewOf(it.body))
                 },
+                revisionCount = (revisionCounts[comment.id] ?: 0).coerceAtLeast(1),
+                regeneratable = comment.state == GenerationState.POSTED && comment.authorId in personaIds,
             )
         // Top-level nodes answer the post, not a comment — treat them as direct so they carry no anchor.
         return childrenByParent[null].orEmpty().map { build(it, isDirect = true) }

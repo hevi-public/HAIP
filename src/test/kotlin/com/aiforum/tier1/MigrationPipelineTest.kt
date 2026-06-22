@@ -97,10 +97,11 @@ class MigrationPipelineTest {
                     assertEquals(null, rs.getString("updated_at"), "V11 leaves the pre-existing thread unedited (NULL)")
                 }
 
-                // flyway_schema_history records the full V1..V12 chain as applied.
+                // flyway_schema_history records the chain through the latest migration. V13 is reserved
+                // for the image-attachments branch, so this branch jumps V12 → V14 (Flyway allows the gap).
                 st.executeQuery("SELECT MAX(CAST(version AS INTEGER)) AS v FROM flyway_schema_history").use { rs ->
                     rs.next()
-                    assertEquals(12, rs.getInt("v"), "all twelve migrations should be recorded as applied")
+                    assertEquals(14, rs.getInt("v"), "the latest migration (V14) should be recorded as applied")
                 }
             }
         }

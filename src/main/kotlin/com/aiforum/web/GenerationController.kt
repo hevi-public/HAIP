@@ -50,6 +50,9 @@ class GenerationController(
     private val personas: PersonaRepository,
     private val comments: CommentRepository,
     private val branchIndex: BranchIndexBuilder,
+    // Regenerate/revision-nav re-render the node WITH its nested replies intact (a persona reply can have
+    // children), so they go through the subtree assembler like the edit path — not the leaf renderNode.
+    private val replyTree: ReplyTreeAssembler,
 ) {
 
     // Two handlers, one body type each: the browser composer posts application/x-www-form-urlencoded
@@ -121,6 +124,30 @@ class GenerationController(
     fun retry(@PathVariable id: String, model: Model): String {
         val reply = generation.retry(id)
         return renderNode(model, reply, comments.findById(id)?.threadId)
+    }
+
+    /**
+     * Regenerate a POSTED persona reply (§7), keeping prior versions: the service appends a content
+     * revision and shows it. The browser "Yes, regenerate" button outerHTML-swaps the closest <article>,
+     * so we re-render the WHOLE subtree (replyTree.subtree) — the new body lands while the nested replies
+     * survive the swap (a bare node would drop them). The revision count rises, so the node now shows the
+     * ‹ › switcher.
+     */
+    @PostMapping("/replies/{id}/regenerate")
+    fun regenerate(@PathVariable id: String, model: Model): String {
+        generation.regenerate(id)
+        return renderSubtree(model, id)
+    }
+
+    /**
+     * Switch a reply to a stored revision [idx] (0-based) — the ‹ › switcher. Pure DB (no LLM): the
+     * selected take's body becomes the live body, then the node re-renders with its subtree intact. A
+     * no-op for an out-of-range index (the node re-renders unchanged).
+     */
+    @PostMapping("/replies/{id}/revision/{idx}")
+    fun revision(@PathVariable id: String, @PathVariable idx: Int, model: Model): String {
+        comments.selectRevision(id, idx)
+        return renderSubtree(model, id)
     }
 
     /**
@@ -227,6 +254,20 @@ class GenerationController(
     private fun renderNode(model: Model, reply: ReplyView, threadId: String?): String {
         model.addAttribute("reply", reply)
         if (threadId != null) {
+            model.addAttribute("threadId", threadId)
+            model.addAttribute("personas", personaViews())
+            model.addAttribute("branchIndex", branchIndex.forThread(threadId))
+        }
+        return "fragments/replyNode"
+    }
+
+    // Like [renderNode] but preserves the node's nested replies through the outerHTML swap (regenerate /
+    // revision-nav can target a node that has children). Mirrors the edit path: assemble the subtree, then
+    // carry a fresh branch index OOB so the rail's snippet follows the now-changed body.
+    private fun renderSubtree(model: Model, id: String): String {
+        val node = replyTree.subtree(id) ?: return emptyNode(model)
+        model.addAttribute("reply", node)
+        comments.findById(id)?.threadId?.let { threadId ->
             model.addAttribute("threadId", threadId)
             model.addAttribute("personas", personaViews())
             model.addAttribute("branchIndex", branchIndex.forThread(threadId))
