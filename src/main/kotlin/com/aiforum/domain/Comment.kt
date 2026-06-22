@@ -5,6 +5,7 @@ import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReplyView
 import com.aiforum.markdown.MarkdownRenderer
+import java.time.Instant
 
 /** Persisted comment-tree node. */
 data class Comment(
@@ -24,6 +25,9 @@ data class Comment(
     // Owner's navigation bookmark (§7) — firewalled from the model like +1, never fed into a prompt.
     // Trailing default so positional constructors keep compiling; the star endpoint toggles it.
     val starred: Boolean = false,
+    // When the owner last edited this body (§7), or null if never edited (V11). Drives the "(edited)"
+    // marker on the node; only the edit endpoint stamps it, so a generation settle never sets it.
+    val updatedAt: Instant? = null,
 ) {
     fun toReplyView(
         voteCount: Int = 0,
@@ -43,6 +47,7 @@ data class Comment(
         depth = depth,
         depthBudget = depthBudget,
         starred = starred,
+        edited = updatedAt != null,
         parent = parent,
         children = children,
     )

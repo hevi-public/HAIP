@@ -8,6 +8,7 @@
 @param title: String
 @param body: String
 @param bodyHtml: String
+@param edited: Boolean = false
 @param replies: List<ReplyView>
 @param branchIndex: List<BranchIndexEntry>
 @param waitingOnRoom: Boolean
@@ -20,16 +21,9 @@
 @template.layout(title = title, activeNav = "threads", content = @`
     <div class="thread" data-thread-id="${threadId}" data-thread-title="${title}">
       <div class="thread__main">
-        <%-- The OP is a nav item: the root of the keyboard-nav tree (k/h/gg land here). data-nav-id +
-             id="reply-<threadId>" give it a permalink in the same #reply-<id> scheme replies use. --%>
-        <div class="thread__op" data-nav-item="post" data-nav-id="${threadId}" id="reply-${threadId}">
-            <h1 class="thread__title">${title}</h1>
-            @if(!body.isBlank())
-                <%-- bodyHtml is the OP body rendered from markdown (MarkdownRenderer escapes raw HTML), so
-                     $unsafe{} is safe here. Gate on the raw body so an all-whitespace OP stays hidden. --%>
-                <div class="thread__body" data-op-body>$unsafe{bodyHtml}</div>
-            @endif
-        </div>
+        <%-- The OP is a nav item and editable (§7); the block lives in its own fragment so an edit can
+             re-render just it. --%>
+        @template.fragments.threadOp(threadId = threadId, title = title, body = body, bodyHtml = bodyHtml, edited = edited)
         @if(summoning && replies.isEmpty())
             <%-- The create-time summon is still routing (the dispatcher's "who replies" call runs on a
                  worker), so there are no drafts yet. Poll /threads/{id}/room until they land; htmx then

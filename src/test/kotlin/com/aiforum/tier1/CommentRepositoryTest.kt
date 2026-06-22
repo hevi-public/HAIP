@@ -5,6 +5,7 @@ import com.aiforum.domain.Comment
 import com.aiforum.dto.GenerationState
 import com.aiforum.repo.CommentRepository
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -203,6 +204,35 @@ class CommentRepositoryTest {
     @Test
     fun `toggleStar on an unknown id is a no-op returning false`() {
         assertEquals(false, comments.toggleStar("does-not-exist"))
+    }
+
+    @Test
+    fun `editBody rewrites the body and stamps updated_at — a generation settle does not`() {
+        val thread = data.insertThread("Scaling SQLite")
+        val draft = Comment(
+            id = data.newId(), threadId = thread, parentId = null, authorId = "sol", body = "first take",
+            state = GenerationState.DRAFTING, failureCategory = null, depth = 0,
+        )
+        comments.insert(draft)
+
+        // A generation settle (update) rewrites the body but is NOT an owner edit — updated_at stays null.
+        comments.update(draft.copy(state = GenerationState.POSTED, body = "settled"))
+        comments.findById(draft.id)!!.let {
+            assertEquals("settled", it.body)
+            assertEquals(null, it.updatedAt)
+        }
+
+        // An owner edit rewrites the body and stamps updated_at, so the node renders the "(edited)" marker.
+        assertEquals(true, comments.editBody(draft.id, "corrected"))
+        comments.findById(draft.id)!!.let {
+            assertEquals("corrected", it.body)
+            assertNotNull(it.updatedAt)
+        }
+    }
+
+    @Test
+    fun `editBody on an unknown id is a no-op returning false`() {
+        assertEquals(false, comments.editBody("does-not-exist", "whatever"))
     }
 
     @Test

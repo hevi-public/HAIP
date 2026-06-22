@@ -856,6 +856,33 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 }
 .reply__delete-buttons { display: flex; align-items: center; gap: 8px; }
 
+/* edited marker — subtle, honest "the owner revised this body" (§7); muted so it never competes with
+   the author. Reused by the OP block's (edited) span too. */
+.reply__edited {
+  font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+  font-style: italic;
+}
+
+/* edit disclosure — same neutral trigger shape as Delete, but non-destructive (sage, not clay). The
+   form inside reuses the .composer styling, so the textarea matches the reply composer. */
+.reply__edit > summary {
+  display: inline-flex; align-items: center; gap: 6px;
+  list-style: none; cursor: pointer; width: max-content;
+  color: var(--muted);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  padding: 4px 12px; font-size: 12px;
+}
+.reply__edit > summary::-webkit-details-marker { display: none; }
+.reply__edit > summary::before { content: "✎"; }
+.reply__edit > summary:hover,
+.reply__edit[open] > summary { color: var(--ink); border-color: var(--sage); }
+.reply__edit[open] { flex-basis: 100%; }              /* the open form spans the action row */
+.reply__edit-form { margin-top: 8px; }
+.reply__edit-text { width: 100%; }
+.thread__op-edit-title { width: 100%; margin-bottom: 8px; }
+/* the OP head keeps the title and its (edited) marker on one baseline */
+.thread__op-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+
 /* danger button — the destructive confirm itself (clay fill, white text) */
 .btn--danger { background: var(--clay); color: #fff; border-color: var(--clay); }
 .btn--danger:hover { filter: brightness(1.05); }

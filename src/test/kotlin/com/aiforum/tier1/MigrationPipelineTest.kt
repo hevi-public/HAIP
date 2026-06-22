@@ -54,7 +54,7 @@ class MigrationPipelineTest {
             }
         }
 
-        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending V4–V10).
+        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending V4–V11).
         flyway(url, null).migrate()
 
         // 4. The old rows survived, and the new columns carry their migration default / backfill.
@@ -81,16 +81,24 @@ class MigrationPipelineTest {
                     assertEquals("", rs.getString("body"), "the pre-existing thread reads '' after V7/V8")
                 }
 
-                // The pre-existing comment survived and V9's NOT NULL DEFAULT 0 left it unstarred.
-                st.executeQuery("SELECT starred FROM comment WHERE id = 'C1'").use { rs ->
+                // The pre-existing comment survived and V9's NOT NULL DEFAULT 0 left it unstarred; V11's
+                // nullable updated_at leaves it NULL (never edited) so the "(edited)" marker stays off.
+                st.executeQuery("SELECT starred, updated_at FROM comment WHERE id = 'C1'").use { rs ->
                     rs.next()
                     assertEquals(0, rs.getInt("starred"), "V9 DEFAULT 0 applies to the pre-existing comment")
+                    assertEquals(null, rs.getString("updated_at"), "V11 leaves the pre-existing comment unedited (NULL)")
                 }
 
-                // flyway_schema_history records the full V1..V10 chain as applied.
+                // The pre-existing thread is likewise unedited after V11.
+                st.executeQuery("SELECT updated_at FROM thread WHERE id = 'T1'").use { rs ->
+                    rs.next()
+                    assertEquals(null, rs.getString("updated_at"), "V11 leaves the pre-existing thread unedited (NULL)")
+                }
+
+                // flyway_schema_history records the full V1..V11 chain as applied.
                 st.executeQuery("SELECT MAX(CAST(version AS INTEGER)) AS v FROM flyway_schema_history").use { rs ->
                     rs.next()
-                    assertEquals(10, rs.getInt("v"), "all ten migrations should be recorded as applied")
+                    assertEquals(11, rs.getInt("v"), "all eleven migrations should be recorded as applied")
                 }
             }
         }
