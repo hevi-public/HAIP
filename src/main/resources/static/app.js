@@ -1,34 +1,45 @@
 /*
- * Scribble-friendly composer auto-grow (ux brief §4): textareas rest generously, expand on focus, and
- * grow with content up to a cap, then scroll. Pure progressive enhancement — the form works without it.
- * Re-bound after every htmx swap so composers injected into the tree (beforeend) behave the same.
+ * Scribble-friendly textarea auto-grow (ux brief §4): textareas rest generously, expand on focus, and
+ * grow with content — plus one empty line of breathing room below the caret — up to a cap, then scroll.
+ * Covers the thread composers and the persona form's descriptor/prompt fields. Pure progressive
+ * enhancement — the forms work without it. Re-bound after every htmx swap so textareas injected into the
+ * tree (inline composers) or swapped in place (a regenerated prompt) behave the same.
  */
 (function () {
+  var SELECTOR = ".composer textarea, .new-persona__descriptor, .new-persona__prompt";
   var MAX = 220;          // desktop growth cap (px)
   var MAX_MOBILE = 180;
   var isMobile = function () { return window.matchMedia("(max-width: 600px)").matches; };
 
   function grow(el) {
     var cap = isMobile() ? MAX_MOBILE : MAX;
+    // One empty line of slack so the field is always content height + a blank line (a place to keep typing).
+    var line = parseFloat(getComputedStyle(el).lineHeight) || 0;
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, cap) + "px";
-    el.style.overflowY = el.scrollHeight > cap ? "auto" : "hidden";
+    var target = el.scrollHeight + line;
+    el.style.height = Math.min(target, cap) + "px";
+    el.style.overflowY = target > cap ? "auto" : "hidden";
   }
 
-  function bind(root) {
-    var fields = (root || document).querySelectorAll(".composer textarea");
-    for (var i = 0; i < fields.length; i++) {
-      var el = fields[i];
-      if (el.dataset.autogrow) continue;     // bind once
+  function bindOne(el) {
+    if (!el.dataset.autogrow) {              // bind listeners once
       el.dataset.autogrow = "1";
       el.addEventListener("input", function (e) { grow(e.target); });
       el.addEventListener("focus", function (e) { grow(e.target); });
-      grow(el);
     }
+    grow(el);                                // (re)size now — content may have just changed via a swap
+  }
+
+  function bind(root) {
+    root = root || document;
+    if (root.matches && root.matches(SELECTOR)) bindOne(root); // the swap target may BE a textarea
+    var fields = root.querySelectorAll(SELECTOR);
+    for (var i = 0; i < fields.length; i++) bindOne(fields[i]);
   }
 
   document.addEventListener("DOMContentLoaded", function () { bind(document); });
-  // htmx swaps in new composers (inline replies, re-rendered nodes) — re-bind the swapped subtree.
+  // htmx swaps in new composers (inline replies, re-rendered nodes) and fresh prompt text (Regenerate) —
+  // re-bind/re-grow the swapped element so it sizes to the new content.
   document.body.addEventListener("htmx:afterSwap", function (e) { bind(e.target); });
 })();
 
