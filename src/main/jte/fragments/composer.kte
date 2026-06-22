@@ -57,6 +57,7 @@
             <button type="button" class="palette__row" data-slash-cmd="branch"><span class="palette__key">/branch</span><span class="palette__desc">context = this branch</span></button>
             <button type="button" class="palette__row" data-slash-cmd="topic"><span class="palette__key">/topic</span><span class="palette__desc">context = whole topic</span></button>
             <button type="button" class="palette__row" data-slash-cmd="note"><span class="palette__key">/note</span><span class="palette__desc">post your comment · no AI reply</span></button>
+            <button type="button" class="palette__row" data-slash-cmd="ask"><span class="palette__key">/ask</span><span class="palette__desc">back to summoning · AI replies</span></button>
         </div>
 
         <%-- @mention menu (app.js shows + filters it while typing an @handle). Picking a row inserts the
@@ -95,6 +96,14 @@
     </div>
 
     <div class="composer__row">
+        <%-- One-click /note shortcut, left-anchored like /more on a reply. Same hook the slash palette
+             uses (data-slash-cmd="note"), so app.js's slash handler flips the composer into note mode —
+             the submit button relabels to "Note ▸" and the form posts to /note (no AI summon).
+             data-composer-shortcut is the stable assertion hook for the footer button itself. The hint
+             below carries margin-left:auto, so it and everything after it (spinner, Ask) sit on the
+             right while this button stays on the left. --%>
+        <button type="button" class="btn btn--ghost composer__shortcut"
+                data-slash-cmd="note" data-composer-shortcut="note">/note</button>
         <%-- When "Anyone" is chosen, this scopes what the dispatcher reads to decide WHO replies: the
              whole topic (default) or just this branch. Ignored when a specific persona is named. Inline
              only: the bottom composer is top-level (no ancestor path), so "this branch" == "whole topic"

@@ -13,3 +13,9 @@ Feature: Composer submit (form-encoded)
     When the owner submits the bottom composer with text "How do we scale?" selecting "sol"
     Then the reply is "posted"
     And the reply body contains "Indexes help here"
+
+  Scenario: The composer offers a one-click /note shortcut button
+    # /note is reachable from the slash palette (type "/"), but the owner also gets a visible
+    # footer button — like /more on a reply — so posting a note without summoning is one click.
+    When the owner uses the bottom composer
+    Then the composer offers a "/note" shortcut button

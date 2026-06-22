@@ -3,6 +3,8 @@
  * grow with content up to a cap, then scroll. Pure progressive enhancement — the form works without it.
  * Re-bound after every htmx swap so composers injected into the tree (beforeend) behave the same.
  */
+import { submitLabel, toggleLabel, toggleCmd, notePath } from "./composer-core.mjs";
+
 (function () {
   var MAX = 220;          // desktop growth cap (px)
   var MAX_MOBILE = 180;
@@ -211,14 +213,38 @@
     }
   });
 
-  // Restore a form that was put into note mode: swap hx-post back to /generate and reset the button.
-  function clearNoteMode(form) {
-    var orig = form.getAttribute("data-orig-hx-post");
-    if (orig) { form.setAttribute("hx-post", orig); form.removeAttribute("data-orig-hx-post"); }
-    form.removeAttribute("data-note-mode");
-    var btn = form.querySelector("button[type='submit']");
-    if (btn && btn.textContent === "Note ▸") btn.textContent = "Ask ▸";
+  // Apply a composer mode ("ask" | "note") to a form's two buttons: the submit verb and the footer
+  // toggle (its label + the command it now fires). Pure-logic decisions come from composer-core; this
+  // is just the DOM application. The endpoint swap is handled by the callers below.
+  function setComposerMode(form, mode) {
+    var submit = form.querySelector("button[type='submit']");
+    if (submit) submit.textContent = submitLabel(mode);
+    var toggle = form.querySelector("[data-composer-shortcut]");
+    if (toggle) {
+      toggle.textContent = toggleLabel(mode);
+      toggle.setAttribute("data-slash-cmd", toggleCmd(mode));
+      toggle.setAttribute("data-composer-shortcut", toggleCmd(mode));
+    }
   }
+
+  // Leave note mode: drop the marker and reset both buttons. The request URL is decided at submit time
+  // (htmx:configRequest below) from data-note-mode, so there's no hx-post attribute to restore.
+  function clearNoteMode(form) {
+    form.removeAttribute("data-note-mode");
+    setComposerMode(form, "ask");
+  }
+
+  // The note/ask switch, where it actually bites: rewrite the POST target to /note when the composer is
+  // in note mode. We do NOT mutate hx-post — htmx caches the form's path on process, so a setAttribute
+  // is silently ignored and the request still hits /generate (summoning the personas — the bug this
+  // fixes). configRequest fires at request time, so rewriting evt.detail.path here always takes effect.
+  document.body.addEventListener("htmx:configRequest", function (evt) {
+    var elt = evt.detail && evt.detail.elt;
+    var form = elt && elt.closest ? elt.closest("form[data-composer]") : null;
+    if (form && form.getAttribute("data-note-mode") === "1") {
+      evt.detail.path = notePath(evt.detail.path);
+    }
+  });
 
   // After a successful submit the composer resets — restore note-mode overrides so the next message
   // goes back through /generate unless the owner picks /note again.
@@ -237,17 +263,13 @@
       var ta = sForm.querySelector("[data-composer-text]");
       if (ta) replaceToken(ta, ""); // drop the "/cmd" the user was typing
       if (cmd === "note") {
-        // Switch the form endpoint to /note — no LLM will be summoned. Store the original so reset
-        // can restore it. Selecting /note clears any scope command (they only apply to /generate).
-        if (!sForm.getAttribute("data-orig-hx-post")) {
-          sForm.setAttribute("data-orig-hx-post", sForm.getAttribute("hx-post"));
-        }
-        sForm.setAttribute("hx-post", sForm.getAttribute("hx-post").replace(/\/generate$/, "/note"));
+        // Enter note mode: mark the form (the configRequest handler reads this to retarget the POST at
+        // /note, so no LLM is summoned) and relabel the buttons. No hx-post mutation — see below.
         sForm.setAttribute("data-note-mode", "1");
-        var btn = sForm.querySelector("button[type='submit']");
-        if (btn) btn.textContent = "Note ▸";
+        setComposerMode(sForm, "note");
       } else {
-        // Any non-note command clears note mode first (they're mutually exclusive).
+        // /ask explicitly returns to ask mode; /branch and /topic also leave note mode (their scope
+        // only applies to a real summon). clearNoteMode restores the /generate endpoint + relabels.
         clearNoteMode(sForm);
       }
       if (cmd === "branch" || cmd === "topic") {
