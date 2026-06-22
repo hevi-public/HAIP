@@ -1,0 +1,18 @@
+# Provider overlay: route generation through an OpenAI-compatible HTTP server (e.g. LM Studio serving a
+# local Gemma model) instead of the `claude -p` CLI — for environments with no Claude access.
+#
+# This profile sets ONLY the llm provider switch + model. It carries no datasource, and activating it
+# overrides `spring.profiles.default: dev`, so run it as an OVERLAY on a base profile (later profile wins):
+#
+#   SPRING_PROFILES_ACTIVE=dev,openai ./gradlew bootRun
+#
+# => provider=openai with the datasource/port from dev. The cli-only web-fetch-* keys are harmlessly ignored.
+aiforum:
+  llm:
+    provider: openai
+    # The exact model id the OpenAI-compatible server reports for the loaded model (in LM Studio: the id
+    # shown under Developer → Local Server). Per-persona PersonaRef.model still overrides this when set.
+    default-model: "gemma-3-4b"
+    openai:
+      base-url: http://localhost:1234/v1
+      api-key: ""

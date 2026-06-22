@@ -1,7 +1,7 @@
 package com.aiforum.llm
 
-import com.aiforum.domain.context.TranscriptRenderer
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 import java.io.File
@@ -25,6 +25,9 @@ import java.util.concurrent.TimeUnit
  */
 @Component
 @Profile("!test")
+// One of the two real LlmClients loads, chosen by `aiforum.llm.provider`: cli (this, the default) vs
+// openai ([OpenAiLlmClient]). matchIfMissing keeps `claude -p` the default when the key is absent.
+@ConditionalOnProperty(prefix = "aiforum.llm", name = ["provider"], havingValue = "cli", matchIfMissing = true)
 open class ProcessLlmClient(
     @Value("\${aiforum.llm.command:claude}") private val command: String,
     // `defaultModel` (not `model`) because the model is persona-specific (PersonaRef.model) — this is the
@@ -50,32 +53,6 @@ open class ProcessLlmClient(
         const val KILL_GRACE_MILLIS = 500L
         /** Once the process has exited, its pipes are at EOF; this bounds the reader join so no path can hang. */
         const val STREAM_GRACE_MILLIS = 2_000L
-
-        /**
-         * Length discipline appended to every render. Personas were defaulting to essay-length replies
-         * (a multi-paragraph wall with bullet lists for a one-line point), which makes a threaded forum
-         * unreadable. This asks for variety with a *concise* default — short by default, longer only when
-         * the substance earns it — without hard-capping, so a genuinely meaty reply can still breathe.
-         * It lives in the task prompt (not the stored per-persona system prompt) so it applies to every
-         * persona immediately, including ones already seeded into the DB.
-         */
-        const val BREVITY =
-            "Keep it concise and conversational, the way you'd actually talk in a thread: match the " +
-                "length to what you genuinely have to say. Most replies are a sentence or two; reach " +
-                "for a short paragraph only when the point really needs it, and avoid long bullet " +
-                "lists or essays. Don't restate the question or pad — make your point and stop."
-
-        /**
-         * Formatting steer for the renderer (MarkdownRenderer: commonmark + GraalJS highlight.js). This is
-         * best-effort quality only — the renderer stays correct if the model ignores it: a fence with no
-         * language degrades to a plain block, and raw HTML is escaped, not executed. Declaring the fence
-         * language is what lets a block come back syntax-highlighted; markdown tables (not raw HTML) are
-         * what render as real tables, since raw HTML in a body is deliberately inert.
-         */
-        const val FORMATTING =
-            "Write in GitHub-flavoured markdown. When you include code, always put it in a fenced block " +
-                "with the language on the opening fence (```kotlin, ```yaml, ```bash, …). Use markdown " +
-                "tables, not raw HTML."
     }
 
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
@@ -84,7 +61,9 @@ open class ProcessLlmClient(
         // Feed the prompt on stdin (the CLI reads it there in -p mode) then close. A broken pipe means
         // the process already died; the parser surfaces that from the exit code, so we don't fail here.
         try {
-            process.outputStream.use { it.write(renderPrompt(request.context, request.persona.name).toByteArray()) }
+            process.outputStream.use {
+                it.write(PromptRenderer.renderTask(request.context, request.persona.name).toByteArray())
+            }
         } catch (_: IOException) {
             // process exited before consuming stdin — classification below handles it
         }
@@ -156,33 +135,6 @@ open class ProcessLlmClient(
         if (webFetchEnabled) {
             val domains = webFetchAllowedDomains.split(",").map(String::trim).filter(String::isNotEmpty)
             if (domains.isEmpty()) add("WebFetch") else domains.forEach { add("WebFetch(domain:$it)") }
-        }
-    }
-
-    private fun renderPrompt(context: PromptContext, personaName: String): String {
-        val transcript = TranscriptRenderer.render(context.comments, context.targetId)
-        // Name the persona explicitly and point it at the target message: without this the model sees its
-        // own past lines labelled "$name:" amid the transcript and gets meta about who it is ("the framing
-        // got flipped"). The system prompt carries the character; this carries the task.
-        return if (transcript.isBlank()) {
-            "You are opening a new thread in the forum. Post the first message as $personaName, in " +
-                "character. $BREVITY $FORMATTING"
-        } else {
-            // Point the persona at the EXACT node it was summoned for (marked "← reply to this"), naming its
-            // ref. In whole-thread scope the target is rarely the last transcript line, so "the most recent
-            // message" would aim the reply at an unrelated branch — only fall back to that when no target is
-            // in scope (e.g. context built without one).
-            val targetRef = TranscriptRenderer.refOf(context.comments, context.targetId)
-            val task = if (targetRef != null) {
-                "Write ${personaName}'s next reply, responding to message [#$targetRef] (marked " +
-                    "\"${TranscriptRenderer.TARGET_MARKER.trim()}\" above). "
-            } else {
-                "Write ${personaName}'s next reply, responding to the most recent message above. "
-            }
-            "The forum discussion so far. Each line is \"[#ref] author: message\"; indentation shows " +
-                "reply depth and \"↳ replying to #n\" marks which message it answers:\n\n$transcript\n\n---\n" +
-                task +
-                "Reply with the message text only, in character as $personaName. $BREVITY $FORMATTING"
         }
     }
 
