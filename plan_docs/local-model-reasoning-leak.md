@@ -55,6 +55,10 @@ failure taxonomy (§4). The flag is persisted (`comment.reasoning_leak`, migrati
 1. **Source-side — `PromptRenderer`.** Every task prompt now instructs the persona to emit only the final
    message and, if it must reason, wrap it in `<think>…</think>` so it's machine-strippable. Applies to
    all personas immediately (it lives in the task prompt, not the stored per-persona system prompt).
+   Reinforced in **`ComposerPrompts.SYSTEM`**: the meta-prompt now tells the authoring model to end every
+   *composed* persona system prompt with the same no-visible-reasoning directive, so a persona carries it
+   itself even where the per-generation steer doesn't reach (newly created/edited personas; belt-and-
+   suspenders).
 2. **Request-side — `disable-thinking`.** `aiforum.llm.openai.disable-thinking: true` sends
    `chat_template_kwargs: { enable_thinking: false }`, turning reasoning **off at generation time**.
    Honoured only by models with a thinking switch in their chat template (Qwen3, vLLM/SGLang); a **no-op

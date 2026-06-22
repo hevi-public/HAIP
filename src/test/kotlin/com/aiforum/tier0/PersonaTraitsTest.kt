@@ -63,6 +63,16 @@ class PersonaTraitsTest {
     }
 
     @Test
+    fun `the composer system role bakes the no-visible-reasoning contract into every prompt it writes`() {
+        // Belt-and-suspenders: a composed persona carries the anti-leak directive itself, so it holds even
+        // where PromptRenderer's per-generation steer doesn't reach (see local-model-reasoning-leak.md).
+        val system = ComposerPrompts.SYSTEM.lowercase()
+        assertTrue(system.contains("only its") && system.contains("finished"), "must demand only the final message")
+        assertTrue(system.contains("no visible reasoning") || system.contains("thinking process"), "must forbid visible reasoning")
+        assertTrue(system.contains("<think>"), "must point reasoning at <think> tags so it stays strippable")
+    }
+
+    @Test
     fun `an edit instruction carries the previous prompt so the model adjusts rather than regenerates`() {
         val prior = PriorComposition(
             spec = PersonaSpec(name = "Vex", dials = mapOf("agreeableness" to 1)),
