@@ -1,5 +1,6 @@
 package com.aiforum.service
 
+import com.aiforum.domain.Attachment
 import com.aiforum.domain.Comment
 import com.aiforum.domain.budget.DepthBudget
 import com.aiforum.domain.context.ContextAssembler
@@ -13,6 +14,7 @@ import com.aiforum.llm.LlmClient
 import com.aiforum.llm.LlmRequest
 import com.aiforum.llm.PersonaRef
 import com.aiforum.llm.PromptContext
+import com.aiforum.repo.AttachmentRepository
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.ThreadRepository
@@ -46,6 +48,9 @@ class GenerationService(
     // needs to read it to seed the room. Nullable-defaulted so the 3/4-arg Tier-2 constructions (which
     // don't exercise OP context) keep compiling; Spring injects the real bean.
     private val threads: ThreadRepository? = null,
+    // Image attachments fold their captions into context (caption-only path). Nullable-defaulted for the
+    // same reason as [threads]; when null no captions are injected (the existing text-only behaviour).
+    private val attachments: AttachmentRepository? = null,
 ) {
     private val timeout = Duration.ofSeconds(120)
     private val log = LoggerFactory.getLogger(GenerationService::class.java)
@@ -236,7 +241,7 @@ class GenerationService(
                     persona = persona,
                     depth = leaf.depth + 1,
                     budget = DepthBudget.childBudget(leaf.depthBudget),
-                    context = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(threadId, context), targetId = leaf.id),
+                    context = assembleContext(threadId, persona.systemPrompt, withOpeningPost(threadId, context), targetId = leaf.id),
                 )
                 created += settleOne(plan, CancellationToken())
             }
@@ -247,7 +252,7 @@ class GenerationService(
     fun retry(replyId: String): ReplyView {
         val existing = comments.findById(replyId) ?: error("no reply $replyId")
         val persona = personas.find(existing.authorId) ?: error("unknown persona ${existing.authorId}")
-        val ctx = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(existing.threadId, comments.threadComments(existing.threadId)), targetId = existing.parentId)
+        val ctx = assembleContext(existing.threadId, persona.systemPrompt, withOpeningPost(existing.threadId, comments.threadComments(existing.threadId)), targetId = existing.parentId)
         val updated = try {
             val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name, persona.model), timeout), CancellationToken())
             resp.reasoningLeak?.let { log.warn("reasoning leak ({}) on retry of reply {} by persona {}", it, replyId, persona.id) }
@@ -360,7 +365,7 @@ class GenerationService(
                 persona = persona,
                 depth = baseDepth,
                 budget = baseBudget,
-                context = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(threadId, contextComments), targetId = parentId),
+                context = assembleContext(threadId, persona.systemPrompt, withOpeningPost(threadId, contextComments), targetId = parentId),
             )
         }
     }
@@ -383,6 +388,29 @@ class GenerationService(
                 .takeIf { it.isNotBlank() }
                 ?.let { Comment(threadId, threadId, null, OWNER_AUTHOR, it, GenerationState.POSTED, null, 0) }
         }
+
+    /**
+     * Assemble context with image captions folded in (caption-only path). Reads the attachments for the
+     * context comments plus the thread's own (the OP synthetic node carries id == threadId), and hands
+     * the map to the firewall boundary [ContextAssembler]. When [attachments] isn't wired (Tier-2
+     * constructions), the map is empty and this is exactly the old text-only assemble.
+     */
+    private fun assembleContext(
+        threadId: String,
+        systemPrompt: String,
+        contextComments: List<Comment>,
+        targetId: String?,
+    ) = ContextAssembler.assemble(systemPrompt, contextComments, targetId, attachmentMap(threadId, contextComments))
+
+    /** comment id -> its attachments, including the thread's own keyed under threadId (the OP node id). */
+    private fun attachmentMap(threadId: String, contextComments: List<Comment>): Map<String, List<Attachment>> {
+        val repo = attachments ?: return emptyMap()
+        // The OP synthetic node's id IS the threadId; its images live in thread-scoped rows, fetched
+        // separately. Every other node is a real comment, batch-read by id.
+        val byComment = repo.forComments(contextComments.map { it.id }.filter { it != threadId })
+        val opAttachments = repo.forThread(threadId)
+        return if (opAttachments.isEmpty()) byComment else byComment + (threadId to opAttachments)
+    }
 
     /** Prepend the opening post to [comments] (deduped) so it heads the context handed to the model. */
     private fun withOpeningPost(threadId: String, comments: List<Comment>): List<Comment> =

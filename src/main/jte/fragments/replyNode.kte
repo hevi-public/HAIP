@@ -77,6 +77,9 @@
     <%-- bodyHtml is markdown rendered to trusted HTML (MarkdownRenderer): raw HTML in a body is escaped
          there, so $unsafe{} here is safe — the only live HTML is commonmark's + our highlighted code. --%>
     <div class="body">$unsafe{reply.bodyHtml}</div>
+    <%-- Owner-attached images (caption-only to the model). Only an owner node shows the Describe control;
+         personas never attach images. Renders nothing when there are none. --%>
+    @template.fragments.attachments(attachments = reply.attachments, owner = reply.authorId == "owner")
     @if(reply.state == GenerationState.DRAFTING)
         <%-- in-flight affordance: a neutral Cancel that trips the shared CancellationToken (§4); the
              drafting indicator itself rides on the state badge above. --%>

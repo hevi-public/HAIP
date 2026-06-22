@@ -1034,3 +1034,64 @@ mark.nav-hit {
 }
 .nav-help td { padding: 3px 0; color: var(--muted); }
 .nav-help__hint { margin: 12px 0 0; font-size: 12px; color: var(--faint); }
+
+/* --- image attachments (gallery under a post/comment body) --------------------------------------- */
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0 2px;
+}
+.attachment {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* Cap each cell so a tall/wide image can't stretch the column; the image scales within it. */
+  max-width: min(320px, 100%);
+}
+.attachment__img {
+  display: block;
+  max-width: 100%;
+  /* Hard ceiling on height too, so a very tall image stays a thumbnail rather than a banner. The
+     image keeps its aspect ratio (object-fit) within the box. */
+  max-height: 320px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border: 1px solid var(--line-node);
+  border-radius: var(--r);
+  background: var(--card);
+}
+/* Caption is a markdown-rendered blockquote (the model's description; may contain a transcribed code
+   block). Quote chrome here; code-block token colours come from hljs-theme.css. */
+.attachment__caption {
+  margin: 0;
+  padding: 3px 0 3px 11px;
+  border-left: 2px solid var(--sage-2);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.attachment__caption > :first-child { margin-top: 0; }
+.attachment__caption > :last-child { margin-bottom: 0; }
+.attachment__caption p { margin: 0 0 8px; }
+.attachment__caption pre {
+  margin: 6px 0; border: 1px solid var(--line-node); border-radius: var(--r);
+  overflow: hidden; /* clip the inner scroll area to the rounded corners */
+}
+.attachment__caption pre code.hljs { font-family: var(--mono); font-size: 12px; line-height: 1.5; }
+.attachment__caption :not(pre) > code {
+  font-family: var(--mono); font-size: 11.5px;
+  padding: 1px 5px; border-radius: 4px; background: rgba(127, 127, 127, 0.14);
+}
+.attachment__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.attachment__state {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+}

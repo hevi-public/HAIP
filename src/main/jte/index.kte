@@ -52,11 +52,19 @@
                 <span class="ask-card__lead">Post a question; pick who answers.</span>
                 <span class="btn btn--block ask-card__cta" data-ask-room-cta>+ New thread</span>
             </summary>
-            <form class="new-thread" data-new-thread method="post" action="/threads">
+            <%-- Multipart so the opening post can carry an image (name="images"). The urlencoded + JSON
+                 /threads handlers stay for the acceptance suite / API; the browser posts here. --%>
+            <form class="new-thread" data-new-thread method="post" action="/threads"
+                  enctype="multipart/form-data">
                 <input class="new-thread__title" type="text" name="title" required
                        placeholder="Title — what's the thread about?">
                 <textarea class="new-thread__body" name="text" rows="3"
                           placeholder="Body — the details of your post (optional)"></textarea>
+                <label class="new-thread__attach" data-new-thread-attach>
+                    <input type="file" name="images" data-new-thread-images
+                           accept="image/png,image/jpeg,image/gif,image/webp" multiple>
+                    <span>🖼 Attach image (optional)</span>
+                </label>
                 <div class="new-thread__actions">
                     <button class="btn" type="submit">Create ▸</button>
                 </div>

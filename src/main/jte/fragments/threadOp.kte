@@ -1,8 +1,10 @@
+@import com.aiforum.dto.AttachmentView
 @param threadId: String
 @param title: String
 @param body: String
 @param bodyHtml: String
 @param edited: Boolean = false
+@param attachments: List<AttachmentView> = java.util.Collections.emptyList()
 
 <%-- The opening post block, extracted so the OP edit (§7) can re-render just this region. It is the root
      of the keyboard-nav tree (data-nav-item="post"; k/h/gg land here) and carries the #reply-<threadId>
@@ -21,6 +23,8 @@
              $unsafe{} is safe here. Gate on the raw body so an all-whitespace OP stays hidden. --%>
         <div class="thread__body" data-op-body>$unsafe{bodyHtml}</div>
     @endif
+    <%-- Opening-post images. The OP is always owner-authored, so the Describe control is shown. --%>
+    @template.fragments.attachments(attachments = attachments, owner = true)
     <%-- Edit the post: title + body. Save posts to /threads/{id}/edit and swaps this block in place;
          Cancel closes the disclosure with no request. A blank title is rejected server-side (the post
          keeps a title); the body may be emptied. --%>

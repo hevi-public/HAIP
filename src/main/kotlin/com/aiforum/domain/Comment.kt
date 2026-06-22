@@ -1,5 +1,6 @@
 package com.aiforum.domain
 
+import com.aiforum.dto.AttachmentView
 import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
@@ -37,6 +38,7 @@ data class Comment(
         voteCount: Int = 0,
         children: List<ReplyView> = emptyList(),
         parent: ParentRef? = null,
+        attachments: List<AttachmentView> = emptyList(),
     ) = ReplyView(
         id = id,
         authorId = authorId,
@@ -55,5 +57,6 @@ data class Comment(
         edited = updatedAt != null,
         parent = parent,
         children = children,
+        attachments = attachments,
     )
 }

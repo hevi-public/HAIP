@@ -99,6 +99,16 @@ Defence-in-depth is built in regardless — leaked reasoning is stripped where p
 than silently. Full investigation, the parsing/flagging design, and the model rationale:
 [`plan_docs/local-model-reasoning-leak.md`](plan_docs/local-model-reasoning-leak.md).
 
+### Image captions (vision)
+
+Attached images are **caption-only** to the room: a separate vision model turns an image into text and
+that caption (never the raw bytes) is what reaches the generation models — so any chat model works.
+Captioning is manual (the owner clicks "Describe") and **on by default**, but needs a vision-capable model
+served at `aiforum.images.vision.base-url` (defaults to the same LM Studio server as generation; load a
+vision model and leave `vision.model` blank to use the loaded one). Until one is up, "Describe" surfaces a
+clear failure. A caption that transcribes a code screenshot renders as a syntax-highlighted code block
+inside a quote. Full design: [`plan_docs/image-attachments.md`](plan_docs/image-attachments.md).
+
 **Discovery mode** — let a sea of red run without failing the build (useful while scaffolding):
 
 ```bash
@@ -138,6 +148,7 @@ fully green, with nothing left tagged `@wip`:
 - New-thread creation (owner starts a thread and asks the room)
 - Personas & admin (view a persona profile, admin adds a persona)
 - Empty-state & unread badges (fresh-forum empty state, thread unread count)
+- Image attachments — caption-only to the model (the caption, never the bytes, reaches the room — spy-asserted), a transcribed code caption renders as a code block inside a quote, delete is FK-clean
 
 ## Project layout
 
@@ -149,7 +160,8 @@ src/main/kotlin/com/aiforum/
   dto/        ReplyView + enums (the frozen view-contract)
   repo/       JdbcTemplate repositories (recursive CTEs)
   service/    GenerationService (orchestration)
-  web/        controllers (generation, owner controls, diagnostics)
+  web/        controllers (generation, owner controls, attachments, diagnostics)
+  images/     ImageStore (content-addressed disk blobs under ~/.haip) + ImageDescriber vision seam
   config/     ClockConfig, ProfileGuard, DataDirectoryInitializer (auto-creates the SQLite data dir
               at startup), PersonaSeeder + PersonaSeedProperties (seeds the default persona team)
 src/main/jte/ layout.kte (page shell + htmx) · fragments/ (composer, replyNode, replyList) — stable data-* hooks

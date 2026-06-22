@@ -6,6 +6,13 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  servlet:
+    multipart:
+      # Caps for image uploads (the only multipart in the app). max-file-size bounds one image;
+      # max-request-size the whole form (several images + the text fields). aiforum.images.max-bytes
+      # is the in-app guard the ImageStore also enforces after sniffing the bytes.
+      max-file-size: 10MB
+      max-request-size: 40MB
 
 # JTE templates are compiled at build time by the gg.jte.gradle plugin (see the jte-spring-kotlin
 # skill), so at runtime we load the precompiled classes rather than compiling in-process — no
@@ -17,6 +24,33 @@ gg:
 aiforum:
   backups:
     enabled: true
+  # Image attachments. Bytes live on disk under `dir` (content-addressed); only metadata is in SQLite.
+  # The prod path is the base default (~/.haip/data/images, sibling of the DB); dev/test override it to a
+  # project-local / build dir (see application-{dev,test}.yml). ${user.home} is Spring-resolved, so a
+  # literal `~` never reaches the filesystem.
+  images:
+    dir: ${user.home}/.haip/data/images
+    max-bytes: 10485760        # 10 MiB; the ImageStore rejects anything larger after magic-byte sniffing
+    # Vision captioning (MANUAL — the owner clicks "Describe"). The caption is injected into LLM context
+    # as text; raw bytes never reach generation models (caption-only design). Enabled by default, but it
+    # still needs a vision-capable model SERVING at the base-url below — bring one up (you'll see a clear
+    # error on "Describe" until then). base-url/api-key fall back to the generation OpenAI server, so one
+    # LM Studio can serve both.
+    describe:
+      enabled: true
+    vision:
+      base-url: ${aiforum.llm.openai.base-url:http://localhost:1234/v1}
+      api-key: ${aiforum.llm.openai.api-key:}
+      # The model to caption with. Blank => send no specific model and let the server use its loaded one
+      # (LM Studio does this, same as the generation client). Set a real id for hosted servers.
+      model: ""
+      max-tokens: 512
+      # The instruction sent to the vision model. The caption it returns is injected into LLM context,
+      # used as the image's alt text, AND rendered as markdown (so it can carry a fenced code block).
+      prompt: >-
+        Describe this image factually and concisely for a reader who cannot see it. If it shows code, a
+        terminal, or a config/log file, transcribe it verbatim inside a fenced markdown code block with
+        the correct language tag. Note any other text, diagrams, charts, or UI shown.
   # Predefined personas seeded into the DB on first startup if they don't already exist (see
   # PersonaSeeder; skipped under the test profile). A small product team for a Kotlin + Spring Boot +
   # PostgreSQL backend with an Angular frontend and Playwright UI tests. Skills overlap on purpose so

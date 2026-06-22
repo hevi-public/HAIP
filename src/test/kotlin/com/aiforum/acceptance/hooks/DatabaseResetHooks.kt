@@ -1,6 +1,7 @@
 package com.aiforum.acceptance.hooks
 
 import com.aiforum.acceptance.config.FailingRepositoryToggle
+import com.aiforum.acceptance.config.ScriptableImageDescriber
 import com.aiforum.acceptance.config.ScriptableLlmClient
 import com.aiforum.service.InFlightGenerations
 import io.cucumber.java.Before
@@ -18,6 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 class DatabaseResetHooks(
     private val jdbc: JdbcTemplate,
     private val llm: ScriptableLlmClient,
+    private val describer: ScriptableImageDescriber,
     private val failingRepo: FailingRepositoryToggle,
     private val inFlight: InFlightGenerations,
 ) {
@@ -29,8 +31,8 @@ class DatabaseResetHooks(
 
     @Before(order = 0)
     fun resetDatabase() {
-        // children before parents (foreign_keys=on)
-        listOf("vote", "event_log", "comment", "thread_read", "thread", "persona").forEach {
+        // children before parents (foreign_keys=on) — attachment references comment+thread, so first.
+        listOf("attachment", "vote", "event_log", "comment", "thread_read", "thread", "persona").forEach {
             jdbc.update("DELETE FROM $it")
         }
     }
@@ -38,6 +40,7 @@ class DatabaseResetHooks(
     @Before(order = 10)
     fun resetFakes() {
         llm.reset()
+        describer.reset()
         failingRepo.clear()
     }
 }
