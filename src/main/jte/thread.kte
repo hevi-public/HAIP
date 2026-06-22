@@ -1,6 +1,8 @@
 @import com.aiforum.dto.ReplyView
 @import com.aiforum.dto.BranchIndexEntry
 @import com.aiforum.web.PersonaView
+@import com.aiforum.web.ActiveThreadRow
+@import com.aiforum.web.RecentCommentRow
 @param threadId: String
 @param title: String
 @param body: String
@@ -9,6 +11,8 @@
 @param branchIndex: List<BranchIndexEntry>
 @param waitingOnRoom: Boolean
 @param personas: List<PersonaView>
+@param recentComments: List<RecentCommentRow>
+@param activeThreads: List<ActiveThreadRow>
 
 @template.layout(title = title, activeNav = "threads", content = @`
     <div class="thread" data-thread-id="${threadId}" data-thread-title="${title}">
@@ -42,12 +46,18 @@
         </div>
         @template.fragments.composer(placement = "bottom", targetId = threadId, parentId = null, scope = "WHOLE_THREAD", threadId = threadId, personas = personas)
       </div>
-      <%-- Side rail. Always present — the branch index box shows an empty state before anything is
-           posted, so the layout doesn't pop from one column to two when the first reply lands. The
-           grid is two columns whenever the rail is there — see .thread:has(.thread__rail) in app.css. --%>
+      <%-- Left rail: this thread's navigation — the branch index (a TOC/minimap of the posted nodes) and
+           the context legend. Mirrors the home page's left rail, which carries navigation. Always present:
+           the branch-index box shows an empty state before anything is posted, so the layout doesn't pop. --%>
       <aside class="thread__rail" data-thread-rail>
           @template.fragments.branchIndex(entries = branchIndex)
           @template.fragments.contextLegend()
+      </aside>
+      <%-- Right rail: forum-wide feeds — the same boxes, on the same side, as the home page's right rail,
+           so "what's happening elsewhere" lives in one consistent place across pages. --%>
+      <aside class="thread__rail-right" data-thread-rail-right>
+          @template.fragments.recentCommentsBox(comments = recentComments)
+          @template.fragments.activeThreadsBox(threads = activeThreads)
       </aside>
     </div>
 `)

@@ -338,14 +338,16 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 .ask-card__lead { font-size: 12px; color: var(--muted); }
 /* Once open, the form below is the action — the CTA has done its job, so retire it. */
 .ask-card[open] .ask-card__cta { display: none; }
-.ask-card .new-thread {
+.ask-card .new-thread,
+.ask-card .new-persona {
   margin-top: 12px; padding: 0; background: none; border: none; box-shadow: none;   /* no nested card */
 }
 
-/* New-thread composer — a card below the thread list. Stacked: a small label, the title line, then a
-   roomier body box, with the Create button right-aligned below. Shares the card chrome of the thread
-   index it sits under. */
-.new-thread {
+/* New-thread / new-member composers — a card below the index list. Stacked fields with the submit button
+   right-aligned below; the new-member card adds a model picker beside its button. Shares the card chrome
+   of the index it sits under (dropped when nested in an .ask-card, above). */
+.new-thread,
+.new-persona {
   display: flex; flex-direction: column; gap: 9px;
   background: var(--card);
   border: 1px solid var(--line);
@@ -358,20 +360,34 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   font-family: var(--mono); font-size: 10px; font-weight: 700;
   letter-spacing: .04em; text-transform: uppercase; color: #6b6e48;
 }
-.new-thread__title, .new-thread__body {
+.new-thread__title, .new-thread__body,
+.new-persona__name, .new-persona__descriptor, .new-persona__abilities, .new-persona__prompt {
   width: 100%; box-sizing: border-box;
   background: var(--input); color: var(--ink);
   border: 1px solid var(--sage-2); border-radius: var(--r);
   font-family: var(--sans);
   padding: 9px 11px;
 }
-.new-thread__title { font-size: 15px; font-weight: 700; }
-.new-thread__body {
+.new-thread__title, .new-persona__name { font-size: 15px; font-weight: 700; }
+.new-thread__body, .new-persona__descriptor, .new-persona__prompt {
   font-size: 13.5px; line-height: 1.6;
   resize: vertical; min-height: 70px;
 }
-.new-thread__title:focus, .new-thread__body:focus { outline: none; border-color: #9aa882; }
+.new-thread__title:focus, .new-thread__body:focus,
+.new-persona__name:focus, .new-persona__descriptor:focus,
+.new-persona__abilities:focus, .new-persona__prompt:focus { outline: none; border-color: #9aa882; }
 .new-thread__actions { display: flex; justify-content: flex-end; }
+/* The member form pairs a model picker (left) with the actions group (right). */
+.new-persona__actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* Cancel / Regenerate / Save grouped on the right, Regenerate adjacent to Save (the gated next step). */
+.new-persona__buttons { display: flex; align-items: center; gap: 10px; }
+.new-persona__model {
+  background: var(--input); color: var(--ink);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  font-family: var(--sans); font-size: 13px;
+  padding: 8px 10px;
+}
+.new-persona__model:focus { outline: none; border-color: #9aa882; }
 
 .thread-index {
   background: var(--card);
@@ -405,23 +421,32 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 .member-row .reply__handle { margin-left: auto; color: var(--muted); }
 
 /* ---------------------------------------------------------------- thread */
-/* Two-region scaffold: main reply column + a reserved side rail. The rail is `hidden` until it gets
-   content, so today the main column spans the full width. Dropping boxes into .thread__rail (and
-   dropping the `hidden` attr) flips it to two columns with zero further layout work — the future
-   side boxes are "factored in" here. */
+/* Three-region scaffold mirroring the home page's left:nav / main / right:feeds frame. The LEFT rail
+   carries this thread's navigation (branch index + context legend); the RIGHT rail carries the
+   forum-wide feeds (recent comments + active threads) — the same boxes, same side, as the home page.
+   Below the breakpoint everything stacks to one column (main, then both rails in DOM order). */
 .thread { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gutter); align-items: start; }
 .thread__main { min-width: 0; }   /* let the grid track shrink the tree instead of overflowing */
-@media (min-width: 1000px) {       /* two columns when there's room; rail stacks below on narrow screens */
-  .thread:has(.thread__rail) { grid-template-columns: minmax(0, 1fr) var(--rail); }
-}
-.thread__rail { display: flex; flex-direction: column; gap: 14px; }
-@media (min-width: 1000px) {       /* rail follows as the tree scrolls and caps to the viewport. Rather than
-                                      scrolling the whole rail, only the branch-index list scrolls inside its
-                                      own box, so the context legend below stays visible however long the index
-                                      gets (a sticky rail taller than the viewport would pin its top and hide
-                                      its tail). The branch-index box is the one allowed to shrink; the legend
-                                      holds its full height. */
-  .thread__rail { position: sticky; top: 18px; max-height: calc(100vh - 36px); }
+.thread__rail, .thread__rail-right { display: flex; flex-direction: column; gap: 14px; }
+@media (min-width: 1024px) {       /* three columns when there's room; rails stack below on narrow screens */
+  .thread {
+    grid-template-columns: var(--rail) minmax(0, 1fr) 248px;
+    grid-template-areas: "left main right";
+  }
+  .thread__main { grid-area: main; }
+  .thread__rail { grid-area: left; }
+  .thread__rail-right { grid-area: right; }
+  /* Both rails follow as the tree scrolls. In the LEFT rail, rather than scrolling the whole rail, only
+     the branch-index list scrolls inside its own box, so the context legend below stays visible however
+     long the index gets (a sticky rail taller than the viewport would pin its top and hide its tail).
+     The branch-index box is the one allowed to shrink; the legend holds its full height. The RIGHT
+     feeds rail just pins its top like the home page's right rail (no internal scroll). */
+  .thread__rail, .thread__rail-right { position: sticky; top: 18px; }
+  /* Cap to the visible space so the legend never drops below the fold. The header (48px) isn't sticky,
+     so at the top of the page the rail sits at 48 + 20 (container top pad) = 68px down — its tallest
+     offset from the viewport. Budget that plus an 18px bottom gap (68 + 18 = 86). Once scrolled, the
+     header leaves and the rail pins to top:18 with room to spare; this cap just stays conservative. */
+  .thread__rail { max-height: calc(100vh - 86px); }
   .thread__rail .rail-box[data-rail-box="branch-index"] { display: flex; flex-direction: column; min-height: 0; }
   .thread__rail .rail-box[data-rail-box="branch-index"] .branch-index { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .thread__rail .rail-box[data-rail-box="context-legend"] { flex-shrink: 0; }

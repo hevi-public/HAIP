@@ -258,16 +258,18 @@
 })();
 
 /*
- * New-thread form (home page): Enter submits, Shift+Enter inserts a newline in the body — the same
- * keyboard contract the composer gives its textarea above, so the two text-entry surfaces feel
- * identical. The title <input> already submits on Enter natively, but the body <textarea> would just
- * insert a newline; this extends the submit gesture to both fields. requestSubmit() fires a real submit
- * event (running validation + the action). Pure progressive enhancement — the Create button still works
- * with JS off.
+ * New-thread / new-member forms: Enter submits, Shift+Enter inserts a newline in the body/descriptor —
+ * the same keyboard contract the composer gives its textarea above, so the text-entry surfaces feel
+ * identical. The first <input> already submits on Enter natively, but the <textarea> would just insert a
+ * newline; this extends the submit gesture to both fields. requestSubmit() fires a real submit event
+ * (running validation + the action). Pure progressive enhancement — the submit button still works with
+ * JS off.
  */
 (function () {
   document.body.addEventListener("keydown", function (e) {
-    var field = e.target.closest("[data-new-thread] input, [data-new-thread] textarea");
+    var field = e.target.closest(
+      "[data-new-thread] input, [data-new-thread] textarea, [data-new-persona] input, [data-new-persona] textarea"
+    );
     if (!field || e.key !== "Enter" || e.shiftKey) return;
     e.preventDefault();
     var form = field.closest("form");
