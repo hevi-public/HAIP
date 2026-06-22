@@ -1,0 +1,48 @@
+@param threadId: String
+@param title: String
+@param body: String
+@param bodyHtml: String
+@param edited: Boolean = false
+
+<%-- The opening post block, extracted so the OP edit (§7) can re-render just this region. It is the root
+     of the keyboard-nav tree (data-nav-item="post"; k/h/gg land here) and carries the #reply-<threadId>
+     permalink. The OP edit form outerHTML-swaps this whole div (hx-target="#reply-<threadId>"), so the
+     POST returns exactly this fragment. data-edited mirrors a comment's marker hook. --%>
+<div class="thread__op" data-nav-item="post" data-nav-id="${threadId}" id="reply-${threadId}"
+     data-edited="${edited.toString()}">
+    <div class="thread__op-head">
+        <h1 class="thread__title">${title}</h1>
+        @if(edited)
+            <span class="reply__edited" data-edited-marker>(edited)</span>
+        @endif
+    </div>
+    @if(!body.isBlank())
+        <%-- bodyHtml is the OP body rendered from markdown (MarkdownRenderer escapes raw HTML), so
+             $unsafe{} is safe here. Gate on the raw body so an all-whitespace OP stays hidden. --%>
+        <div class="thread__body" data-op-body>$unsafe{bodyHtml}</div>
+    @endif
+    <%-- Edit the post: title + body. Save posts to /threads/{id}/edit and swaps this block in place;
+         Cancel closes the disclosure with no request. A blank title is rejected server-side (the post
+         keeps a title); the body may be emptied. --%>
+    <details class="thread__op-edit reply__edit">
+        <summary class="reply__edit-trigger">Edit post</summary>
+        <form class="composer composer--inline reply__edit-form" data-edit-op="${threadId}"
+              hx-post="/threads/${threadId}/edit"
+              hx-target="#reply-${threadId}"
+              hx-swap="outerHTML"
+              hx-disabled-elt="find button[type='submit']">
+            <input type="text" name="title" class="thread__op-edit-title" value="${title}"
+                   aria-label="Post title">
+            <div class="composer__editor">
+                <textarea name="text" class="reply__edit-text" data-edit-text
+                          placeholder="Opening post (optional)">${body}</textarea>
+            </div>
+            <div class="composer__row">
+                <span class="composer__hint">Edit the title and opening post.</span>
+                <button type="button" class="btn btn--ghost"
+                        onclick="this.closest('details').open = false">Cancel</button>
+                <button class="btn" type="submit">Save ▸</button>
+            </div>
+        </form>
+    </details>
+</div>

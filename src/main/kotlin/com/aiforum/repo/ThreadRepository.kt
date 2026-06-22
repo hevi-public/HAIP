@@ -4,12 +4,17 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
 import java.sql.ResultSet
 import java.time.Clock
+import java.time.Instant
 
 @Repository
 class ThreadRepository(private val jdbc: JdbcTemplate, private val clock: Clock) {
 
     // body is the opening post's content (§2, V7) — may be blank for title-only / legacy threads.
-    data class Thread(val id: String, val title: String, val body: String)
+    // updatedAt is when the owner last edited the OP (title/body), or null if never (V11) — drives the
+    // "(edited)" marker on the post, same as a comment's.
+    data class Thread(val id: String, val title: String, val body: String, val updatedAt: Instant? = null) {
+        val edited: Boolean get() = updatedAt != null
+    }
 
     // A thread ranked by recent activity for the front-page rail; lastActivity is the ISO instant of
     // the newest POSTED comment, falling back to the thread's own creation when it has no replies yet.
@@ -31,11 +36,22 @@ class ThreadRepository(private val jdbc: JdbcTemplate, private val clock: Clock)
         jdbc.update("DELETE FROM thread WHERE id = ?", id)
     }
 
+    /**
+     * Edit the opening post (§7): the owner revises the thread title and/or body. Stamps updated_at so
+     * the post renders the "(edited)" marker. Returns true if a row was updated. created_at is untouched
+     * (the OP keeps its place in the activity ranking).
+     */
+    fun updateOp(id: String, title: String, body: String): Boolean =
+        jdbc.update(
+            "UPDATE thread SET title=?, body=?, updated_at=? WHERE id=?",
+            title, body, clock.instant().toString(), id,
+        ) > 0
+
     fun find(id: String): Thread? =
-        jdbc.query("SELECT id, title, body FROM thread WHERE id = ?", ::mapThread, id).firstOrNull()
+        jdbc.query("SELECT id, title, body, updated_at FROM thread WHERE id = ?", ::mapThread, id).firstOrNull()
 
     fun findAll(): List<Thread> =
-        jdbc.query("SELECT id, title, body FROM thread ORDER BY created_at DESC", ::mapThread)
+        jdbc.query("SELECT id, title, body, updated_at FROM thread ORDER BY created_at DESC", ::mapThread)
 
     /**
      * Threads most recently active first, capped at [limit]. Activity = newest POSTED comment, or the
@@ -56,5 +72,8 @@ class ThreadRepository(private val jdbc: JdbcTemplate, private val clock: Clock)
         )
 
     private fun mapThread(rs: ResultSet, @Suppress("UNUSED_PARAMETER") rowNum: Int) =
-        Thread(rs.getString("id"), rs.getString("title"), rs.getString("body"))
+        Thread(
+            rs.getString("id"), rs.getString("title"), rs.getString("body"),
+            rs.getString("updated_at")?.let { Instant.parse(it) },
+        )
 }

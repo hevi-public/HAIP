@@ -1,9 +1,7 @@
 package com.aiforum.web
 
-import com.aiforum.domain.Comment
 import com.aiforum.dto.BranchIndexEntry
 import com.aiforum.dto.GenerationState
-import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReplyView
 import com.aiforum.dto.ScopeMode
 import com.aiforum.dto.Snippet
@@ -12,7 +10,6 @@ import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.ThreadReadRepository
 import com.aiforum.repo.ThreadRepository
-import com.aiforum.repo.VoteRepository
 import com.aiforum.service.GenerationService
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Controller
@@ -21,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
 import java.util.UUID
 
@@ -45,10 +43,10 @@ class ThreadController(
     private val threads: ThreadRepository,
     private val comments: CommentRepository,
     private val personas: PersonaRepository,
-    private val votes: VoteRepository,
     private val threadReads: ThreadReadRepository,
     private val generation: GenerationService,
     private val railFeeds: RailFeeds,
+    private val replyTree: ReplyTreeAssembler,
 ) {
 
     // Two bindings, one creation path: the browser's new-thread form posts form-urlencoded and wants a
@@ -57,7 +55,7 @@ class ThreadController(
     @PostMapping("/threads", consumes = [MediaType.APPLICATION_JSON_VALUE])
     fun createJson(@RequestBody req: CreateThreadRequest, model: Model): String {
         val id = newThread(req.title, req.text)
-        return renderThread(id, req.title, req.text, model)
+        return renderThread(id, req.title, req.text, edited = false, model = model)
     }
 
     @PostMapping("/threads", consumes = [MediaType.APPLICATION_FORM_URLENCODED_VALUE])
@@ -113,20 +111,52 @@ class ThreadController(
     fun view(@PathVariable id: String, model: Model): String {
         val thread = threads.find(id) ?: return "redirect:/"
         threadReads.markRead(id)
-        return renderThread(thread.id, thread.title, thread.body, model)
+        return renderThread(thread.id, thread.title, thread.body, thread.edited, model)
     }
 
-    private fun renderThread(id: String, title: String, body: String, model: Model): String {
+    /**
+     * Edit the opening post (§7): the owner revises the thread title and/or body. The OP edit form
+     * (rendered inline in the post block) outerHTML-swaps the post block with the re-rendered fragment,
+     * so the marker and updated text appear in place. A blank title is rejected — the OP must keep a
+     * title — by re-rendering the post unchanged; the body may be emptied.
+     */
+    @PostMapping("/threads/{id}/edit", consumes = [MediaType.APPLICATION_FORM_URLENCODED_VALUE])
+    fun editOp(
+        @PathVariable id: String,
+        @RequestParam(required = false) title: String?,
+        @RequestParam(required = false) text: String?,
+        model: Model,
+    ): String {
+        val thread = threads.find(id) ?: return "redirect:/"
+        val newTitle = title?.trim().orEmpty()
+        if (newTitle.isNotBlank()) {
+            threads.updateOp(id, newTitle, text.orEmpty())
+        }
+        val updated = threads.find(id) ?: thread
+        return renderOp(updated, model)
+    }
+
+    private fun renderOp(thread: ThreadRepository.Thread, model: Model): String {
+        model.addAttribute("threadId", thread.id)
+        model.addAttribute("title", thread.title)
+        model.addAttribute("body", thread.body)
+        model.addAttribute("bodyHtml", MarkdownRenderer.render(thread.body))
+        model.addAttribute("edited", thread.edited)
+        return "fragments/threadOp"
+    }
+
+    private fun renderThread(id: String, title: String, body: String, edited: Boolean, model: Model): String {
         val all = comments.threadComments(id)
         model.addAttribute("threadId", id)
         model.addAttribute("title", title)
         model.addAttribute("body", body)
         model.addAttribute("bodyHtml", MarkdownRenderer.render(body))
+        model.addAttribute("edited", edited)
         // Nest replies under their parents so the page reflects the comment tree (a persona reply sits
         // under the message it answered). replyNode.kte renders reply.children recursively; the flat
         // list it gets here was rendering every node at level 0. Children keep their repository order
         // (depth, created_at), so siblings stay chronological.
-        val tree = assembleTree(all)
+        val tree = replyTree.assemble(all)
         // The room is summoned on creation (async); its DRAFTING replies live only in the in-flight
         // registry until they settle — no DRAFTING DB row exists. Surface them at the top level so a plain
         // page load (e.g. the PRG redirect after create) shows the room responding: each drafting node
@@ -187,30 +217,5 @@ class ThreadController(
         }
         tree.forEach(::walk)
         return out
-    }
-
-    /** Build the top-level reply views with their descendants nested, from the flat thread list. */
-    private fun assembleTree(all: List<Comment>): List<ReplyView> {
-        val voteCounts = votes.countAll()
-        val childrenByParent = all.groupBy { it.parentId }
-        val byId = all.associateBy { it.id }
-        // The "in reply to" anchor only earns its place when a reply is visually separated from the
-        // comment it answers. A parent's FIRST child renders immediately under it (depth-first preorder),
-        // so the quote would just echo the line above — redundant clutter. Later siblings get pushed
-        // down past the first child's whole sub-thread, so the anchor re-establishes "who am I answering"
-        // (the owner's UX ask). isDirect = "renders right under its parent" = is the parent's first child.
-        fun build(comment: Comment, isDirect: Boolean): ReplyView =
-            comment.toReplyView(
-                voteCount = voteCounts[comment.id] ?: 0,
-                children = childrenByParent[comment.id].orEmpty()
-                    .mapIndexed { index, child -> build(child, isDirect = index == 0) },
-                // Null for top-level nodes (parentId null — they answer the post, which has no comment
-                // node) and for direct replies (the parent is the line directly above).
-                parent = if (isDirect) null else comment.parentId?.let { byId[it] }?.let {
-                    ParentRef(it.id, it.authorId, ParentRef.previewOf(it.body))
-                },
-            )
-        // Top-level nodes answer the post, not a comment — treat them as direct so they carry no anchor.
-        return childrenByParent[null].orEmpty().map { build(it, isDirect = true) }
     }
 }

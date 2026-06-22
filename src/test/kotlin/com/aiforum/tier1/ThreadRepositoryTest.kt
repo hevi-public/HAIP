@@ -3,6 +3,8 @@ package com.aiforum.tier1
 import com.aiforum.acceptance.support.TestData
 import com.aiforum.repo.ThreadRepository
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -71,5 +73,29 @@ class ThreadRepositoryTest {
 
         val active = threads.findActive(limit = 2)
         assertEquals(listOf("t3", "t2"), active.map { it.title })   // newest two only
+    }
+
+    @Test
+    fun `updateOp rewrites the title and body and stamps updated_at`() {
+        val id = data.insertThread("Old title")
+        // a fresh thread is unedited — no marker
+        threads.find(id)!!.let {
+            assertNull(it.updatedAt)
+            assertEquals(false, it.edited)
+        }
+
+        assertEquals(true, threads.updateOp(id, "New title", "New opening body"))
+
+        threads.find(id)!!.let {
+            assertEquals("New title", it.title)
+            assertEquals("New opening body", it.body)
+            assertNotNull(it.updatedAt)
+            assertEquals(true, it.edited)   // the (edited) marker now shows on the OP
+        }
+    }
+
+    @Test
+    fun `updateOp on an unknown id is a no-op returning false`() {
+        assertEquals(false, threads.updateOp("does-not-exist", "t", "b"))
     }
 }
