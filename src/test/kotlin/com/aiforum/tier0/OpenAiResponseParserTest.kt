@@ -1,8 +1,10 @@
 package com.aiforum.tier0
 
+import com.aiforum.dto.ReasoningLeak
 import com.aiforum.llm.LlmException
 import com.aiforum.llm.OpenAiResponseParser
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -29,6 +31,33 @@ class OpenAiResponseParserTest {
     @Test
     fun `a success envelope yields the assistant message content`() {
         assertEquals("pong", parse(200, envelope("pong")).text)
+    }
+
+    @Test
+    fun `a clean reply carries no reasoning-leak flag`() {
+        assertNull(parse(200, envelope("pong")).reasoningLeak)
+    }
+
+    @Test
+    fun `a think block is stripped from the content and flagged ACTUAL`() {
+        val resp = parse(200, envelope("<think>plan</think>Real answer"))
+        assertEquals("Real answer", resp.text)
+        assertEquals(ReasoningLeak.ACTUAL, resp.reasoningLeak)
+    }
+
+    @Test
+    fun `untagged thinking preamble is kept but flagged POSSIBLE`() {
+        val body = "Thinking Process: 1. Analyze the request."
+        val resp = parse(200, envelope(body))
+        assertEquals(body, resp.text)
+        assertEquals(ReasoningLeak.POSSIBLE, resp.reasoningLeak)
+    }
+
+    @Test
+    fun `content that is only a think block is empty output`() {
+        assertThrows(LlmException.EmptyOutput::class.java) {
+            parse(200, envelope("<think>only reasoning</think>"))
+        }
     }
 
     @Test

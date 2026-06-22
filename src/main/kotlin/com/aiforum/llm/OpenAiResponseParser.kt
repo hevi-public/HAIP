@@ -76,7 +76,11 @@ object OpenAiResponseParser {
         // Hit the output ceiling mid-reply: we have text but it's truncated, so the owner should retry —
         // the HTTP analogue of the CLI's stop_reason == "max_tokens".
         if (choice.finishReason == "length") throw LlmException.MalformedOutput(content)
-        return LlmResponse(content)
+        // Strip any leaked chain-of-thought and flag what we strip/suspect (never discard — see
+        // ReplySanitizer). A body that was ONLY a <think> block is now blank: that's empty output.
+        val sanitized = ReplySanitizer.sanitize(content)
+        if (sanitized.text.isBlank()) throw LlmException.EmptyOutput()
+        return LlmResponse(sanitized.text, sanitized.leak)
     }
 
     /** `Retry-After` is seconds-or-HTTP-date; we honour the seconds form and fall back to config otherwise. */

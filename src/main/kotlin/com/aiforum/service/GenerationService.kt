@@ -16,6 +16,7 @@ import com.aiforum.llm.PromptContext
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.ThreadRepository
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Duration
 import java.util.UUID
@@ -47,6 +48,7 @@ class GenerationService(
     private val threads: ThreadRepository? = null,
 ) {
     private val timeout = Duration.ofSeconds(120)
+    private val log = LoggerFactory.getLogger(GenerationService::class.java)
 
     companion object {
         // Sentinel the composer's default "Anyone" option submits instead of a persona id: it hands the
@@ -248,10 +250,12 @@ class GenerationService(
         val ctx = ContextAssembler.assemble(persona.systemPrompt, withOpeningPost(existing.threadId, comments.threadComments(existing.threadId)), targetId = existing.parentId)
         val updated = try {
             val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name, persona.model), timeout), CancellationToken())
-            existing.copy(body = resp.text, state = GenerationState.POSTED, failureCategory = null, reason = null, retryAfterSeconds = null)
+            resp.reasoningLeak?.let { log.warn("reasoning leak ({}) on retry of reply {} by persona {}", it, replyId, persona.id) }
+            // Overwrite the flag with this regeneration's verdict (it may now be clean → null).
+            existing.copy(body = resp.text, state = GenerationState.POSTED, failureCategory = null, reason = null, retryAfterSeconds = null, reasoningLeak = resp.reasoningLeak)
         } catch (e: Throwable) {
             val o = GenerationStateMachine.classify(e)
-            existing.copy(body = "", state = o.state, failureCategory = o.failureCategory, reason = o.reason, retryAfterSeconds = o.retryAfterSeconds)
+            existing.copy(body = "", state = o.state, failureCategory = o.failureCategory, reason = o.reason, retryAfterSeconds = o.retryAfterSeconds, reasoningLeak = null)
         }
         comments.update(updated)
         return updated.toReplyView()
@@ -394,7 +398,8 @@ class GenerationService(
     private fun settleOne(plan: GenPlan, token: CancellationToken): ReplyView {
         val comment = try {
             val resp = llm.generate(LlmRequest(plan.context, PersonaRef(plan.persona.id, plan.persona.name, plan.persona.model), timeout), token)
-            Comment(plan.id, plan.threadId, plan.parentId, plan.persona.id, resp.text, GenerationState.POSTED, null, plan.depth, depthBudget = plan.budget)
+            resp.reasoningLeak?.let { log.warn("reasoning leak ({}) in reply {} by persona {}", it, plan.id, plan.persona.id) }
+            Comment(plan.id, plan.threadId, plan.parentId, plan.persona.id, resp.text, GenerationState.POSTED, null, plan.depth, depthBudget = plan.budget, reasoningLeak = resp.reasoningLeak)
         } catch (e: Throwable) {
             val o = GenerationStateMachine.classify(e)
             Comment(plan.id, plan.threadId, plan.parentId, plan.persona.id, "", o.state, o.failureCategory, plan.depth, o.reason, o.retryAfterSeconds, depthBudget = plan.budget)

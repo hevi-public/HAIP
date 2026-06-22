@@ -1,5 +1,6 @@
 package com.aiforum.llm
 
+import com.aiforum.dto.ReasoningLeak
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -19,7 +20,10 @@ data class LlmRequest(
     val timeout: Duration,
 )
 
-data class LlmResponse(val text: String)
+// `reasoningLeak` tags a reply whose model leaked chain-of-thought (set by ReplySanitizer in the
+// parsers). The body is already cleaned; this only drives the UI badge + a log line. Null => clean.
+// Trailing default so the scriptable test double and other LlmResponse("text") call sites stay terse.
+data class LlmResponse(val text: String, val reasoningLeak: ReasoningLeak? = null)
 
 // `model` pins the LLM this persona generates with; blank => the ProcessLlmClient's default-model
 // fallback. Default "" so test fixtures that don't care about model selection stay terse.

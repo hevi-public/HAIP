@@ -1,5 +1,6 @@
 package com.aiforum.acceptance.config
 
+import com.aiforum.dto.ReasoningLeak
 import com.aiforum.llm.CancellationToken
 import com.aiforum.llm.LlmClient
 import com.aiforum.llm.LlmRequest
@@ -28,7 +29,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 class ScriptableLlmClient : LlmClient {
 
     sealed interface Behavior {
-        data class Respond(val text: String) : Behavior
+        // `leak` mirrors what the real parsers (ReplySanitizer) would attach to a leaked completion, so a
+        // scenario can drive the reasoning-leak badge through the real persist/render path. Null = clean.
+        data class Respond(val text: String, val leak: ReasoningLeak? = null) : Behavior
         data class Fail(val ex: () -> RuntimeException) : Behavior
         /** Block until the cancellation token is tripped, then report cancellation. */
         object HangUntilCancelled : Behavior
@@ -51,7 +54,7 @@ class ScriptableLlmClient : LlmClient {
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
         received += request
         return when (val behavior = script.pollFirst() ?: Behavior.Respond("default reply")) {
-            is Behavior.Respond -> LlmResponse(behavior.text)
+            is Behavior.Respond -> LlmResponse(behavior.text, behavior.leak)
             is Behavior.Fail -> throw behavior.ex()
             Behavior.HangUntilCancelled -> {
                 while (!cancellation.isCancelled) Thread.sleep(10)

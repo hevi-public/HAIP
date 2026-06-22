@@ -3,6 +3,7 @@ package com.aiforum.domain
 import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
+import com.aiforum.dto.ReasoningLeak
 import com.aiforum.dto.ReplyView
 import com.aiforum.markdown.MarkdownRenderer
 
@@ -24,6 +25,9 @@ data class Comment(
     // Owner's navigation bookmark (§7) — firewalled from the model like +1, never fed into a prompt.
     // Trailing default so positional constructors keep compiling; the star endpoint toggles it.
     val starred: Boolean = false,
+    // Set when the model leaked chain-of-thought into this reply (ReplySanitizer): the body is already
+    // cleaned, this only drives the UI badge. Trailing default so positional constructors keep compiling.
+    val reasoningLeak: ReasoningLeak? = null,
 ) {
     fun toReplyView(
         voteCount: Int = 0,
@@ -43,6 +47,7 @@ data class Comment(
         depth = depth,
         depthBudget = depthBudget,
         starred = starred,
+        reasoningLeak = reasoningLeak,
         parent = parent,
         children = children,
     )

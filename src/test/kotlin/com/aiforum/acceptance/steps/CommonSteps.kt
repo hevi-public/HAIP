@@ -112,6 +112,14 @@ class CommonSteps(
         )
     }
 
+    @Then("the reply reasoning-leak is {string}")
+    fun replyReasoningLeak(leak: String) {
+        assertTrue(
+            Html.hasAttr(body(), "data-reasoning-leak", leak),
+            "expected data-reasoning-leak=\"$leak\" in:\n${body()}",
+        )
+    }
+
     @Then("the response status is {int}")
     fun responseStatus(status: Int) = assertEquals(status, world.lastStatus)
 

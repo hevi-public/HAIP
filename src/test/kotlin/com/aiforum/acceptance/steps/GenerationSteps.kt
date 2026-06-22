@@ -7,6 +7,7 @@ import com.aiforum.acceptance.support.GenerationSettle
 import com.aiforum.acceptance.support.Html
 import com.aiforum.acceptance.support.HttpClient
 import com.aiforum.acceptance.support.ScenarioWorld
+import com.aiforum.dto.ReasoningLeak
 import com.aiforum.llm.LlmRequest
 import io.cucumber.java.en.Given
 import io.cucumber.java.en.Then
@@ -31,6 +32,13 @@ class GenerationSteps(
 
     @Given("the generation hangs until cancelled")
     fun generationHangs() = llm.enqueue(Behavior.HangUntilCancelled)
+
+    // The model leaked its chain-of-thought: the parsers (ReplySanitizer) would clean the body and tag it
+    // ACTUAL (stripped <think>) or POSSIBLE (heuristic). We inject the already-classified response here —
+    // the fake stands in for the parser at the seam — so the persist/render path is exercised for real.
+    @Given("the LLM responds with {string} flagged as a {word} reasoning leak")
+    fun llmLeaks(text: String, kind: String) =
+        llm.enqueue(Behavior.Respond(text, ReasoningLeak.valueOf(kind.uppercase())))
 
     @When("the owner summons {string}")
     fun summon(persona: String) {

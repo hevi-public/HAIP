@@ -40,6 +40,21 @@ object PromptRenderer {
             "with the language on the opening fence (```kotlin, ```yaml, ```bash, …). Use markdown " +
             "tables, not raw HTML."
 
+    /**
+     * Anti-preamble steer. Some local models (e.g. Gemma via LM Studio) dump their chain-of-thought into
+     * the reply itself — "Thinking Process:", "The user wants me to act as…", "**Analyze the context:**".
+     * This pins the contract hard: emit ONLY the final in-character message, and if the model must reason
+     * first, wrap it in <think>…</think> so it's machine-strippable (ReplySanitizer removes those tags and
+     * flags the rest). It's the source-side half of the fix; the sanitizer is the net for what leaks past.
+     * Lives in the task prompt (not the stored per-persona system prompt) so it applies to every persona
+     * immediately, including ones already seeded into the DB.
+     */
+    private const val NO_PREAMBLE =
+        "Output only your final message, in character — no preamble, no narration of your persona or " +
+            "instructions, and no visible reasoning, planning, or \"thinking process\". If you need to " +
+            "reason first, put that reasoning inside <think>…</think> tags and write only the finished " +
+            "reply after them."
+
     fun renderTask(context: PromptContext, personaName: String): String {
         val transcript = TranscriptRenderer.render(context.comments, context.targetId)
         // Name the persona explicitly and point it at the target message: without this the model sees its
@@ -47,7 +62,7 @@ object PromptRenderer {
         // got flipped"). The system prompt carries the character; this carries the task.
         return if (transcript.isBlank()) {
             "You are opening a new thread in the forum. Post the first message as $personaName, in " +
-                "character. $BREVITY $FORMATTING"
+                "character. $BREVITY $FORMATTING $NO_PREAMBLE"
         } else {
             // Point the persona at the EXACT node it was summoned for (marked "← reply to this"), naming its
             // ref. In whole-thread scope the target is rarely the last transcript line, so "the most recent
@@ -63,7 +78,7 @@ object PromptRenderer {
             "The forum discussion so far. Each line is \"[#ref] author: message\"; indentation shows " +
                 "reply depth and \"↳ replying to #n\" marks which message it answers:\n\n$transcript\n\n---\n" +
                 task +
-                "Reply with the message text only, in character as $personaName. $BREVITY $FORMATTING"
+                "Reply with the message text only, in character as $personaName. $BREVITY $FORMATTING $NO_PREAMBLE"
         }
     }
 }
