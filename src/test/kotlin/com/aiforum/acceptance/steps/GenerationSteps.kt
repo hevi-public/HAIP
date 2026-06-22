@@ -79,11 +79,13 @@ class GenerationSteps(
     }
 
     @Then("the room was summoned")
-    fun roomWasSummoned() =
-        // Creating a thread fires a "Whole Topic + Anyone" summon: the dispatcher's routing call is
-        // synchronous on the create request, so the spy carries it by the time this asserts (used by the
-        // browser/form paths, which don't capture draft ids to settle).
+    fun roomWasSummoned() {
+        // Creating a thread fires a "Whole Topic + Anyone" summon. Routing now runs on a worker
+        // (summonAsync) and the browser/form path doesn't settle draft ids, so wait (bounded) for the
+        // dispatcher's call to land in the spy before asserting the room was summoned.
+        awaitDispatcher()
         assertTrue(llm.received.isNotEmpty(), "expected creating the thread to summon the room (an LLM call)")
+    }
 
     @Then("the dispatcher considered node {string}")
     fun dispatcherConsidered(label: String) =
@@ -100,8 +102,22 @@ class GenerationSteps(
         assertTrue(routingCall().context.comments.none { it.body == label }, "the dispatcher should NOT have seen node \"$label\"")
 
     /** The dispatcher's own call is the one carrying its PersonaRef (name "Moderator"), not a persona's. */
-    private fun routingCall(): LlmRequest =
-        llm.received.firstOrNull { it.persona.name == "Moderator" } ?: error("the dispatcher was never called")
+    private fun routingCall(): LlmRequest {
+        awaitDispatcher()
+        return llm.received.firstOrNull { it.persona.name == "Moderator" } ?: error("the dispatcher was never called")
+    }
+
+    /**
+     * Wait (bounded) for the dispatcher's routing call to land in the spy. summonAsync runs routing on a
+     * worker, so on the browser/form path — which doesn't settle drafts — the call may not have happened
+     * yet when these Then steps assert. Mirrors GenerationSettle's poll cadence.
+     */
+    private fun awaitDispatcher() {
+        val deadline = System.currentTimeMillis() + 5_000L
+        while (System.currentTimeMillis() < deadline && llm.received.none { it.persona.name == "Moderator" }) {
+            Thread.sleep(10)
+        }
+    }
 
     @When("the owner starts a draft from {string}")
     fun startDraft(persona: String) {

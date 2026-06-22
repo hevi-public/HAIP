@@ -31,10 +31,11 @@ class ThreadSteps(
         world.threadId = resp.body?.let {
             Regex("""data-thread-id="([^"]+)"""").find(it)?.groupValues?.get(1)
         }
-        // Creating a thread auto-summons the room (Whole Topic + Anyone): the create response surfaces the
-        // in-flight DRAFTING node(s). Settle them so the dispatcher + persona calls land in the LlmClient
-        // spy and the thread page shows the posted replies the Then steps assert on.
-        settle.awaitAllSettled(Html.allReplyIds(resp.body ?: ""))
+        // Creating a thread auto-summons the room (Whole Topic + Anyone) on a worker — routing included
+        // (summonAsync), so the create response carries no drafts yet. Poll the room endpoint until the
+        // dispatcher has picked and the drafts are registered, then settle them so the dispatcher + persona
+        // calls land in the LlmClient spy and the thread page shows the posted replies the Then steps read.
+        settle.awaitAllSettled(settle.awaitRoomDrafts(world.threadId ?: ""))
     }
 
     @When("the owner starts a thread titled {string} from the browser")

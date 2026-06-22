@@ -128,6 +128,27 @@ class GenerationController(
     }
 
     /**
+     * Poll the create-time room summon (§4). While the dispatcher's routing call is still in flight the
+     * thread has no drafts yet, so the thread page shows a "Summoning the room…" poller that hits this
+     * every second. Once routing picks who replies and the drafts are registered, this returns them as the
+     * reply-list fragment — htmx swaps the poller for the drafts, which then self-poll to settle. If the
+     * summon ends with no drafts (routing failed / empty roster), the poller drops itself so htmx stops.
+     */
+    @GetMapping("/threads/{threadId}/room")
+    fun room(@PathVariable threadId: String, model: Model): String {
+        val drafts = generation.inFlightViews(threadId)
+        if (drafts.isNotEmpty()) {
+            model.addAttribute("replies", drafts)
+            model.addAttribute("threadId", threadId)
+            model.addAttribute("personas", personaViews())
+            return "fragments/replyList"
+        }
+        model.addAttribute("threadId", threadId)
+        model.addAttribute("summoning", generation.isSummoning(threadId))
+        return "fragments/roomPoller"
+    }
+
+    /**
      * Poll a single node (§4). The DRAFTING fragment self-polls every second; once the node settles, the
      * returned fragment drops the poll trigger so htmx stops. DB-first: a persisted row is the source of
      * truth, so we only fall back to the transient in-flight view while no row exists yet (this closes

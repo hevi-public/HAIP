@@ -14,6 +14,7 @@ import com.aiforum.repo.PersonaRepository
 import com.aiforum.service.GenerationService
 import com.aiforum.service.InFlightGenerations
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
@@ -144,5 +145,30 @@ class GenerationServiceTest {
         assertEquals(1, llm.requests.size, "an @mention pre-empts the dispatcher — no routing call")
         assertEquals("Paul", replies.single().authorId)
         assertEquals("Paul's take", replies.single().body)
+    }
+
+    @Test
+    fun `summonAsync routes the dispatcher on the worker, then settles the chosen persona`() {
+        // The dispatcher's routing call (first scripted body) AND the persona's reply both run on the
+        // worker — summonAsync returns at once without touching the LLM, which is the whole point: the
+        // create request never blocks on the model.
+        val llm = ScriptedLlm(listOf("Sol", "Sol's take"))
+        val comments = RecordingComments()
+        val registry = InFlightGenerations()
+        val service = GenerationService(llm, comments, roster("Sol", "Paul"), registry)
+
+        service.summonAsync("t1", null, listOf(GenerationService.AUTO_PERSONA), "")
+
+        val deadline = System.currentTimeMillis() + 5_000
+        while (System.currentTimeMillis() < deadline &&
+            comments.saved.none { it.authorId == "Sol" && it.state == GenerationState.POSTED }
+        ) {
+            Thread.sleep(10)
+        }
+
+        assertTrue(llm.requests.any { it.persona.name == "Moderator" }, "the dispatcher routed on the worker")
+        val sol = comments.saved.singleOrNull { it.authorId == "Sol" }
+        assertEquals("Sol's take", sol?.body, "the persona the dispatcher picked drafted and settled")
+        assertFalse(service.isSummoning("t1"), "the summon clears once routing + draft registration finish")
     }
 }
