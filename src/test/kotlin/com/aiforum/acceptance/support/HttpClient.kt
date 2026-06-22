@@ -2,6 +2,7 @@ package com.aiforum.acceptance.support
 
 import org.springframework.context.annotation.Profile
 import org.springframework.core.env.Environment
+import org.springframework.core.io.ByteArrayResource
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Component
@@ -47,6 +48,27 @@ class HttpClient(private val env: Environment) {
 
     fun post(path: String): ResponseEntity<String> =
         client.post().uri(url(path)).exchange { _, res -> capture(res) }
+
+    /**
+     * multipart/form-data POST — text [fields] plus named image [files]. Mirrors the browser's image
+     * upload (the multipart controller handlers). Each file part needs a filename, so we wrap the bytes in
+     * a ByteArrayResource that reports one.
+     */
+    fun postMultipart(
+        path: String,
+        fields: Map<String, String> = emptyMap(),
+        files: Map<String, ByteArray> = emptyMap(),
+    ): ResponseEntity<String> {
+        val map = LinkedMultiValueMap<String, Any>()
+        fields.forEach { (k, v) -> map.add(k, v) }
+        files.forEach { (k, bytes) ->
+            map.add(k, object : ByteArrayResource(bytes) {
+                override fun getFilename() = "$k.png"
+            })
+        }
+        return client.post().uri(url(path)).contentType(MediaType.MULTIPART_FORM_DATA).body(map)
+            .exchange { _, res -> capture(res) }
+    }
 
     private fun capture(res: RestClient.RequestHeadersSpec.ConvertibleClientHttpResponse): ResponseEntity<String> =
         ResponseEntity.status(res.statusCode).body(res.bodyTo(String::class.java) ?: "")

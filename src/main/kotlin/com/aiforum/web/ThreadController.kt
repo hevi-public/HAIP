@@ -4,12 +4,15 @@ import com.aiforum.dto.BranchIndexEntry
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ReplyView
 import com.aiforum.dto.ScopeMode
+import com.aiforum.dto.AttachmentView
 import com.aiforum.dto.Snippet
 import com.aiforum.markdown.MarkdownRenderer
+import com.aiforum.repo.AttachmentRepository
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.ThreadReadRepository
 import com.aiforum.repo.ThreadRepository
+import com.aiforum.service.AttachmentService
 import com.aiforum.service.GenerationService
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Controller
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
+import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
 /** How many characters of a comment to preview in a branch-index entry (CSS ellipsis caps the rest). */
@@ -47,6 +51,8 @@ class ThreadController(
     private val generation: GenerationService,
     private val railFeeds: RailFeeds,
     private val replyTree: ReplyTreeAssembler,
+    private val attachments: AttachmentService,
+    private val attachmentRepo: AttachmentRepository,
 ) {
 
     // Two bindings, one creation path: the browser's new-thread form posts form-urlencoded and wants a
@@ -63,6 +69,19 @@ class ThreadController(
         val id = newThread(req.title, req.text)
         // Post/Redirect/Get: land the browser on the new thread (correct URL, refresh-safe), where the
         // room — summoned on create (see newThread) — is already drafting its replies.
+        return "redirect:/threads/$id"
+    }
+
+    // The browser new-thread form posts multipart when it can carry an image (enctype set in index.kte).
+    // Same PRG as createForm; the images attach to the opening post (thread-scoped). The urlencoded /
+    // JSON handlers above stay for the acceptance suite and API clients.
+    @PostMapping("/threads", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun createMultipart(
+        req: CreateThreadRequest,
+        @RequestParam(name = "images", required = false) images: List<MultipartFile>?,
+    ): String {
+        val id = newThread(req.title, req.text)
+        images?.toUploads()?.takeIf { it.isNotEmpty() }?.let { attachments.attachToThread(id, it) }
         return "redirect:/threads/$id"
     }
 
@@ -142,8 +161,13 @@ class ThreadController(
         model.addAttribute("body", thread.body)
         model.addAttribute("bodyHtml", MarkdownRenderer.render(thread.body))
         model.addAttribute("edited", thread.edited)
+        model.addAttribute("attachments", opAttachments(thread.id))
         return "fragments/threadOp"
     }
+
+    /** The opening post's images (thread-scoped), as gallery views — the OP is always owner-authored. */
+    private fun opAttachments(threadId: String): List<AttachmentView> =
+        attachmentRepo.forThread(threadId).map(AttachmentView::of)
 
     private fun renderThread(id: String, title: String, body: String, edited: Boolean, model: Model): String {
         val all = comments.threadComments(id)
@@ -152,6 +176,7 @@ class ThreadController(
         model.addAttribute("body", body)
         model.addAttribute("bodyHtml", MarkdownRenderer.render(body))
         model.addAttribute("edited", edited)
+        model.addAttribute("opAttachments", opAttachments(id))
         // Nest replies under their parents so the page reflects the comment tree (a persona reply sits
         // under the message it answered). replyNode.kte renders reply.children recursively; the flat
         // list it gets here was rendering every node at level 0. Children keep their repository order

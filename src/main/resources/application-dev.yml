@@ -13,6 +13,9 @@ spring:
 aiforum:
   backups:
     enabled: true
+  images:
+    # Throwaway project-local image store for dev (mirrors the dev DB living under data/).
+    dir: data/images-dev
   llm:
     # Dev dogfooding: let personas actually hit the web (e.g. "check HackerNews"). Leave the domain
     # allowlist blank for any host, or scope it (see application.yml) if you want to keep dev fetches tight.

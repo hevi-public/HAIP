@@ -1,6 +1,9 @@
 package com.aiforum.acceptance.config
 
 import com.aiforum.dto.ReasoningLeak
+import com.aiforum.images.DescribeRequest
+import com.aiforum.images.ImageDescriber
+import com.aiforum.images.VisionUnavailableException
 import com.aiforum.llm.CancellationToken
 import com.aiforum.llm.LlmClient
 import com.aiforum.llm.LlmRequest
@@ -61,6 +64,37 @@ class ScriptableLlmClient : LlmClient {
                 throw com.aiforum.llm.LlmException.Cancelled()
             }
         }
+    }
+}
+
+/**
+ * The scriptable vision seam ([ImageDescriber]) under test — the sibling of [ScriptableLlmClient]. Steps
+ * program the caption it returns (or make it fail), and it spies on every request so a scenario can assert
+ * the vision model was actually invoked. Reset between scenarios by DatabaseResetHooks.
+ */
+@Component
+@Primary
+@Profile("test")
+class ScriptableImageDescriber : ImageDescriber {
+
+    val received = CopyOnWriteArrayList<DescribeRequest>()
+
+    @Volatile
+    var nextCaption: String = "an attached image"
+
+    @Volatile
+    var failNext: Boolean = false
+
+    override fun describe(request: DescribeRequest): String {
+        received += request
+        if (failNext) throw VisionUnavailableException("scripted vision failure")
+        return nextCaption
+    }
+
+    fun reset() {
+        received.clear()
+        nextCaption = "an attached image"
+        failNext = false
     }
 }
 

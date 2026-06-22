@@ -16,6 +16,10 @@
      text. --%>
 <form class="composer composer--${placement}"
       data-composer="${placement}" data-target-id="${targetId}" data-scope="${scope}"
+      <%-- Multipart so the form can carry an image part (name="images"). With no file chosen the browser
+           sends an empty part, which the multipart controllers treat exactly as the urlencoded submit;
+           the urlencoded/JSON handlers remain for the acceptance suite and API clients. --%>
+      enctype="multipart/form-data"
       hx-post="/threads/${threadId}/generate"
       hx-target="${if (placement == "bottom") ".reply-list" else "closest article"}"
       hx-swap="beforeend"
@@ -49,6 +53,15 @@
     <div class="composer__editor" data-composer-editor>
         <textarea name="text" data-composer-text
                   placeholder="Write a reply…   type / for commands, @ to summon a persona"></textarea>
+
+        <%-- Attach an image (owner-authored, caption-only to the model — see AttachmentService). Multiple
+             allowed; the server sniffs magic bytes and rejects non-images. data-composer-images is the
+             stable hook. --%>
+        <label class="composer__attach" data-composer-attach>
+            <input type="file" name="images" data-composer-images
+                   accept="image/png,image/jpeg,image/gif,image/webp" multiple>
+            <span class="composer__attach-hint">🖼 Attach image</span>
+        </label>
 
         <%-- Slash palette (app.js shows + filters it while the line starts with "/"). Each command just
              flips one of the existing controls, so it works the same as clicking them. --%>

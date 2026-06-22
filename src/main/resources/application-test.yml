@@ -10,3 +10,7 @@ spring:
 aiforum:
   backups:
     enabled: false
+  images:
+    # Image blobs go under build/ (like the test DB), asserted by ProfileGuard so a test run never writes
+    # into the real ~/.haip image store.
+    dir: build/images-test

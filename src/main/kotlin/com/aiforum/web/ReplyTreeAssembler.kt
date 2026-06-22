@@ -1,8 +1,10 @@
 package com.aiforum.web
 
 import com.aiforum.domain.Comment
+import com.aiforum.dto.AttachmentView
 import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReplyView
+import com.aiforum.repo.AttachmentRepository
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.VoteRepository
 import org.springframework.stereotype.Component
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Component
 class ReplyTreeAssembler(
     private val comments: CommentRepository,
     private val votes: VoteRepository,
+    private val attachments: AttachmentRepository,
 ) {
 
     /** Build the top-level reply views with their descendants nested, from the flat thread list. */
@@ -23,6 +26,8 @@ class ReplyTreeAssembler(
         val voteCounts = votes.countAll()
         val childrenByParent = all.groupBy { it.parentId }
         val byId = all.associateBy { it.id }
+        // One batch read for the whole tree's images (no per-node query), folded into each node below.
+        val attByComment = attachments.forComments(all.map { it.id })
         // The "in reply to" anchor only earns its place when a reply is visually separated from the
         // comment it answers. A parent's FIRST child renders immediately under it (depth-first preorder),
         // so the quote would just echo the line above — redundant clutter. Later siblings get pushed
@@ -38,6 +43,7 @@ class ReplyTreeAssembler(
                 parent = if (isDirect) null else comment.parentId?.let { byId[it] }?.let {
                     ParentRef(it.id, it.authorId, ParentRef.previewOf(it.body))
                 },
+                attachments = attByComment[comment.id].orEmpty().map(AttachmentView::of),
             )
         // Top-level nodes answer the post, not a comment — treat them as direct so they carry no anchor.
         return childrenByParent[null].orEmpty().map { build(it, isDirect = true) }

@@ -1,0 +1,14 @@
+@import com.aiforum.dto.AttachmentView
+@param attachments: List<AttachmentView>
+@param owner: Boolean = false
+
+<%-- Image gallery rendered under a post/comment body. Owner-authored nodes get the per-image Describe
+     control (owner=true). Renders nothing when there are no attachments, so it's safe to drop under
+     every body unconditionally. --%>
+@if(!attachments.isEmpty())
+    <div class="attachments" data-attachments>
+        @for(a in attachments)
+            @template.fragments.attachment(attachment = a, owner = owner)
+        @endfor
+    </div>
+@endif
