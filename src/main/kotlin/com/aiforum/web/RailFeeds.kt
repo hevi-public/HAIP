@@ -8,9 +8,9 @@ import java.time.Clock
 import java.time.Instant
 
 /**
- * The forum-wide rail feeds — "Active threads" and "Recent comments" — shared by the home page's right
- * rail and every thread page's right rail. Centralised here so the two surfaces can't drift in count,
- * snippet length, or "time ago" formatting: the feeds read identically wherever they appear.
+ * The forum-wide rail feeds — "Active threads", "Recent comments", and "Starred" — shared by the
+ * home page's right rail and every thread page's right rail. Centralised here so the two surfaces
+ * can't drift in count, snippet length, or "time ago" formatting: the feeds read identically.
  */
 @Component
 class RailFeeds(
@@ -37,9 +37,23 @@ class RailFeeds(
         }
     }
 
+    /** Starred POSTED comments across all threads, newest-starred first, for the rail box. */
+    fun starredComments(): List<StarredCommentRow> {
+        val now = clock.instant()
+        return comments.starredPosted(STARRED_LIMIT).map { c ->
+            StarredCommentRow(
+                c.threadId, c.id, c.threadTitle, c.authorId,
+                Snippet.oneLine(c.body, STARRED_SNIPPET_LEN),
+                RelativeTime.ago(Instant.parse(c.createdAt), now),
+            )
+        }
+    }
+
     private companion object {
         const val ACTIVE_THREADS_LIMIT = 5
         const val RECENT_COMMENTS_LIMIT = 5
         const val RECENT_SNIPPET_LEN = 64
+        const val STARRED_LIMIT = 5
+        const val STARRED_SNIPPET_LEN = 64
     }
 }

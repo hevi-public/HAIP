@@ -206,6 +206,62 @@ class CommentRepositoryTest {
     }
 
     @Test
+    fun `starredPosted returns only starred POSTED comments, newest first, capped at limit`() {
+        val t1 = data.insertThread("io_uring vs epoll")
+        val t2 = data.insertThread("Rust in the kernel")
+        fun post(thread: String, author: String, body: String, at: String, star: Boolean = false): String {
+            val id = data.insertComment(thread, authorId = author, body = body)
+            jdbc.update("UPDATE comment SET created_at = ? WHERE id = ?", at, id)
+            if (star) comments.toggleStar(id)
+            return id
+        }
+
+        post(t1, "vex", "not-starred", "2026-06-21T10:00:00Z")
+        val oldest = post(t2, "pike", "oldest-star", "2026-06-21T11:00:00Z", star = true)
+        val newest = post(t1, "sol", "newest-star", "2026-06-21T12:00:00Z", star = true)
+
+        val results = comments.starredPosted(limit = 5)
+        assertEquals(listOf("newest-star", "oldest-star"), results.map { it.body })
+        assertEquals(newest, results.first().id)
+        assertEquals(t1, results.first().threadId)
+        assertEquals("io_uring vs epoll", results.first().threadTitle)
+        assertEquals("sol", results.first().authorId)
+    }
+
+    @Test
+    fun `starredPosted is capped at the given limit`() {
+        val t = data.insertThread("Scaling SQLite")
+        repeat(3) { i ->
+            val id = data.insertComment(t, authorId = "sol", body = "reply-$i")
+            comments.toggleStar(id)
+        }
+        assertEquals(2, comments.starredPosted(limit = 2).size)
+    }
+
+    @Test
+    fun `starredPosted excludes drafts and failures even when starred`() {
+        val t = data.insertThread("Scaling SQLite")
+        val posted = data.insertComment(t, authorId = "sol", body = "posted", state = "POSTED")
+        val drafting = data.insertComment(t, authorId = "sol", body = "drafting", state = "DRAFTING")
+        val failed = data.insertComment(t, authorId = "sol", body = "failed", state = "FAILED")
+        comments.toggleStar(posted)
+        comments.toggleStar(drafting)
+        comments.toggleStar(failed)
+
+        assertEquals(listOf("posted"), comments.starredPosted(limit = 10).map { it.body })
+    }
+
+    @Test
+    fun `allStarredPosted returns all starred POSTED comments without a cap`() {
+        val t = data.insertThread("Scaling SQLite")
+        repeat(6) { i ->
+            val id = data.insertComment(t, authorId = "sol", body = "reply-$i")
+            comments.toggleStar(id)
+        }
+        assertEquals(6, comments.allStarredPosted().size)
+    }
+
+    @Test
     fun `recentPosted excludes drafts, failures and cancelled nodes`() {
         val thread = data.insertThread("Scaling SQLite")
         data.insertComment(thread, authorId = "sol", body = "posted", state = "POSTED")
