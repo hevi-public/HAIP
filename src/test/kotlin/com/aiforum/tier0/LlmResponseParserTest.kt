@@ -1,8 +1,10 @@
 package com.aiforum.tier0
 
+import com.aiforum.dto.ReasoningLeak
 import com.aiforum.llm.LlmException
 import com.aiforum.llm.LlmResponseParser
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -20,6 +22,36 @@ class LlmResponseParserTest {
 
     private fun parse(exitCode: Int, stdout: String) =
         LlmResponseParser.parse(exitCode, stdout, retryAfter)
+
+    @Test
+    fun `a clean reply carries no reasoning-leak flag`() {
+        val envelope = """{"is_error":false,"subtype":"success","result":"pong","stop_reason":"end_turn"}"""
+        assertNull(parse(0, envelope).reasoningLeak)
+    }
+
+    @Test
+    fun `a think block is stripped from the result and flagged ACTUAL`() {
+        val envelope = """{"is_error":false,"subtype":"success","result":"<think>plan</think>Real answer","stop_reason":"end_turn"}"""
+        val resp = parse(0, envelope)
+        assertEquals("Real answer", resp.text)
+        assertEquals(ReasoningLeak.ACTUAL, resp.reasoningLeak)
+    }
+
+    @Test
+    fun `untagged thinking preamble is kept but flagged POSSIBLE`() {
+        val body = "Thinking Process: 1. Analyze the request."
+        val envelope = """{"is_error":false,"subtype":"success","result":"$body","stop_reason":"end_turn"}"""
+        val resp = parse(0, envelope)
+        assertEquals(body, resp.text)
+        assertEquals(ReasoningLeak.POSSIBLE, resp.reasoningLeak)
+    }
+
+    @Test
+    fun `a result that is only a think block is empty output`() {
+        assertThrows(LlmException.EmptyOutput::class.java) {
+            parse(0, """{"is_error":false,"subtype":"success","result":"<think>only reasoning</think>","stop_reason":"end_turn"}""")
+        }
+    }
 
     @Test
     fun `the real success envelope yields its result text`() {

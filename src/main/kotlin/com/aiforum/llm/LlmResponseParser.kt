@@ -74,6 +74,10 @@ object LlmResponseParser {
         if (result.isBlank()) throw LlmException.EmptyOutput()
         // Hit the output ceiling mid-reply: we have text but it's truncated, so the owner should retry.
         if (env.stopReason == "max_tokens") throw LlmException.MalformedOutput(result)
-        return LlmResponse(result)
+        // Strip any leaked chain-of-thought and flag what we strip/suspect (never discard — see
+        // ReplySanitizer). A body that was ONLY a <think> block is now blank: that's empty output.
+        val sanitized = ReplySanitizer.sanitize(result)
+        if (sanitized.text.isBlank()) throw LlmException.EmptyOutput()
+        return LlmResponse(sanitized.text, sanitized.leak)
     }
 }

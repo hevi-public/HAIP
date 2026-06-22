@@ -708,6 +708,8 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   background: var(--grey-chip); color: var(--grey-ink);
 }
 .reply__badge--drafting { background: var(--sage-2); color: var(--sage-ink-2); }
+/* reasoning-leak: a soft warning, not a failure — amber, sits beside a POSTED reply that was cleaned */
+.reply__badge--leak { background: var(--amber-chip); color: var(--amber-ink); cursor: help; }
 .reply__badge--drafting::after {
   content: " •••"; animation: dotpulse 1.2s ease-in-out infinite;
 }

@@ -1,6 +1,7 @@
 @import com.aiforum.dto.ReplyView
 @import com.aiforum.dto.GenerationState
 @import com.aiforum.dto.FailureCategory
+@import com.aiforum.dto.ReasoningLeak
 @import com.aiforum.web.AuthorColor
 @import com.aiforum.web.PersonaView
 @param reply: ReplyView
@@ -32,6 +33,7 @@
          data-retryable="${reply.retryable.toString()}"
          data-retry-after="${reply.retryAfterSeconds?.toString() ?: ""}"
          data-vote-count="${reply.voteCount.toString()}"
+         data-reasoning-leak="${reply.reasoningLeak?.name?.lowercase() ?: ""}"
          data-edited="${reply.edited.toString()}"
          data-depth="${reply.depth.toString()}">
     <header class="reply__head">
@@ -39,6 +41,15 @@
         <span class="reply__author">${reply.authorId}</span>
         @if(reply.state != GenerationState.POSTED)
             <span class="reply__badge reply__badge--${reply.state.name.lowercase()}">${badge}</span>
+        @endif
+        <%-- Reasoning-leak badge: shown independently of state (a POSTED reply can still be flagged). The
+             body was already cleaned; this just tells the reader the model leaked its thinking. ACTUAL =
+             we stripped <think> tags; POSSIBLE = a heuristic suspects untagged reasoning. --%>
+        @if(reply.reasoningLeak != null)
+            <span class="reply__badge reply__badge--leak"
+                  title="The model leaked its reasoning into this reply; the body shown has been cleaned.">
+                ${if (reply.reasoningLeak == ReasoningLeak.ACTUAL) "reasoning leak" else "possible reasoning leak"}
+            </span>
         @endif
         <%-- The owner has revised this body (their own or an AI reply, §7). Subtle, honest marker — it
              matters most on a persona's node, where it signals the owner changed what the persona "said". --%>

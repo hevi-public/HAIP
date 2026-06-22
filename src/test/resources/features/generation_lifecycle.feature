@@ -28,3 +28,20 @@ Feature: Generation lifecycle
     When the owner retries the reply
     Then the reply is "posted"
     And the reply body contains "drafted again"
+
+  # A leaked chain-of-thought is NOT a failure (§4): the body is cleaned and the reply still posts, only
+  # flagged so the reader knows the model leaked its reasoning. ACTUAL = we stripped <think> tags;
+  # POSSIBLE = a heuristic suspected untagged "thinking" preamble. The data-reasoning-leak hook drives the
+  # badge; the body survives either way.
+  Scenario Outline: A reply that leaks the model's reasoning still posts, cleaned and flagged
+    Given the LLM responds with "Indexes help here" flagged as a <kind> reasoning leak
+    When the owner summons "sol"
+    Then the reply is "posted"
+    And the reply is not "failed"
+    And the reply body contains "Indexes help here"
+    And the reply reasoning-leak is "<attr>"
+
+    Examples:
+      | kind     | attr     |
+      | ACTUAL   | actual   |
+      | POSSIBLE | possible |

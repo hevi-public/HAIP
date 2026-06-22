@@ -1,6 +1,8 @@
 package com.aiforum.llm
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -44,7 +46,17 @@ open class OpenAiLlmClient(
     private val maxTokens: Int,
     private val pollMillis: Long,
     private val rateLimitRetryAfterSeconds: Long,
+    // Diagnostics/opt-ins, defaulted so the Tier-1 test (and any positional caller) can ignore them.
+    // logRawResponse: dump the unparsed HTTP body at DEBUG (the `debug` profile flips it on) so we can
+    // see whether a model leaks reasoning inline in `content` or in a separate reasoning field.
+    private val logRawResponse: Boolean = false,
+    // disableThinking: send chat_template_kwargs.enable_thinking=false to turn the model's reasoning OFF
+    // at generation time. Honoured only by servers/models with a thinking switch in their chat template
+    // (Qwen3, vLLM/SGLang, LM Studio); a no-op for models like Gemma whose "thinking" is prompt-induced.
+    private val disableThinking: Boolean = false,
 ) : LlmClient {
+
+    private val log = LoggerFactory.getLogger(OpenAiLlmClient::class.java)
 
     /**
      * The constructor Spring uses. It builds its own [RestClient] from the static `RestClient.builder()`
@@ -61,9 +73,11 @@ open class OpenAiLlmClient(
         @Value("\${aiforum.llm.openai.max-tokens:1024}") maxTokens: Int,
         @Value("\${aiforum.llm.poll-millis:100}") pollMillis: Long,
         @Value("\${aiforum.llm.rate-limit-retry-after-seconds:300}") rateLimitRetryAfterSeconds: Long,
+        @Value("\${aiforum.llm.openai.log-raw-response:false}") logRawResponse: Boolean,
+        @Value("\${aiforum.llm.openai.disable-thinking:false}") disableThinking: Boolean,
     ) : this(
         RestClient.builder(), baseUrl, apiKey, defaultModel,
-        temperature, maxTokens, pollMillis, rateLimitRetryAfterSeconds,
+        temperature, maxTokens, pollMillis, rateLimitRetryAfterSeconds, logRawResponse, disableThinking,
     )
 
     // Absolute endpoint, built by hand rather than via RestClient's baseUrl: a leading-slash path against
@@ -83,6 +97,9 @@ open class OpenAiLlmClient(
             ),
             temperature = temperature,
             maxTokens = maxTokens,
+            // Only present when the opt-in is on — omitted otherwise (NON_NULL) so servers that don't
+            // understand it never see it. Turns the model's reasoning off at the template level.
+            chatTemplateKwargs = if (disableThinking) mapOf("enable_thinking" to false) else null,
         )
 
         // Run the blocking POST on a daemon worker so the poll loop below can enforce the deadline and
@@ -91,6 +108,9 @@ open class OpenAiLlmClient(
         Thread(task).apply { isDaemon = true; name = "openai-llm" }.start()
 
         val result = awaitWithin(task, request.timeout, cancellation)
+        // Raw-body diagnostics (debug profile): the only way to know for certain whether a given model
+        // leaks reasoning inline in `content` or splits it into a reasoning_content/reasoning field.
+        if (logRawResponse) log.debug("LM Studio/OpenAI raw response — status={} body={}", result.status, result.body)
         return OpenAiResponseParser.parse(
             result.status,
             result.body,
@@ -161,12 +181,15 @@ open class OpenAiLlmClient(
 
     private data class HttpResult(val status: Int, val body: String, val retryAfter: String?)
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     private data class ChatRequest(
         val model: String,
         val messages: List<ChatMessage>,
         val temperature: Double,
         @get:JsonProperty("max_tokens") val maxTokens: Int,
         val stream: Boolean = false,
+        // Forwarded to the model's chat template (e.g. {enable_thinking:false}); omitted when null.
+        @get:JsonProperty("chat_template_kwargs") val chatTemplateKwargs: Map<String, Any>? = null,
     )
 
     private data class ChatMessage(val role: String, val content: String)

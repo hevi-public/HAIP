@@ -30,7 +30,14 @@ object ComposerPrompts {
         append("name, abilities, and personality dials, write a concise system prompt (2–4 sentences) ")
         append("that makes a language model embody that persona when it replies in the forum. ")
         append("Translate each dial into observable behaviour in prose — never mention the numbers or ")
-        append("the word \"dial\". Output only the system prompt itself, with no preamble or quotes.")
+        append("the word \"dial\". ")
+        // Bake the anti-leak contract into every composed prompt, so a persona carries it itself even
+        // where the per-generation steer (PromptRenderer.NO_PREAMBLE) doesn't reach. Belt-and-suspenders
+        // against models that narrate their chain-of-thought; see plan_docs/local-model-reasoning-leak.md.
+        append("End the prompt you write with a directive that the persona replies with ONLY its ")
+        append("finished, in-character message — no preamble, no narration of its role, and no visible ")
+        append("reasoning or \"thinking process\" (any reasoning wrapped in <think>…</think> tags). ")
+        append("Output only the system prompt itself, with no preamble or quotes.")
     }
 
     /** The per-persona instruction turn: the spec, and on an edit the previous values + prompt. */

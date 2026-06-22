@@ -3,6 +3,7 @@ package com.aiforum.repo
 import com.aiforum.domain.Comment
 import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
+import com.aiforum.dto.ReasoningLeak
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Repository
@@ -51,6 +52,7 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
                 ?: rs.getString("retry_after_seconds")?.toLongOrNull(),
             depthBudget = rs.getInt("depth_budget"),
             starred = rs.getInt("starred") != 0,
+            reasoningLeak = rs.getString("reasoning_leak")?.let { ReasoningLeak.valueOf(it) },
             updatedAt = rs.getString("updated_at")?.let { Instant.parse(it) },
         )
     }
@@ -58,21 +60,26 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
     fun insert(c: Comment) {
         jdbc.update(
             """INSERT INTO comment(id, thread_id, parent_id, author_id, body, state, failure_category,
-                                   reason, retry_after_seconds, depth, depth_budget, starred, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                   reason, retry_after_seconds, depth, depth_budget, starred,
+                                   reasoning_leak, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             c.id, c.threadId, c.parentId, c.authorId, c.body, c.state.name, c.failureCategory?.name,
             c.reason, c.retryAfterSeconds, c.depth, c.depthBudget, if (c.starred) 1 else 0,
-            clock.instant().toString(),
+            c.reasoningLeak?.name, clock.instant().toString(),
         )
     }
 
     // Note: update() deliberately leaves `starred` (and depth_budget) alone, so a generation settle
     // (DRAFTING → POSTED) never clears a star the owner set. The star is toggled only via toggleStar.
     fun update(c: Comment) {
+        // reasoning_leak tracks the body, so it's refreshed here (a retry regenerates the body and can
+        // clear or re-raise the flag) — unlike starred/depth_budget, which a settle deliberately leaves.
         jdbc.update(
-            """UPDATE comment SET body=?, state=?, failure_category=?, reason=?, retry_after_seconds=?
+            """UPDATE comment SET body=?, state=?, failure_category=?, reason=?, retry_after_seconds=?,
+                                  reasoning_leak=?
                WHERE id=?""",
-            c.body, c.state.name, c.failureCategory?.name, c.reason, c.retryAfterSeconds, c.id,
+            c.body, c.state.name, c.failureCategory?.name, c.reason, c.retryAfterSeconds,
+            c.reasoningLeak?.name, c.id,
         )
     }
 

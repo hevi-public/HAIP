@@ -19,6 +19,9 @@ data class ReplyView(
     val depthBudget: Int = 0,
     // Owner's star bookmark — drives the filled-star control on the node and the star marker in the rail.
     val starred: Boolean = false,
+    // When set, the model leaked chain-of-thought into this reply; the body is already cleaned. Drives a
+    // "reasoning leak" badge + the data-reasoning-leak hook on the node. Null => clean.
+    val reasoningLeak: ReasoningLeak? = null,
     // True once the owner has edited this body (§7) — drives the subtle "(edited)" marker and the
     // data-edited hook. Trailing default so positional constructions stay valid.
     val edited: Boolean = false,

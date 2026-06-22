@@ -3,6 +3,7 @@ package com.aiforum.tier2
 import com.aiforum.domain.Comment
 import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
+import com.aiforum.dto.ReasoningLeak
 import com.aiforum.dto.ScopeMode
 import com.aiforum.llm.CancellationToken
 import com.aiforum.llm.LlmClient
@@ -66,6 +67,24 @@ class GenerationServiceTest {
         assertEquals("Indexes help here", view.body, "the drafted text must survive the save failure")
         assertTrue(view.retryable)
         assertEquals(1, comments.saved.size, "the failure marker is persisted so retry has a real row")
+    }
+
+    @Test
+    fun `a reasoning-leak flag flows from the response through to the persisted comment and view`() {
+        // The parsers set LlmResponse.reasoningLeak; here we pin that the service persists it as-is and
+        // surfaces it on the view (so the node renders a badge), without touching the POSTED state.
+        val leakyLlm = object : LlmClient {
+            override fun generate(request: LlmRequest, cancellation: CancellationToken) =
+                LlmResponse("The real reply.", ReasoningLeak.ACTUAL)
+        }
+        val comments = RecordingComments()
+        val service = GenerationService(leakyLlm, comments, personas)
+
+        val view = service.generate("t1", null, listOf("sol"), "q?", ScopeMode.WHOLE_THREAD).single()
+
+        assertEquals(GenerationState.POSTED, view.state, "a leak is flagged, not failed")
+        assertEquals(ReasoningLeak.ACTUAL, view.reasoningLeak)
+        assertEquals(ReasoningLeak.ACTUAL, comments.saved.single().reasoningLeak, "the flag is persisted")
     }
 
     /** An LlmClient that blocks until its token is tripped, then reports cancellation (mirrors the
