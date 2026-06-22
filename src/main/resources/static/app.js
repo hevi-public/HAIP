@@ -211,6 +211,22 @@
     }
   });
 
+  // Restore a form that was put into note mode: swap hx-post back to /generate and reset the button.
+  function clearNoteMode(form) {
+    var orig = form.getAttribute("data-orig-hx-post");
+    if (orig) { form.setAttribute("hx-post", orig); form.removeAttribute("data-orig-hx-post"); }
+    form.removeAttribute("data-note-mode");
+    var btn = form.querySelector("button[type='submit']");
+    if (btn && btn.textContent === "Note ▸") btn.textContent = "Ask ▸";
+  }
+
+  // After a successful submit the composer resets — restore note-mode overrides so the next message
+  // goes back through /generate unless the owner picks /note again.
+  document.body.addEventListener("reset", function (e) {
+    var form = composerOf(e.target);
+    if (form) clearNoteMode(form);
+  });
+
   // ---- clicks: chips, slash commands, mention picks ----
   document.body.addEventListener("click", function (e) {
     var slashCmd = e.target.closest("[data-slash-cmd]");
@@ -220,6 +236,20 @@
       var cmd = slashCmd.getAttribute("data-slash-cmd");
       var ta = sForm.querySelector("[data-composer-text]");
       if (ta) replaceToken(ta, ""); // drop the "/cmd" the user was typing
+      if (cmd === "note") {
+        // Switch the form endpoint to /note — no LLM will be summoned. Store the original so reset
+        // can restore it. Selecting /note clears any scope command (they only apply to /generate).
+        if (!sForm.getAttribute("data-orig-hx-post")) {
+          sForm.setAttribute("data-orig-hx-post", sForm.getAttribute("hx-post"));
+        }
+        sForm.setAttribute("hx-post", sForm.getAttribute("hx-post").replace(/\/generate$/, "/note"));
+        sForm.setAttribute("data-note-mode", "1");
+        var btn = sForm.querySelector("button[type='submit']");
+        if (btn) btn.textContent = "Note ▸";
+      } else {
+        // Any non-note command clears note mode first (they're mutually exclusive).
+        clearNoteMode(sForm);
+      }
       if (cmd === "branch" || cmd === "topic") {
         var val = cmd === "branch" ? "BRANCH_ONLY" : "WHOLE_THREAD";
         // The generation scope (what the persona reads) is hidden; the only on-screen context control is
