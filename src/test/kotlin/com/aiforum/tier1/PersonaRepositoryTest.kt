@@ -95,6 +95,24 @@ class PersonaRepositoryTest {
     }
 
     @Test
+    fun `delete removes the persona and leaves the others intact`() {
+        personas.insert("vex", "Vex", "systems contrarian")
+        personas.insert("sol", "Sol", "index whisperer")
+
+        personas.delete("vex")
+
+        assertEquals(null, personas.find("vex"))
+        assertEquals(listOf("Sol"), personas.findAll().map { it.name })
+    }
+
+    @Test
+    fun `delete is a no-op when the persona does not exist`() {
+        personas.insert("sol", "Sol", "index whisperer")
+        personas.delete("ghost")
+        assertEquals(listOf("Sol"), personas.findAll().map { it.name })
+    }
+
+    @Test
     fun `a persona seeded with the pre-V10 columns reads back empty abilities and dials`() {
         // The DEFAULT '[]' / '{}' the migration sets must deserialize to empty collections.
         jdbc.update(
