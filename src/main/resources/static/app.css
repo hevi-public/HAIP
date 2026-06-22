@@ -188,6 +188,16 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   color: var(--ink); font-weight: 700; border-bottom-color: var(--sage);
 }
 
+/* Pin the header on desktop so the nav + theme toggle stay reachable while reading long threads, and so
+   clicking the bare chrome (header.js) scrolls back to a still-visible bar. z-index clears the sticky
+   side rails, which pin BELOW the header (their top offsets budget for it). Mobile keeps a static header
+   — pinning a 48px bar on a short phone viewport costs more reading room than it's worth. */
+@media (min-width: 1024px) {
+  /* -webkit-sticky first: Safari/iOS only honour the prefixed value on older engines, and silently drop
+     the whole declaration (no sticky) without it. Unprefixed second wins everywhere current. */
+  .site-header { position: -webkit-sticky; position: sticky; top: 0; z-index: 50; }
+}
+
 .container { max-width: var(--maxw); margin: 0 auto; padding: 20px clamp(16px, 2.5vw, 36px) 40px; }
 /* The thread view runs full-bleed — it wants every horizontal pixel for the reply tree. Prose stays
    capped at --prose, so widening only buys room for depth, not unreadable line lengths. */
@@ -274,14 +284,14 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   .home__rail { grid-area: left; margin-bottom: 0; }
   .home__main { grid-area: main; }
   .home__rail-right { grid-area: right; margin-top: 0; }
-  /* The LEFT nav rail pins as the page scrolls so the forum nav + members stay reachable. Cap it to the
-     visible space (same 86px budget as the thread rail — see its note) and let overflow scroll inside,
-     so a rail taller than the viewport doesn't glue its top and hide its tail. The RIGHT feeds rail is
-     deliberately NOT sticky: on a page longer than the rail, pinning leaves the boxes frozen over a
-     growing blank gap, so it just scrolls away with the page like normal content. */
+  /* The LEFT nav rail pins as the page scrolls so the forum nav + members stay reachable. It pins below
+     the sticky header (48px) + an 18px gap = top:66px (same budget as the thread rail — see its note),
+     capped to the visible space with overflow scrolling inside so a rail taller than the viewport doesn't
+     glue its top and hide its tail. The RIGHT feeds rail is deliberately NOT sticky: on a page longer than
+     the rail, pinning leaves the boxes frozen over a growing blank gap, so it just scrolls away. */
   .home__rail {
-    position: sticky; top: 18px;
-    max-height: calc(100vh - 86px); overflow-y: auto;
+    position: -webkit-sticky; position: sticky; top: 66px;
+    max-height: calc(100vh - 84px); overflow-y: auto;
   }
 }
 
@@ -507,12 +517,11 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
      pin its top and hide its tail). The branch-index box is the one allowed to shrink; the legend holds
      its full height. The RIGHT feeds rail is deliberately NOT sticky: on a thread longer than the rail,
      pinning leaves the boxes frozen over a growing blank gap, so it just scrolls away with the page. */
-  .thread__rail { position: sticky; top: 18px; }
-  /* Cap to the visible space so the lower boxes never drop below the fold. The header (48px) isn't
-     sticky, so at the top of the page the rail sits at 48 + 20 (container top pad) = 68px down — its
-     tallest offset from the viewport. Budget that plus an 18px bottom gap (68 + 18 = 86). Once scrolled,
-     the header leaves and the rail pins to top:18 with room to spare; this cap just stays conservative. */
-  .thread__rail { max-height: calc(100vh - 86px); }
+  .thread__rail { position: -webkit-sticky; position: sticky; top: 66px; }
+  /* Pin below the sticky header (48px) + an 18px gap = top:66px, so the branch index clears the bar
+     instead of sliding under it. Cap to the visible space so the lower boxes never drop below the fold:
+     66px top offset + an 18px bottom gap = 84px budget. */
+  .thread__rail { max-height: calc(100vh - 84px); }
   .thread__rail .rail-box[data-rail-box="branch-index"] { display: flex; flex-direction: column; min-height: 0; }
   .thread__rail .rail-box[data-rail-box="branch-index"] .branch-index { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .thread__rail .rail-box[data-rail-box="context-legend"] { flex-shrink: 0; }

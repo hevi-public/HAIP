@@ -31,32 +31,21 @@
     <link rel="stylesheet" href="/hljs-theme.css">
     <%-- htmx served from the webjar (see build.gradle.kts); version-agnostic path via webjars-locator-lite --%>
     <script src="/webjars/htmx.org/dist/htmx.min.js"></script>
-    <script src="/app.js" defer></script>
+    <%-- Composer affordances (auto-grow, slash/@mention palettes, the note/ask toggle). ES module →
+         deferred by default; imports the unit-tested composer-core decision layer. --%>
+    <script type="module" src="/app.js"></script>
     <%-- Vim-style keyboard navigation (plan_docs/keyboard-navigation.md). ES module → deferred by
          default; activates only where [data-nav-item] exists (thread page for now), no-ops elsewhere. --%>
     <script type="module" src="/nav.js"></script>
     <%-- Persona create/edit prompt-staleness guard (plan_docs/persona-prompt-edit-ux.md). ES module →
          deferred; activates only where [data-persona-form] exists (members/edit pages), no-ops elsewhere. --%>
     <script type="module" src="/persona-form.js"></script>
+    <%-- Click the bare header chrome to scroll to top (header is sticky on desktop, app.css). ES module
+         → deferred; activates wherever [data-scroll-top] exists, no-ops elsewhere. --%>
+    <script type="module" src="/header.js"></script>
 </head>
 <body>
-    <header class="site-header">
-        <a class="site-header__brand" href="/">
-            <span class="site-header__logo" aria-hidden="true">~/</span>
-            <span class="site-header__wordmark">AI Forum</span>
-        </a>
-        <nav class="site-nav">
-            <a href="/" aria-current="${if (activeNav == "threads") "page" else null}">threads</a>
-            <a href="/personas" aria-current="${if (activeNav == "members") "page" else null}">members</a>
-        </nav>
-        <div class="theme-toggle" role="group" aria-label="Theme">
-            <button type="button" class="theme-toggle__opt" data-set-theme="dark"><span aria-hidden="true">&#x263E;</span> dark</button>
-            <span class="theme-toggle__sep" aria-hidden="true">/</span>
-            <button type="button" class="theme-toggle__opt" data-set-theme="light"><span aria-hidden="true">&#x2600;</span> light</button>
-            <span class="theme-toggle__sep" aria-hidden="true">/</span>
-            <button type="button" class="theme-toggle__opt" data-set-theme="auto"><span aria-hidden="true">&#x25D1;</span> auto</button>
-        </div>
-    </header>
+    @template.fragments.siteHeader(activeNav = activeNav)
     <main class="container">
     ${content}
     </main>
