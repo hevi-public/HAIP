@@ -171,10 +171,18 @@
                 <div class="reply__regenerate-confirm" role="group" aria-label="Confirm regenerate">
                     <p class="reply__regenerate-warning">Regenerate this reply? The current version is kept — step back any time with the ‹ › control.</p>
                     <div class="reply__regenerate-buttons">
+                        <%-- Synchronous LLM call: disable the button and reveal the inline spinner while it
+                             runs (htmx toggles .htmx-request on both), mirroring the persona-prompt
+                             regenerate and the composer submit. The settled node outerHTML-swaps this whole
+                             panel away, so the disabled/spinner state never needs resetting. --%>
                         <button type="button" class="btn"
                                 hx-post="/replies/${reply.id}/regenerate"
                                 hx-target="closest article"
-                                hx-swap="outerHTML">Yes, regenerate</button>
+                                hx-swap="outerHTML"
+                                hx-disabled-elt="this" hx-indicator="next .regen-spinner">Yes, regenerate</button>
+                        <span class="htmx-indicator regen-spinner" aria-live="polite">
+                            <span class="spinner" aria-hidden="true"></span>Regenerating…
+                        </span>
                         <button type="button" class="btn btn--ghost"
                                 onclick="this.closest('details').open = false">Cancel</button>
                     </div>
