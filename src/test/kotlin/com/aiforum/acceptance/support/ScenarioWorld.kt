@@ -19,6 +19,9 @@ class ScenarioWorld {
      *  so a scenario can assert on the swap structure the browser actually receives. */
     var lastFragment: String? = null
 
+    /** thread title -> thread id, for steps that act on a thread by its title (e.g. deletion). */
+    val threadIds = mutableMapOf<String, String>()
+
     /** alias (e.g. persona name or "sol's reply") -> reply id, for cross-step references. */
     val replyIds = mutableMapOf<String, String>()
     var lastReplyId: String? = null

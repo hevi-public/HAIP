@@ -164,6 +164,24 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
         return ids
     }
 
+    /**
+     * Delete every comment in [threadId] (and their votes) — used when a whole thread is removed. Same
+     * FK ordering as [deleteSubtree]: votes first (`vote.node_id` references `comment`), then comments
+     * deepest-first so a child is always gone before the parent it points at (`comment.parent_id`).
+     * Returns the ids removed; empty if the thread has no comments.
+     */
+    fun deleteByThread(threadId: String): List<String> {
+        val ids = jdbc.query(
+            "SELECT id FROM comment WHERE thread_id = ? ORDER BY depth DESC",
+            { rs, _ -> rs.getString("id") }, threadId,
+        )
+        if (ids.isEmpty()) return emptyList()
+        val placeholders = ids.joinToString(",") { "?" }
+        jdbc.update("DELETE FROM vote WHERE node_id IN ($placeholders)", *ids.toTypedArray())
+        ids.forEach { jdbc.update("DELETE FROM comment WHERE id = ?", it) }
+        return ids
+    }
+
     /** Ids of [nodeId]'s subtree (itself + all descendants) ordered deepest depth first, for FK-safe delete. */
     private fun subtreeIdsDeepestFirst(nodeId: String): List<String> =
         jdbc.query(

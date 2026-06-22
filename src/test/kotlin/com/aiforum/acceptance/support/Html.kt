@@ -15,6 +15,12 @@ object Html {
         return Regex("$attr=\"([^\"]*)\"").find(tag)?.groupValues?.get(1)
     }
 
+    /** The value of [attr] on the thread row whose data-thread-title == [title], or null. */
+    fun threadRowAttr(html: String, title: String, attr: String): String? {
+        val tag = Regex("<[^>]*data-thread-title=\"${Regex.escape(title)}\"[^>]*>").find(html)?.value ?: return null
+        return Regex("${Regex.escape(attr)}=\"([^\"]*)\"").find(tag)?.groupValues?.get(1)
+    }
+
     /** True if any element carries data-[name]="[value]". */
     fun hasAttr(html: String, name: String, value: String): Boolean =
         Regex("$name=\"${Regex.escape(value)}\"").containsMatchIn(html)

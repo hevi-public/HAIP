@@ -19,6 +19,12 @@ class ThreadReadRepository(private val jdbc: JdbcTemplate, private val clock: Cl
         )
     }
 
+    /** Drop the owner's read marker for a thread — called when the thread is deleted (the FK to
+     *  thread(id) means this row must go before the thread row). No-op if there's no marker. */
+    fun delete(threadId: String) {
+        jdbc.update("DELETE FROM thread_read WHERE thread_id = ?", threadId)
+    }
+
     fun unreadCount(threadId: String): Int {
         val lastReadAt = jdbc.query(
             "SELECT last_read_at FROM thread_read WHERE thread_id = ?",
