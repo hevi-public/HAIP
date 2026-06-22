@@ -2,10 +2,12 @@ package com.aiforum.web
 
 import com.aiforum.domain.Comment
 import com.aiforum.dto.AttachmentView
+import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReplyView
 import com.aiforum.repo.AttachmentRepository
 import com.aiforum.repo.CommentRepository
+import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.VoteRepository
 import org.springframework.stereotype.Component
 
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Component
 class ReplyTreeAssembler(
     private val comments: CommentRepository,
     private val votes: VoteRepository,
+    private val personas: PersonaRepository,
     private val attachments: AttachmentRepository,
 ) {
 
@@ -26,6 +29,11 @@ class ReplyTreeAssembler(
         val voteCounts = votes.countAll()
         val childrenByParent = all.groupBy { it.parentId }
         val byId = all.associateBy { it.id }
+        // Regenerate is offered only on a POSTED reply authored by a persona (not the owner or the system
+        // /more directive). Revision counts are read once for the whole thread; a comment with no stored
+        // revisions is an implicit 1-of-1, so the node shows no switcher (template gates on count > 1).
+        val personaIds = personas.findAll().map { it.id }.toSet()
+        val revisionCounts = all.firstOrNull()?.let { comments.revisionCountsByComment(it.threadId) } ?: emptyMap()
         // One batch read for the whole tree's images (no per-node query), folded into each node below.
         val attByComment = attachments.forComments(all.map { it.id })
         // The "in reply to" anchor only earns its place when a reply is visually separated from the
@@ -43,6 +51,8 @@ class ReplyTreeAssembler(
                 parent = if (isDirect) null else comment.parentId?.let { byId[it] }?.let {
                     ParentRef(it.id, it.authorId, ParentRef.previewOf(it.body))
                 },
+                revisionCount = (revisionCounts[comment.id] ?: 0).coerceAtLeast(1),
+                regeneratable = comment.state == GenerationState.POSTED && comment.authorId in personaIds,
                 attachments = attByComment[comment.id].orEmpty().map(AttachmentView::of),
             )
         // Top-level nodes answer the post, not a comment — treat them as direct so they carry no anchor.

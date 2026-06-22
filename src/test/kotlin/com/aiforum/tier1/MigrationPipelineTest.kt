@@ -54,7 +54,7 @@ class MigrationPipelineTest {
             }
         }
 
-        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending V4–V12).
+        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending V4–V14).
         flyway(url, null).migrate()
 
         // 4. The old rows survived, and the new columns carry their migration default / backfill.
@@ -97,10 +97,10 @@ class MigrationPipelineTest {
                     assertEquals(null, rs.getString("updated_at"), "V11 leaves the pre-existing thread unedited (NULL)")
                 }
 
-                // flyway_schema_history records the full V1..V13 chain as applied.
+                // flyway_schema_history records the full V1..V14 chain as applied.
                 st.executeQuery("SELECT MAX(CAST(version AS INTEGER)) AS v FROM flyway_schema_history").use { rs ->
                     rs.next()
-                    assertEquals(13, rs.getInt("v"), "all thirteen migrations should be recorded as applied")
+                    assertEquals(14, rs.getInt("v"), "all fourteen migrations should be recorded as applied")
                 }
             }
         }

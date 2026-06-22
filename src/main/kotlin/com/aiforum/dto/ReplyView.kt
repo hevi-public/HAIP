@@ -25,6 +25,12 @@ data class ReplyView(
     // True once the owner has edited this body (§7) — drives the subtle "(edited)" marker and the
     // data-edited hook. Trailing default so positional constructions stay valid.
     val edited: Boolean = false,
+    // Content-revision state (V14). [revisionIndex] is 1-based and [revisionCount] the total, so the node
+    // can render a "2/3" switcher (shown only when revisionCount > 1). [regeneratable] is true on a POSTED
+    // persona reply — the only nodes that offer the Regenerate control. Defaults keep a node at 1-of-1.
+    val revisionIndex: Int = 1,
+    val revisionCount: Int = 1,
+    val regeneratable: Boolean = false,
     // The comment this reply answers, for the "in reply to" anchor. Null for top-level replies (they
     // answer the post, which has no comment node). Populated on the full thread-page render.
     val parent: ParentRef? = null,

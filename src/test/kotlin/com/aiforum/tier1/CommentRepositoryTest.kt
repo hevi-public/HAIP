@@ -29,7 +29,7 @@ class CommentRepositoryTest {
 
     @BeforeEach
     fun clean() {
-        listOf("vote", "event_log", "comment", "thread", "persona").forEach { jdbc.update("DELETE FROM $it") }
+        listOf("vote", "comment_revision", "event_log", "comment", "thread", "persona").forEach { jdbc.update("DELETE FROM $it") }
     }
 
     @Test
@@ -233,6 +233,83 @@ class CommentRepositoryTest {
     @Test
     fun `editBody on an unknown id is a no-op returning false`() {
         assertEquals(false, comments.editBody("does-not-exist", "whatever"))
+    }
+
+    @Test
+    fun `editBody appends an edit revision — the original is kept and the marker tracks the shown version`() {
+        val thread = data.insertThread("Scaling SQLite")
+        val id = data.insertComment(thread, authorId = "sol", body = "first take")
+
+        assertEquals(true, comments.editBody(id, "corrected"))
+        // Two revisions now: idx 0 = the original generation, idx 1 = the owner's edit (shown).
+        assertEquals(2, comments.revisionCount(id))
+        comments.findById(id)!!.let {
+            assertEquals("corrected", it.body)
+            assertNotNull(it.updatedAt, "the shown revision is the edit → marked edited")
+            assertEquals(1, it.revisionIndex)
+        }
+
+        // Stepping back to the original generation restores it AND clears the edited marker.
+        assertEquals(true, comments.selectRevision(id, 0))
+        comments.findById(id)!!.let {
+            assertEquals("first take", it.body)
+            assertEquals(null, it.updatedAt, "the original generation is not an edit → no marker")
+        }
+    }
+
+    @Test
+    fun `revisions are append-only and selectRevision swaps the chosen take into the live body`() {
+        val thread = data.insertThread("Scaling SQLite")
+        val id = data.insertComment(thread, authorId = "sol", body = "first take")
+
+        // No revisions yet → implicit 1-of-1, body untouched, revision_index 0.
+        assertEquals(0, comments.revisionCount(id))
+        assertEquals(0, comments.findById(id)!!.revisionIndex)
+
+        // First regenerate seeds idx 0 (the body being replaced) then idx 1 (the new take), and shows idx 1.
+        comments.addRevision(id, 0, "first take", null)
+        comments.addRevision(id, 1, "second take", null)
+        assertEquals(true, comments.selectRevision(id, 1))
+        comments.findById(id)!!.let {
+            assertEquals("second take", it.body, "the live body follows the selected revision")
+            assertEquals(1, it.revisionIndex)
+        }
+        assertEquals(2, comments.revisionCount(id))
+
+        // Stepping back to idx 0 restores the original take in place.
+        assertEquals(true, comments.selectRevision(id, 0))
+        comments.findById(id)!!.let {
+            assertEquals("first take", it.body)
+            assertEquals(0, it.revisionIndex)
+        }
+
+        // An out-of-range index is a no-op leaving the comment untouched.
+        assertEquals(false, comments.selectRevision(id, 9))
+        assertEquals("first take", comments.findById(id)!!.body)
+    }
+
+    @Test
+    fun `revisionCountsByComment reports counts per comment for the whole thread`() {
+        val thread = data.insertThread("Scaling SQLite")
+        val regened = data.insertComment(thread, authorId = "sol", body = "live")
+        data.insertComment(thread, authorId = "vex", body = "never regened")
+        comments.addRevision(regened, 0, "v0", null)
+        comments.addRevision(regened, 1, "v1", null)
+
+        val counts = comments.revisionCountsByComment(thread)
+        assertEquals(2, counts[regened])
+        assertEquals(null, counts[data.newId()], "a comment with no revisions has no entry (implicit 1-of-1)")
+    }
+
+    @Test
+    fun `deleteSubtree clears a node's revisions so the FK never blocks the delete`() {
+        val thread = data.insertThread("Scaling SQLite")
+        val id = data.insertComment(thread, authorId = "sol", body = "live", parentId = null, depth = 0)
+        comments.addRevision(id, 0, "v0", null)
+        comments.addRevision(id, 1, "v1", null)
+
+        assertEquals(setOf(id), comments.deleteSubtree(id).toSet())
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM comment_revision WHERE comment_id = ?", Int::class.java, id))
     }
 
     @Test

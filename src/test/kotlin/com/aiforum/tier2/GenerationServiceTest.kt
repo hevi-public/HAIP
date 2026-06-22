@@ -12,11 +12,13 @@ import com.aiforum.llm.LlmRequest
 import com.aiforum.llm.LlmResponse
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
+import com.aiforum.repo.Revision
 import com.aiforum.service.GenerationService
 import com.aiforum.service.InFlightGenerations
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -164,6 +166,81 @@ class GenerationServiceTest {
         assertEquals(1, llm.requests.size, "an @mention pre-empts the dispatcher — no routing call")
         assertEquals("Paul", replies.single().authorId)
         assertEquals("Paul's take", replies.single().body)
+    }
+
+    /** An in-memory repo that backs the revision round-trip: holds comments + their revisions so the
+     *  regenerate path runs end-to-end against fakes at the single LLM seam. */
+    private class RevisioningComments : CommentRepository(JdbcTemplate(), Clock.systemUTC()) {
+        val store = mutableMapOf<String, Comment>()
+        private val revs = mutableMapOf<String, MutableList<Revision>>()
+        override fun insert(c: Comment) { store[c.id] = c }
+        override fun findById(id: String): Comment? = store[id]
+        override fun threadComments(threadId: String): List<Comment> = store.values.filter { it.threadId == threadId }
+        override fun ancestorPath(nodeId: String): List<Comment> = emptyList()
+        override fun revisionCount(commentId: String): Int = revs[commentId]?.size ?: 0
+        override fun addRevision(commentId: String, idx: Int, body: String, reasoningLeak: com.aiforum.dto.ReasoningLeak?, editedAt: java.time.Instant?) {
+            revs.getOrPut(commentId) { mutableListOf() }.add(Revision(idx, body, reasoningLeak, editedAt))
+        }
+        override fun selectRevision(commentId: String, idx: Int): Boolean {
+            val rev = revs[commentId]?.firstOrNull { it.idx == idx } ?: return false
+            store[commentId] = store.getValue(commentId).copy(body = rev.body, reasoningLeak = rev.reasoningLeak, updatedAt = rev.editedAt, revisionIndex = idx)
+            return true
+        }
+    }
+
+    private fun postedReply(id: String, author: String, body: String) =
+        Comment(id, "t1", null, author, body, GenerationState.POSTED, null, 0)
+
+    @Test
+    fun `regenerate appends a new revision, keeps the original, and shows the new take`() {
+        val comments = RevisioningComments().apply { insert(postedReply("c1", "sol", "first take")) }
+        val service = GenerationService(okLlm, comments, personas)   // okLlm answers "Indexes help here"
+
+        val view = service.regenerate("c1")
+
+        assertEquals("Indexes help here", view.body, "the node shows the regenerated take")
+        assertEquals(2, view.revisionIndex, "the new take is the one shown (idx 1, 1-based 2)")
+        assertEquals(2, comments.revisionCount("c1"), "the original (idx 0) and the new take (idx 1) are both stored")
+
+        // The original is preserved — stepping back to revision 0 restores it in place.
+        comments.selectRevision("c1", 0)
+        assertEquals("first take", comments.findById("c1")!!.body)
+    }
+
+    @Test
+    fun `a second regenerate appends a third revision without re-seeding the original`() {
+        val comments = RevisioningComments().apply { insert(postedReply("c1", "sol", "first take")) }
+        val service = GenerationService(okLlm, comments, personas)
+
+        service.regenerate("c1")
+        val second = service.regenerate("c1")
+
+        assertEquals(3, comments.revisionCount("c1"), "first(0) + two regenerations(1,2) = 3 takes")
+        assertEquals(3, second.revisionIndex, "the latest take is shown (idx 2, 1-based 3)")
+    }
+
+    @Test
+    fun `a regeneration failure keeps the current take and appends no revision`() {
+        val failing = object : LlmClient {
+            override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse =
+                throw LlmException.RateLimited(retryAfter = java.time.Duration.ZERO)
+        }
+        val comments = RevisioningComments().apply { insert(postedReply("c1", "sol", "keep me")) }
+        val service = GenerationService(failing, comments, personas)
+
+        val view = service.regenerate("c1")
+
+        assertEquals("keep me", view.body, "a flaky model never destroys the live take")
+        assertEquals(0, comments.revisionCount("c1"), "no revision is appended on failure")
+    }
+
+    @Test
+    fun `regenerate rejects a non-posted reply`() {
+        val draft = Comment("c1", "t1", null, "sol", "", GenerationState.DRAFTING, null, 0)
+        val comments = RevisioningComments().apply { insert(draft) }
+        val service = GenerationService(okLlm, comments, personas)
+
+        assertThrows(IllegalArgumentException::class.java) { service.regenerate("c1") }
     }
 
     @Test

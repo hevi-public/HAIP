@@ -267,6 +267,43 @@ class GenerationService(
     }
 
     /**
+     * Regenerate a POSTED persona reply (§7), KEEPING every prior take. Unlike [retry] (which overwrites a
+     * dead-end draft in place), this appends a content revision and points the node at it, so the owner can
+     * step back through earlier versions via the ‹ › switcher. The FIRST regenerate also stores the body
+     * being replaced as revision 0, so the original is never lost; thereafter the table already holds it.
+     *
+     * Children are untouched — the node's body changes, its subtree stays. A transient generation failure
+     * leaves the current take in place (no revision appended) and returns the node unchanged, so a flaky
+     * model can never destroy a good reply. Returns the re-rendered node (its body now the new revision).
+     */
+    fun regenerate(replyId: String): ReplyView {
+        val existing = comments.findById(replyId) ?: error("no reply $replyId")
+        require(existing.state == GenerationState.POSTED) { "only a posted reply can be regenerated" }
+        val persona = personas.find(existing.authorId)
+            ?: error("reply $replyId is not a persona reply (author ${existing.authorId})")
+        // Same caption-aware context path as [retry], so a regenerated take sees the thread's image
+        // captions exactly as the original generation did.
+        val ctx = assembleContext(existing.threadId, persona.systemPrompt, withOpeningPost(existing.threadId, comments.threadComments(existing.threadId)), targetId = existing.parentId)
+        val resp = try {
+            llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name, persona.model), timeout), CancellationToken())
+        } catch (e: Throwable) {
+            // Regeneration is non-destructive: on failure we keep what's there and re-render it unchanged.
+            log.warn("regenerate of reply {} by persona {} failed; keeping current take", replyId, persona.id, e)
+            return existing.toReplyView()
+        }
+        resp.reasoningLeak?.let { log.warn("reasoning leak ({}) on regenerate of reply {} by persona {}", it, replyId, persona.id) }
+        // Append the new take. Seed revision 0 with the body we're replacing the first time, so the
+        // original survives; the appended index is the prior count (which already includes idx 0 after
+        // the first regenerate). Then select it so `comment.body` becomes this take for the rest of the app.
+        val count = comments.revisionCount(replyId)
+        if (count == 0) comments.addRevision(replyId, 0, existing.body, existing.reasoningLeak, editedAt = existing.updatedAt)
+        val newIdx = if (count == 0) 1 else count
+        comments.addRevision(replyId, newIdx, resp.text, resp.reasoningLeak)
+        comments.selectRevision(replyId, newIdx)
+        return comments.findById(replyId)!!.toReplyView()
+    }
+
+    /**
      * Persist the owner's composed message as their own POSTED node (§4/§5) and return its id, so the
      * summon that follows parents under it. This is what makes the owner's words both APPEAR in the tree
      * and reach every persona's context — without it the room only ever sees a blank transcript and

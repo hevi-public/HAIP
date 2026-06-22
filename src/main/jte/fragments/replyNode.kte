@@ -40,6 +40,9 @@
          data-vote-count="${reply.voteCount.toString()}"
          data-reasoning-leak="${reply.reasoningLeak?.name?.lowercase() ?: ""}"
          data-edited="${reply.edited.toString()}"
+         data-revision-index="${reply.revisionIndex.toString()}"
+         data-revision-count="${reply.revisionCount.toString()}"
+         data-regeneratable="${reply.regeneratable.toString()}"
          data-depth="${reply.depth.toString()}">
     <header class="reply__head">
         <span class="monogram" aria-hidden="true" style="--mono-h: ${AuthorColor.hue(reply.authorId, personas)}">${reply.authorId.take(2).uppercase()}</span>
@@ -60,6 +63,23 @@
              matters most on a persona's node, where it signals the owner changed what the persona "said". --%>
         @if(reply.edited)
             <span class="reply__edited" data-edited-marker>(edited)</span>
+        @endif
+        <%-- Revision switcher (§7 regenerate): only when the reply has more than one stored take. Steps
+             through versions in place — each ‹/› outerHTML-swaps this <article> with the selected revision
+             (children preserved, server-rendered). The 1-based label is the data-revision-* hooks the
+             acceptance probe reads; the prev/next targets are 0-based stored indices. --%>
+        @if(reply.revisionCount > 1)
+            <span class="reply__revisions" role="group" aria-label="Revision history" data-revisions>
+                <button type="button" class="reply__rev-nav" aria-label="Previous version"
+                        disabled="${reply.revisionIndex <= 1}"
+                        hx-post="/replies/${reply.id}/revision/${reply.revisionIndex - 2}"
+                        hx-target="closest article" hx-swap="outerHTML">‹</button>
+                <span class="reply__rev-count" data-revision-label>${reply.revisionIndex}/${reply.revisionCount}</span>
+                <button type="button" class="reply__rev-nav" aria-label="Next version"
+                        disabled="${reply.revisionIndex >= reply.revisionCount}"
+                        hx-post="/replies/${reply.id}/revision/${reply.revisionIndex}"
+                        hx-target="closest article" hx-swap="outerHTML">›</button>
+            </span>
         @endif
     </header>
     @if(reply.parent != null)
@@ -133,6 +153,41 @@
              edit. The disclosure prefills with the raw markdown and saves in place (see editForm). --%>
         @if(reply.state == GenerationState.POSTED)
             @template.fragments.editForm(reply = reply)
+        @endif
+        <%-- Regenerate (§7): re-run the model on a POSTED persona reply for a fresh take. Reuses the
+             delete-confirm disclosure pattern, but it is NON-destructive (sage, not clay) — the current
+             take is kept as a revision, so the warning points the owner at the ‹ › switcher to step back.
+             Only on a persona reply (reply.regeneratable); the owner's own notes have nothing to regen. --%>
+        @if(reply.regeneratable)
+            <details class="reply__regenerate">
+                <summary class="reply__regenerate-trigger">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                    <span>Regenerate</span>
+                </summary>
+                <div class="reply__regenerate-confirm" role="group" aria-label="Confirm regenerate">
+                    <p class="reply__regenerate-warning">Regenerate this reply? The current version is kept — step back any time with the ‹ › control.</p>
+                    <div class="reply__regenerate-buttons">
+                        <%-- Synchronous LLM call: disable the button and reveal the inline spinner while it
+                             runs (htmx toggles .htmx-request on both), mirroring the persona-prompt
+                             regenerate and the composer submit. The settled node outerHTML-swaps this whole
+                             panel away, so the disabled/spinner state never needs resetting. --%>
+                        <button type="button" class="btn"
+                                hx-post="/replies/${reply.id}/regenerate"
+                                hx-target="closest article"
+                                hx-swap="outerHTML"
+                                hx-disabled-elt="this" hx-indicator="next .regen-spinner">Yes, regenerate</button>
+                        <span class="htmx-indicator regen-spinner" aria-live="polite">
+                            <span class="spinner" aria-hidden="true"></span>Regenerating…
+                        </span>
+                        <button type="button" class="btn btn--ghost"
+                                onclick="this.closest('details').open = false">Cancel</button>
+                    </div>
+                </div>
+            </details>
         @endif
         <%-- Delete cascades to the whole subtree (§8 node operations), pushed to the bottom-right of the action row. The
              trash trigger opens an inline "are you sure" panel (a <details> disclosure) instead of the

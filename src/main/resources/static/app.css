@@ -894,6 +894,44 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 .reply__edit[open] { flex-basis: 100%; }              /* the open form spans the action row */
 .reply__edit-form { margin-top: 8px; }
 .reply__edit-text { width: 100%; }
+
+/* regenerate disclosure — same neutral trigger shape as Edit/Delete, but non-destructive (sage). The
+   confirm panel reuses the sage surface (not clay) since the current take is kept as a revision. */
+.reply__regenerate > summary {
+  display: inline-flex; align-items: center; gap: 6px;
+  list-style: none; cursor: pointer; width: max-content;
+  color: var(--muted);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  padding: 4px 12px; font-size: 12px;
+}
+.reply__regenerate > summary::-webkit-details-marker { display: none; }
+.reply__regenerate > summary .icon { width: 14px; height: 14px; }
+.reply__regenerate > summary:hover,
+.reply__regenerate[open] > summary { color: var(--ink); border-color: var(--sage); }
+.reply__regenerate-confirm {
+  margin-top: 8px; max-width: 360px;
+  background: var(--grey-bg);
+  border: 1px solid var(--sage-2); border-left: 3px solid var(--sage);
+  border-radius: var(--r); padding: 11px 13px;
+}
+.reply__regenerate-warning {
+  margin: 0 0 10px;
+  font-size: 12.5px; line-height: 1.5; color: var(--ink);
+}
+.reply__regenerate-buttons { display: flex; align-items: center; gap: 8px; }
+
+/* revision switcher — a compact ‹ 2/3 › stepper in the reply header, shown only when a reply has more
+   than one stored take. The count is mono so the digits don't jitter as you step through versions. */
+.reply__revisions { display: inline-flex; align-items: center; gap: 2px; }
+.reply__rev-nav {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; padding: 0; line-height: 1;
+  background: none; cursor: pointer; color: var(--muted);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+}
+.reply__rev-nav:hover:not(:disabled) { color: var(--ink); border-color: var(--sage); }
+.reply__rev-nav:disabled { opacity: 0.4; cursor: default; }
+.reply__rev-count { font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding: 0 3px; }
 .thread__op-edit-title { width: 100%; margin-bottom: 8px; }
 /* the OP head keeps the title and its (edited) marker on one baseline */
 .thread__op-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }

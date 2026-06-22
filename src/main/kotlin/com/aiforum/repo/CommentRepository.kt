@@ -34,6 +34,15 @@ data class StarredComment(
     val createdAt: String,
 )
 
+/** One stored content revision of a comment (V14): its 0-based position, body, leak verdict, and — when
+ *  this revision is an owner edit rather than a generated take — the edit timestamp (null otherwise). */
+data class Revision(
+    val idx: Int,
+    val body: String,
+    val reasoningLeak: ReasoningLeak?,
+    val editedAt: Instant? = null,
+)
+
 @Repository
 class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock) {
 
@@ -54,6 +63,16 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
             starred = rs.getInt("starred") != 0,
             reasoningLeak = rs.getString("reasoning_leak")?.let { ReasoningLeak.valueOf(it) },
             updatedAt = rs.getString("updated_at")?.let { Instant.parse(it) },
+            revisionIndex = rs.getInt("revision_index"),
+        )
+    }
+
+    private val revisionMapper = RowMapper { rs, _ ->
+        Revision(
+            idx = rs.getInt("idx"),
+            body = rs.getString("body"),
+            reasoningLeak = rs.getString("reasoning_leak")?.let { ReasoningLeak.valueOf(it) },
+            editedAt = rs.getString("edited_at")?.let { Instant.parse(it) },
         )
     }
 
@@ -90,8 +109,70 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
      * if a row was updated. The corrected body flows into future generation context automatically: branch
      * context is reassembled from the stored bodies at summon time.
      */
-    fun editBody(id: String, body: String): Boolean =
-        jdbc.update("UPDATE comment SET body=?, updated_at=? WHERE id=?", body, clock.instant().toString(), id) > 0
+    /**
+     * Edit a comment body (§7) as a NEW REVISION (V14), not an in-place overwrite — so the owner's
+     * correction is kept in the version history beside the generated take(s) and can be stepped back to.
+     * The new revision is flagged as an edit (edited_at set), which [selectRevision] copies into
+     * `comment.updated_at`, so the "(edited)" marker tracks whichever version is currently shown. The
+     * FIRST edit/regenerate also seeds idx 0 with the body being replaced (carrying its original
+     * edited-ness), so nothing is lost. Returns false for an unknown id (nothing to edit).
+     */
+    fun editBody(id: String, body: String): Boolean {
+        val existing = findById(id) ?: return false
+        val count = revisionCount(id)
+        if (count == 0) addRevision(id, 0, existing.body, existing.reasoningLeak, editedAt = existing.updatedAt)
+        val newIdx = if (count == 0) 1 else count
+        // An owner edit is the owner's own words: no model reasoning leak, and edited_at stamps it as an edit.
+        addRevision(id, newIdx, body, reasoningLeak = null, editedAt = clock.instant())
+        return selectRevision(id, newIdx)
+    }
+
+    /**
+     * Append a content revision (V14) — a regenerated take or an owner edit of a reply. Revisions are
+     * stored append-only and never overwrite the live body; [selectRevision] is what swaps a stored take
+     * into `comment.body` for display. [editedAt] is non-null only for an owner edit (it drives the
+     * "(edited)" marker via [selectRevision]); a generated take leaves it null. The FIRST regenerate/edit
+     * also stores idx 0 (the body being replaced) so the original take is kept.
+     */
+    fun addRevision(commentId: String, idx: Int, body: String, reasoningLeak: ReasoningLeak?, editedAt: Instant? = null) {
+        jdbc.update(
+            "INSERT INTO comment_revision(comment_id, idx, body, reasoning_leak, edited_at, created_at) VALUES (?,?,?,?,?,?)",
+            commentId, idx, body, reasoningLeak?.name, editedAt?.toString(), clock.instant().toString(),
+        )
+    }
+
+    /** How many revisions are stored for [commentId]. 0 means "never regenerated" — an implicit 1-of-1. */
+    fun revisionCount(commentId: String): Int =
+        jdbc.queryForObject("SELECT COUNT(*) FROM comment_revision WHERE comment_id = ?", Int::class.java, commentId) ?: 0
+
+    /** Revision counts for every regenerated comment in [threadId], so the assembler can label nodes in
+     *  one read instead of per-node. Absent comments (no rows) are an implicit 1-of-1. */
+    fun revisionCountsByComment(threadId: String): Map<String, Int> =
+        jdbc.query(
+            """SELECT r.comment_id AS cid, COUNT(*) AS n
+               FROM comment_revision r JOIN comment c ON c.id = r.comment_id
+               WHERE c.thread_id = ? GROUP BY r.comment_id""",
+            { rs, _ -> rs.getString("cid") to rs.getInt("n") }, threadId,
+        ).toMap()
+
+    /**
+     * Show revision [idx] of [commentId]: copy that stored take's body + leak into the live `comment` row
+     * and point `revision_index` at it. This is the navigation primitive behind the ‹ › switcher — the
+     * body the rest of the app reads (context, rail, markdown) follows the selected revision. Returns
+     * false if no such revision exists (an out-of-range index), leaving the comment untouched.
+     */
+    fun selectRevision(commentId: String, idx: Int): Boolean {
+        val rev = jdbc.query(
+            "SELECT idx, body, reasoning_leak, edited_at FROM comment_revision WHERE comment_id = ? AND idx = ?",
+            revisionMapper, commentId, idx,
+        ).firstOrNull() ?: return false
+        // updated_at follows the selected revision's edit flag: set on an owner edit, cleared on a generated
+        // take — so the "(edited)" marker reflects whichever version is on screen.
+        return jdbc.update(
+            "UPDATE comment SET body=?, reasoning_leak=?, updated_at=?, revision_index=? WHERE id=?",
+            rev.body, rev.reasoningLeak?.name, rev.editedAt?.toString(), idx, commentId,
+        ) > 0
+    }
 
     /**
      * Flip a comment's star and return the new state. Toggled atomically in SQL (CASE) so concurrent
@@ -215,6 +296,8 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
         if (ids.isEmpty()) return emptyList()
         val placeholders = ids.joinToString(",") { "?" }
         jdbc.update("DELETE FROM vote WHERE node_id IN ($placeholders)", *ids.toTypedArray())
+        // Revisions reference comment(id) too (foreign_keys=on) — clear them before the comments they hang off.
+        jdbc.update("DELETE FROM comment_revision WHERE comment_id IN ($placeholders)", *ids.toTypedArray())
         // Attachments reference comment(id) (foreign_keys=on), so they must go before the comments —
         // the blob on disk is content-addressed and left for a future dedup-aware GC.
         jdbc.update("DELETE FROM attachment WHERE comment_id IN ($placeholders)", *ids.toTypedArray())
@@ -237,6 +320,7 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
         if (ids.isEmpty()) return emptyList()
         val placeholders = ids.joinToString(",") { "?" }
         jdbc.update("DELETE FROM vote WHERE node_id IN ($placeholders)", *ids.toTypedArray())
+        jdbc.update("DELETE FROM comment_revision WHERE comment_id IN ($placeholders)", *ids.toTypedArray())
         // Comment-scoped attachments reference comment(id), so clear them before the comments.
         jdbc.update("DELETE FROM attachment WHERE comment_id IN ($placeholders)", *ids.toTypedArray())
         ids.forEach { jdbc.update("DELETE FROM comment WHERE id = ?", it) }
