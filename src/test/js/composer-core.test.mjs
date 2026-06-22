@@ -2,17 +2,20 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   reduceMode,
+  effectiveMode,
   submitLabel,
   toggleLabel,
   toggleCmd,
   notePath,
+  resolvePath,
 } from "../../main/resources/static/composer-core.mjs";
 
 /*
  * The frontend "Tier 0" for the composer's note/ask toggle (Step 2). Pure mode model, no DOM: the
- * composer posts to /generate (summon) in "ask" mode or /note (silent owner comment) in "note" mode,
- * and the one footer button alternates between them. DOM glue (app.js) reads the form's current mode
- * and applies these labels/commands.
+ * composer posts to /note (silent owner comment — the DEFAULT) in "note" mode or /generate (summon)
+ * in "ask" mode, and the one footer button alternates between them. Tagging a persona always summons,
+ * even from the note default. DOM glue (app.js) reads the form's current mode and applies these
+ * labels/commands.
  */
 
 test("reduceMode — /note enters note mode, /ask returns to ask", () => {
@@ -32,6 +35,15 @@ test("reduceMode — the scope commands only apply to a real summon, so they lea
 test("reduceMode — an unknown command is a no-op", () => {
   assert.equal(reduceMode("note", "mention"), "note");
   assert.equal(reduceMode("ask", ""), "ask");
+});
+
+test("effectiveMode — tagging a persona always summons, even from the note default", () => {
+  // Untagged: the toggle mode wins (note stays note, ask stays ask).
+  assert.equal(effectiveMode("note", false), "note");
+  assert.equal(effectiveMode("ask", false), "ask");
+  // Tagged: an @mention / named chip is a deliberate summon, so note is overridden to ask.
+  assert.equal(effectiveMode("note", true), "ask");
+  assert.equal(effectiveMode("ask", true), "ask");
 });
 
 test("submitLabel — the button says what pressing it does", () => {
@@ -56,6 +68,18 @@ test("notePath — rewrites the /generate request URL to /note (the actual summo
   assert.equal(notePath("/x/generate-stuff/generate"), "/x/generate-stuff/note");
   // a query string survives the rewrite
   assert.equal(notePath("/threads/abc/generate?foo=1"), "/threads/abc/note?foo=1");
+});
+
+test("resolvePath — note mode redirects to /note, but a tag keeps the summon on /generate", () => {
+  // Note (the default), no tag → silent owner comment.
+  assert.equal(resolvePath("/threads/abc/generate", "note", false), "/threads/abc/note");
+  // Note default, but the message tags a persona → summon wins, path stays /generate.
+  assert.equal(resolvePath("/threads/abc/generate", "note", true), "/threads/abc/generate");
+  // Ask mode always summons, tagged or not — the canonical /generate path is left intact.
+  assert.equal(resolvePath("/threads/abc/generate", "ask", false), "/threads/abc/generate");
+  assert.equal(resolvePath("/threads/abc/generate", "ask", true), "/threads/abc/generate");
+  // The query string survives the note rewrite.
+  assert.equal(resolvePath("/threads/abc/generate?foo=1", "note", false), "/threads/abc/note?foo=1");
 });
 
 test("a full alternation: ask → /note → note → /ask → ask", () => {
