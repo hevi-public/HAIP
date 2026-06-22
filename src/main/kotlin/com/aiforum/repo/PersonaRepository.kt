@@ -88,6 +88,15 @@ class PersonaRepository(private val jdbc: JdbcTemplate) {
     }
 
     /**
+     * Remove a persona row. Nothing references persona(id) — comment authorship is stored as a plain
+     * attribution string, not a foreign key (V1 schema) — so past comments by this persona keep their
+     * byline and this is a clean single-row delete with no cascade. No-op if the id is unknown.
+     */
+    fun delete(id: String) {
+        jdbc.update("DELETE FROM persona WHERE id = ?", id)
+    }
+
+    /**
      * Build the persona's system prompt from the owner-authored descriptor (their CHARACTER) plus the
      * forum framing the model needs to stay in role. Used by seeding (no LLM at startup) and as the
      * default; the admin create/edit path replaces this with an LLM-composed prompt.
