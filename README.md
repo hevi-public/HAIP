@@ -16,7 +16,7 @@ test-enforced contract. Source spec lives in [`plan_docs/`](plan_docs/); design 
 | Language / runtime | Kotlin 2.4.0, Java 21 |
 | Framework | Spring Boot 4.1 (Spring Framework 7), SSR via JTE 3.2.4, API-first DTOs |
 | Persistence | SQLite + `spring-jdbc` (`JdbcTemplate`, recursive CTEs) + Flyway 12.4 (`flyway-database-nc-sqlite`) — **not** Hibernate |
-| LLM | `claude -p` behind an injected `LlmClient` seam (mocked under the `test` profile) |
+| LLM | `claude -p` **or** any OpenAI-compatible server (e.g. LM Studio), behind one injected `LlmClient` seam (mocked under the `test` profile) |
 | Tests | Cucumber-JVM 7.34 over HTTP (`@SpringBootTest(RANDOM_PORT)` + `RestClient`), JUnit 6 |
 | Build / CI | Gradle 9.5.0 (Kotlin DSL); Dockerized build entrypoint + thin GitHub Actions wrapper |
 
@@ -57,6 +57,47 @@ On first launch the app seeds a small default team of personas — **Sol** (back
 (frontend), **Paul** (QA), **Mira** (PM), **Dana** (design) — so the forum is usable immediately;
 edit the roster under `aiforum.seed.personas` in `application.yml`, or manage personas at `/personas`.
 Seeding is idempotent (skips any that already exist) and disabled under the `test` profile.
+
+### Run profiles & LLM providers
+
+Profiles compose as **overlays** — the later one wins, and `SPRING_PROFILES_ACTIVE` overrides the
+`spring.profiles.default: dev`. A *base* profile (`dev`/`prod`/`test`) carries the datasource/port; the
+*overlay* profiles below only flip specific knobs.
+
+| Profile | Kind | What it does |
+|---------|------|--------------|
+| `dev` | base (default) | Local datasource (`data/`), port 8080, real `claude -p`, web-fetch on |
+| `prod` | base | Production datasource, web-fetch on |
+| `test` | base | Separate DB, backups off, `@Primary` scriptable `LlmClient` fake (no real IO) |
+| `openai` | overlay | Switch generation to an **OpenAI-compatible** server (e.g. LM Studio) instead of `claude -p` ([`application-openai.yml`](src/main/resources/application-openai.yml)) |
+| `debug` | overlay | DEBUG-log the **raw** LLM HTTP body, to inspect a model's reasoning shape ([`application-debug.yml`](src/main/resources/application-debug.yml)) |
+
+```bash
+./gradlew bootRun                                            # dev + claude -p (default)
+SPRING_PROFILES_ACTIVE=dev,openai ./gradlew bootRun          # dev datasource, generate via LM Studio
+SPRING_PROFILES_ACTIVE=dev,openai,debug ./gradlew bootRun    # + raw-response logging
+```
+
+### Running against a local model (LM Studio)
+
+The `openai` overlay points at LM Studio's local server (`http://localhost:1234/v1`) and reuses
+`aiforum.llm.default-model` for model selection (a per-persona `model` still wins). Set `default-model`
+to the **exact id** LM Studio reports (`GET /v1/models`, or the loaded-model row).
+
+**Model choice matters.** Local models differ in *how* they surface reasoning, and some leak their
+chain-of-thought into the reply:
+
+- **Recommended: a Qwen3-arch model** (we use **Qwen3.5 9B**, ~6 GB at 4-bit MLX). It wraps reasoning in
+  `<think>` tags **and** honours an `enable_thinking` switch, so the pipeline keeps replies clean. For a
+  role-play forum, turn thinking **off** — set the LM Studio preset to *No Thinking* (the reliable
+  switch) and/or `aiforum.llm.openai.disable-thinking: true`.
+- **Avoid Gemma** here: it narrates its reasoning inline in the reply with no separable marker, which no
+  amount of server-side parsing can clean.
+
+Defence-in-depth is built in regardless — leaked reasoning is stripped where possible and otherwise
+**flagged, never dropped** (a `reasoning leak` badge on the node), so a bad model degrades visibly rather
+than silently. Full investigation, the parsing/flagging design, and the model rationale:
+[`plan_docs/local-model-reasoning-leak.md`](plan_docs/local-model-reasoning-leak.md).
 
 **Discovery mode** — let a sea of red run without failing the build (useful while scaffolding):
 
@@ -102,7 +143,8 @@ fully green, with nothing left tagged `@wip`:
 
 ```
 src/main/kotlin/com/aiforum/
-  llm/        LlmClient seam (interface, ProcessLlmClient wrapping real `claude -p`, PromptContext, exceptions)
+  llm/        LlmClient seam (interface; ProcessLlmClient = `claude -p`, OpenAiLlmClient = LM Studio/HTTP;
+              PromptRenderer, ReplySanitizer (reasoning-leak strip/flag), response parsers, exceptions)
   domain/     Comment, lifecycle/GenerationStateMachine, context/ContextAssembler (Tier 0)
   dto/        ReplyView + enums (the frozen view-contract)
   repo/       JdbcTemplate repositories (recursive CTEs)
