@@ -1,5 +1,4 @@
--- Content versioning for AI replies (§7). (V14: V13 is reserved for the image-attachments branch;
--- Flyway tolerates the version gap on this branch until that one lands.)
+-- Content versioning for AI replies (§7). (V14 follows V13 = image attachments.)
 -- A regenerate OR an owner edit APPENDS a new revision instead of overwriting, so the owner can step back
 -- through earlier takes — the node shows a "2/3" indicator and a ‹ › switcher. `comment.body` stays the
 -- denormalised CURRENT revision (so every context-assembly / markdown / rail query keeps reading it

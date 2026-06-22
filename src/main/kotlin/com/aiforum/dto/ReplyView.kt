@@ -39,4 +39,7 @@ data class ReplyView(
     // emits this via $unsafe{}. Trailing default so positional constructions stay valid. Empty for
     // bodiless nodes (validation errors), which never display a body.
     val bodyHtml: String = "",
+    // Owner-attached images rendered as a gallery under the body. Trailing default so positional
+    // constructions stay valid; populated on the full thread render (and the just-posted note node).
+    val attachments: List<AttachmentView> = emptyList(),
 )

@@ -2,12 +2,14 @@ package com.aiforum.web
 
 import com.aiforum.domain.Comment
 import com.aiforum.domain.budget.DepthBudget
+import com.aiforum.dto.AttachmentView
 import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ReplyView
 import com.aiforum.dto.ScopeMode
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
+import com.aiforum.service.AttachmentService
 import com.aiforum.service.GenerationService
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Controller
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
 /** Request body for POST /threads/{id}/generate. */
@@ -49,6 +52,7 @@ class GenerationController(
     private val generation: GenerationService,
     private val personas: PersonaRepository,
     private val comments: CommentRepository,
+    private val attachments: AttachmentService,
     private val branchIndex: BranchIndexBuilder,
     // Regenerate/revision-nav re-render the node WITH its nested replies intact (a persona reply can have
     // children), so they go through the subtree assembler like the edit path — not the leaf renderNode.
@@ -65,6 +69,39 @@ class GenerationController(
     @PostMapping("/threads/{threadId}/generate", consumes = [MediaType.APPLICATION_FORM_URLENCODED_VALUE])
     fun generateForm(@PathVariable threadId: String, req: GenerateRequest, model: Model): String =
         respond(threadId, req, model)
+
+    /**
+     * The browser composer posts multipart when it carries an image (enctype set in composer.kte). With
+     * no file selected this is exactly the urlencoded path. With an image we persist the owner's message
+     * as their node first (so the image has an owner to hang off — the firewall keeps images owner-only),
+     * attach the image to it, THEN summon beneath it (postAsOwner=false, the node already exists). The
+     * personas pick up the image via its caption once the owner describes it; raw bytes never reach them.
+     */
+    @PostMapping("/threads/{threadId}/generate", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun generateMultipart(
+        @PathVariable threadId: String,
+        req: GenerateRequest,
+        @RequestParam(name = "images", required = false) images: List<MultipartFile>?,
+        model: Model,
+    ): String {
+        val uploads = images?.toUploads().orEmpty()
+        // No image → behave exactly like the urlencoded composer submit (owner message + summon).
+        if (uploads.isEmpty()) return respond(threadId, req, model)
+        val ownerNode = postOwnerNode(threadId, req.parentId, req.text)
+        val attViews = attachments.attachToComment(ownerNode.id, uploads).map(AttachmentView::of)
+        // Summon under the freshly-posted owner node. An empty selection (the owner deselected Anyone)
+        // just posts the image as a note — nothing to summon — rather than erroring.
+        val drafts = if (req.personaIds.isEmpty()) emptyList() else generation.startGeneration(
+            threadId, ownerNode.id, req.personaIds, "",
+            parseScope(req.scope), req.includeSiblings, postAsOwner = false, parseScope(req.routingScope),
+        )
+        model.addAttribute("replies", listOf(ownerNode.toReplyView(children = drafts, attachments = attViews)))
+        model.addAttribute("threadId", threadId)
+        model.addAttribute("personas", personaViews())
+        // The owner's node posts immediately — refresh the rail's branch index as an out-of-band swap.
+        model.addAttribute("branchIndex", branchIndex.forThread(threadId))
+        return "fragments/replyList"
+    }
 
     private fun respond(threadId: String, req: GenerateRequest, model: Model): String {
         // Validation BEFORE spending an LLM call (§4): reject empty question / no persona at the
@@ -166,6 +203,46 @@ class GenerationController(
             model.addAttribute("replies", emptyList<ReplyView>())
             return "fragments/replyList"
         }
+        val node = postOwnerNode(threadId, parentId, text)
+        model.addAttribute("replies", listOf(node.toReplyView()))
+        model.addAttribute("threadId", threadId)
+        model.addAttribute("personas", personaViews())
+        // The note posts immediately — refresh the rail's branch index as an out-of-band swap.
+        model.addAttribute("branchIndex", branchIndex.forThread(threadId))
+        return "fragments/replyList"
+    }
+
+    /**
+     * Multipart variant of [noteForm] — the composer in note mode posts here when it carries an image.
+     * Posts the owner note (no AI summon) and attaches the image(s). Either the text or an image must be
+     * present; an image with no text is a valid image-only note.
+     */
+    @PostMapping("/threads/{threadId}/note", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun noteMultipart(
+        @PathVariable threadId: String,
+        @RequestParam(required = false) text: String?,
+        @RequestParam(required = false) parentId: String?,
+        @RequestParam(name = "images", required = false) images: List<MultipartFile>?,
+        model: Model,
+    ): String {
+        val uploads = images?.toUploads().orEmpty()
+        if (text.isNullOrBlank() && uploads.isEmpty()) {
+            model.addAttribute("replies", emptyList<ReplyView>())
+            return "fragments/replyList"
+        }
+        val node = postOwnerNode(threadId, parentId, text.orEmpty())
+        val attViews = if (uploads.isEmpty()) emptyList()
+        else attachments.attachToComment(node.id, uploads).map(AttachmentView::of)
+        model.addAttribute("replies", listOf(node.toReplyView(attachments = attViews)))
+        model.addAttribute("threadId", threadId)
+        model.addAttribute("personas", personaViews())
+        // The note posts immediately — refresh the rail's branch index as an out-of-band swap.
+        model.addAttribute("branchIndex", branchIndex.forThread(threadId))
+        return "fragments/replyList"
+    }
+
+    /** Persist the owner's message as their own POSTED node (the /note + image-bearing composer paths). */
+    private fun postOwnerNode(threadId: String, parentId: String?, text: String): Comment {
         val parentDepth = parentId?.let { comments.findById(it)?.depth } ?: 0
         val node = Comment(
             id = UUID.randomUUID().toString(),
@@ -179,13 +256,12 @@ class GenerationController(
             depthBudget = DepthBudget.granted(),
         )
         comments.insert(node)
-        model.addAttribute("replies", listOf(node.toReplyView()))
-        model.addAttribute("threadId", threadId)
-        model.addAttribute("personas", personaViews())
-        // The note posts immediately — refresh the rail's branch index as an out-of-band swap.
-        model.addAttribute("branchIndex", branchIndex.forThread(threadId))
-        return "fragments/replyList"
+        return node
     }
+
+    /** Parse a ScopeMode name, defaulting to WHOLE_THREAD for null/unknown (the composer's default). */
+    private fun parseScope(raw: String?): ScopeMode =
+        raw?.let { runCatching { ScopeMode.valueOf(it) }.getOrNull() } ?: ScopeMode.WHOLE_THREAD
 
     /**
      * Drive bounded autonomous growth (§4): the room auto-replies down each branch that still has depth

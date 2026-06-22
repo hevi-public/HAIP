@@ -33,6 +33,10 @@ class ThreadRepository(private val jdbc: JdbcTemplate, private val clock: Clock)
      * comments ([CommentRepository.deleteByThread]) and read marker ([ThreadReadRepository.delete]) first.
      */
     fun delete(id: String) {
+        // Opening-post images reference thread(id) (foreign_keys=on), so clear them before the row. The
+        // caller already removed the comments (and their attachments); the content-addressed blobs on disk
+        // are left for a future dedup-aware GC.
+        jdbc.update("DELETE FROM attachment WHERE thread_id = ?", id)
         jdbc.update("DELETE FROM thread WHERE id = ?", id)
     }
 

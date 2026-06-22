@@ -1,5 +1,6 @@
 package com.aiforum.domain
 
+import com.aiforum.dto.AttachmentView
 import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
@@ -47,6 +48,7 @@ data class Comment(
         // counts. Defaulted so the bare toReplyView() calls (drafts, validation errors) stay 1-of-1.
         revisionCount: Int = 1,
         regeneratable: Boolean = false,
+        attachments: List<AttachmentView> = emptyList(),
     ) = ReplyView(
         id = id,
         authorId = authorId,
@@ -70,5 +72,6 @@ data class Comment(
         regeneratable = regeneratable,
         parent = parent,
         children = children,
+        attachments = attachments,
     )
 }

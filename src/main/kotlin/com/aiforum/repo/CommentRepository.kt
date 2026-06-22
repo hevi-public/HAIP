@@ -298,6 +298,9 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
         jdbc.update("DELETE FROM vote WHERE node_id IN ($placeholders)", *ids.toTypedArray())
         // Revisions reference comment(id) too (foreign_keys=on) — clear them before the comments they hang off.
         jdbc.update("DELETE FROM comment_revision WHERE comment_id IN ($placeholders)", *ids.toTypedArray())
+        // Attachments reference comment(id) (foreign_keys=on), so they must go before the comments —
+        // the blob on disk is content-addressed and left for a future dedup-aware GC.
+        jdbc.update("DELETE FROM attachment WHERE comment_id IN ($placeholders)", *ids.toTypedArray())
         // Deepest-first so the self-referential parent_id FK is never momentarily violated.
         ids.forEach { jdbc.update("DELETE FROM comment WHERE id = ?", it) }
         return ids
@@ -318,6 +321,8 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
         val placeholders = ids.joinToString(",") { "?" }
         jdbc.update("DELETE FROM vote WHERE node_id IN ($placeholders)", *ids.toTypedArray())
         jdbc.update("DELETE FROM comment_revision WHERE comment_id IN ($placeholders)", *ids.toTypedArray())
+        // Comment-scoped attachments reference comment(id), so clear them before the comments.
+        jdbc.update("DELETE FROM attachment WHERE comment_id IN ($placeholders)", *ids.toTypedArray())
         ids.forEach { jdbc.update("DELETE FROM comment WHERE id = ?", it) }
         return ids
     }
