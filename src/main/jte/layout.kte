@@ -31,7 +31,9 @@
     <link rel="stylesheet" href="/hljs-theme.css">
     <%-- htmx served from the webjar (see build.gradle.kts); version-agnostic path via webjars-locator-lite --%>
     <script src="/webjars/htmx.org/dist/htmx.min.js"></script>
-    <script src="/app.js" defer></script>
+    <%-- Composer affordances (auto-grow, slash/@mention palettes, the note/ask toggle). ES module →
+         deferred by default; imports the unit-tested composer-core decision layer. --%>
+    <script type="module" src="/app.js"></script>
     <%-- Vim-style keyboard navigation (plan_docs/keyboard-navigation.md). ES module → deferred by
          default; activates only where [data-nav-item] exists (thread page for now), no-ops elsewhere. --%>
     <script type="module" src="/nav.js"></script>

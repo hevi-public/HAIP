@@ -74,6 +74,16 @@ class ComposerSteps(
         )
     }
 
+    @Then("the composer offers a {string} shortcut button")
+    fun composerOffersShortcut(label: String) {
+        val body = world.lastBody ?: ""
+        val cmd = label.removePrefix("/")
+        assertTrue(
+            Html.hasAttr(body, "data-composer-shortcut", cmd),
+            "expected a data-composer-shortcut=\"$cmd\" button in the composer:\n$body",
+        )
+    }
+
     @Then("the composer offers a text field and a persona picker")
     fun composerOffersFields() {
         val body = world.lastBody ?: ""
