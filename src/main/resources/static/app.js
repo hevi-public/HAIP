@@ -277,3 +277,6 @@
     else { var btn = form.querySelector("button[type='submit']"); if (btn) btn.click(); }
   });
 })();
+
+// Persona create/edit prompt-staleness guard lives in persona-form.js (+ persona-form-core.mjs, unit
+// tested) — a pure-core/glue module pair like nav, loaded separately from layout.kte.

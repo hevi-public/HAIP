@@ -9,8 +9,9 @@ services:
     build: .
     environment:
       - DISCOVERY_MODE=${DISCOVERY_MODE:-false}
-    # Explicit stage order so the log reads as a pipeline; lowest tier first.
-    command: ["generateJte", "compileKotlin", "tier0", "tier1", "tier2", "acceptance"]
+    # Explicit stage order so the log reads as a pipeline; lowest tier first (jsTest is the frontend
+    # unit tier — pure *-core.mjs under node:test — the JS analogue of tier0).
+    command: ["generateJte", "compileKotlin", "jsTest", "tier0", "tier1", "tier2", "acceptance"]
     volumes:
       - .:/app
       - gradle-cache:/root/.gradle
