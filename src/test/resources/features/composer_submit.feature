@@ -14,8 +14,9 @@ Feature: Composer submit (form-encoded)
     Then the reply is "posted"
     And the reply body contains "Indexes help here"
 
-  Scenario: The composer offers a one-click /note shortcut button
-    # /note is reachable from the slash palette (type "/"), but the owner also gets a visible
-    # footer button — like /more on a reply — so posting a note without summoning is one click.
+  Scenario: The composer offers a one-click /ask shortcut button
+    # Note is the default (the composer posts a silent owner comment), so the footer toggle offers the
+    # OTHER mode — /ask — like /more on a reply: summoning a persona is one click. Both /note and /ask
+    # also live in the slash palette (type "/").
     When the owner uses the bottom composer
-    Then the composer offers a "/note" shortcut button
+    Then the composer offers a "/ask" shortcut button
