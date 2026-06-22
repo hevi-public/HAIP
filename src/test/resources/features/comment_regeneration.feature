@@ -13,6 +13,7 @@ Feature: Regenerating an AI persona's reply, keeping every version
     Given a posted reply from "sol" saying "First take"
     When the owner views the thread page
     Then the regenerate button is present on "sol"'s reply
+    And the regenerate button shows a processing state while it runs
 
   Scenario: An owner note offers no regenerate button — there is nothing to regenerate
     Given a posted reply from "owner" saying "My own note"

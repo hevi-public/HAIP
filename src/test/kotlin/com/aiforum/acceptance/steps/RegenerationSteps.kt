@@ -46,6 +46,16 @@ class RegenerationSteps(
         )
     }
 
+    @Then("the regenerate button shows a processing state while it runs")
+    fun regenerateButtonHasProcessingState() {
+        // The confirm is a synchronous LLM call, so the button disables itself (hx-disabled-elt) and
+        // reveals an inline spinner (.regen-spinner) while it runs — both are in the rendered HTML. (The
+        // runtime .htmx-request toggle is client-side and out of reach of these HTTP-level assertions.)
+        val body = world.lastBody ?: ""
+        assertTrue(body.contains("hx-disabled-elt"), "expected the regenerate button to disable itself while running (hx-disabled-elt):\n$body")
+        assertTrue(body.contains("regen-spinner"), "expected an inline 'Regenerating…' spinner (regen-spinner):\n$body")
+    }
+
     @Then("the regenerate button is not present on {string}'s reply")
     fun regenerateButtonAbsent(persona: String) {
         val id = replyId(persona)
