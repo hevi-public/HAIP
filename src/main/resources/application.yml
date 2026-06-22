@@ -45,11 +45,12 @@ aiforum:
       # (LM Studio does this, same as the generation client). Set a real id for hosted servers.
       model: ""
       max-tokens: 512
-      # The instruction sent to the vision model. The caption it returns is injected into LLM context AND
-      # used as the image's alt text, so steer it toward a factual, self-contained description.
+      # The instruction sent to the vision model. The caption it returns is injected into LLM context,
+      # used as the image's alt text, AND rendered as markdown (so it can carry a fenced code block).
       prompt: >-
-        Describe this image factually and concisely for a reader who cannot see it. Note any text,
-        diagrams, code, charts, or UI shown.
+        Describe this image factually and concisely for a reader who cannot see it. If it shows code, a
+        terminal, or a config/log file, transcribe it verbatim inside a fenced markdown code block with
+        the correct language tag. Note any other text, diagrams, charts, or UI shown.
   # Predefined personas seeded into the DB on first startup if they don't already exist (see
   # PersonaSeeder; skipped under the test profile). A small product team for a Kotlin + Spring Boot +
   # PostgreSQL backend with an Angular frontend and Playwright UI tests. Skills overlap on purpose so

@@ -78,6 +78,35 @@ class ImageAttachmentSteps(
         describer.nextCaption = caption
     }
 
+    @Given("the vision model will caption the image with the markdown:")
+    fun visionWillCaptionMarkdown(markdown: String) {
+        describer.nextCaption = markdown
+    }
+
+    @Then("the caption renders as a quote")
+    fun captionRendersAsQuote() {
+        assertTrue(
+            world.lastFragment?.contains("<blockquote class=\"attachment__caption\"") == true,
+            "the caption should render as a markdown blockquote:\n${world.lastFragment}",
+        )
+    }
+
+    @Then("the caption renders a code block containing {string}")
+    fun captionRendersCodeBlock(code: String) {
+        val html = world.lastFragment ?: error("no fragment captured")
+        val open = html.indexOf("<blockquote class=\"attachment__caption\"")
+        val close = html.indexOf("</blockquote>", open)
+        assertTrue(open >= 0 && close > open, "expected an attachment caption blockquote")
+        val inside = html.substring(open, close)
+        // A real fenced code block rendered through the engine (highlight.js adds hljs), with the
+        // transcribed code inside the quote — not a wall of plain text.
+        assertTrue(inside.contains("<pre"), "code should render as a <pre> block inside the quote:\n$inside")
+        assertTrue(inside.contains("hljs"), "the code block should be syntax-highlighted (hljs):\n$inside")
+        // highlight.js wraps tokens in <span>s, so strip tags before checking the transcribed code is there.
+        val text = inside.replace(Regex("<[^>]+>"), "")
+        assertTrue(text.contains(code), "the transcribed code \"$code\" should be in the block:\n$inside")
+    }
+
     @When("the owner describes the attachment")
     fun describeAttachment() {
         val id = world.replyIds[ATTACHMENT] ?: error("no attachment captured")

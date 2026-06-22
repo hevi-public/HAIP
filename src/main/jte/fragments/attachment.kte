@@ -10,8 +10,11 @@
 <figure class="attachment" data-attachment-id="${attachment.id}" data-caption-state="${attachment.captionState}">
     <img class="attachment__img" src="${attachment.src}" loading="lazy"
          alt="${attachment.caption ?: attachment.originalFilename ?: "attached image"}">
-    @if(attachment.described && attachment.caption != null)
-        <figcaption class="attachment__caption" data-attachment-caption>${attachment.caption}</figcaption>
+    @if(attachment.described && attachment.captionHtml != null)
+        <%-- The caption rendered through the markdown engine (MarkdownRenderer escapes raw HTML, so
+             $unsafe{} is safe), wrapped in a semantic blockquote styled as a quote. A transcribed code
+             fence in the caption renders as a real highlighted code block inside the quote. --%>
+        <blockquote class="attachment__caption" data-attachment-caption>$unsafe{attachment.captionHtml}</blockquote>
     @endif
     @if(owner)
         <div class="attachment__controls">

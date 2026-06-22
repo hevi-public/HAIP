@@ -42,7 +42,7 @@ open class OpenAiImageDescriber(
         @Value("\${aiforum.images.vision.api-key:\${aiforum.llm.openai.api-key:}}") apiKey: String,
         @Value("\${aiforum.images.vision.model:}") model: String,
         @Value("\${aiforum.images.describe.enabled:false}") enabled: Boolean,
-        @Value("\${aiforum.images.vision.prompt:Describe this image factually and concisely for a reader who cannot see it. Note any text, diagrams, code, charts, or UI shown.}") prompt: String,
+        @Value("\${aiforum.images.vision.prompt:Describe this image factually and concisely for a reader who cannot see it. If it shows code, a terminal, or a config/log file, transcribe it verbatim inside a fenced markdown code block with the correct language tag. Note any other text, diagrams, charts, or UI shown.}") prompt: String,
         @Value("\${aiforum.images.vision.max-tokens:512}") maxTokens: Int,
     ) : this(RestClient.builder(), baseUrl, apiKey, model, enabled, prompt, maxTokens)
 

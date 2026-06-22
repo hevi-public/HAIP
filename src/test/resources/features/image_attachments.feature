@@ -26,6 +26,20 @@ Feature: Image attachments reach the model as a caption, not raw bytes
     When the owner summons "sol"
     Then the model context mentions "[Image attached (no description)]"
 
+  Scenario: A caption that transcribes code renders as a code block inside the quote
+    When the owner attaches an image with the note "code screenshot"
+    Given the vision model will caption the image with the markdown:
+      """
+      The screenshot shows a Kotlin snippet:
+
+      ```kotlin
+      val answer = 42
+      ```
+      """
+    When the owner describes the attachment
+    Then the caption renders as a quote
+    And the caption renders a code block containing "val answer = 42"
+
   Scenario: Deleting a note with an image removes the attachment cleanly
     When the owner attaches an image with the note "throwaway"
     And the owner deletes the image note
