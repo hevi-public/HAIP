@@ -27,6 +27,8 @@ const NAV = "[data-nav-item]";
 let model = null;
 const elById = new Map();
 let currentId = null;
+let cursorHidden = false; // selection cancelled via click-away: highlight is gone but currentId remembers
+                          // where it was, so keyboard nav resumes from there instead of jumping to the top
 const descendMemory = new Map(); // parentId -> last child we ascended from (ranger model)
 let lastSearch = { query: "", dir: 1 };
 let awaitingG = false;
@@ -77,13 +79,16 @@ function rebuild() {
     const fromHash = idFromHash();
     currentId = fromHash && elById.has(fromHash) ? fromHash : firstNode(model);
   }
-  // re-apply the highlight: an htmx swap replaces element objects, dropping the class.
-  const el = elById.get(currentId);
-  if (el) el.classList.add("is-current");
+  // re-apply the highlight: an htmx swap replaces element objects, dropping the class. Skip while the
+  // cursor is hidden (cancelled via click-away) so a swap doesn't resurrect the highlight we just cleared.
+  if (!cursorHidden) {
+    const el = elById.get(currentId);
+    if (el) el.classList.add("is-current");
+    highlightRailEntry(currentId);
+  }
   // Branch-index rail mirrors two things the cursor/swaps change: which entry is selected, and which
   // comments are starred. A star toggle swaps in a fresh .reply__star-area (with the new data-starred)
   // but never touches the rail, so re-sync both here — rebuild runs on load and on every htmx:afterSwap.
-  highlightRailEntry(currentId);
   syncRailMarkers();
 }
 
@@ -111,6 +116,7 @@ function setCursor(id, scroll = true) {
   if (id == null || !elById.has(id)) return;
   if (currentId != null && elById.has(currentId)) elById.get(currentId).classList.remove("is-current");
   currentId = id;
+  cursorHidden = false; // any placement re-engages the cursor (re-shows the highlight)
   // Reflect the selection in the URL so it acts as a permalink. replaceState (not location.hash = …) so
   // it neither piles up a history entry on every j/k nor triggers a native scroll jump that would fight
   // scrollCommentIntoView. Genuine hash changes (link clicks, back/forward) still fire hashchange below.
@@ -119,6 +125,18 @@ function setCursor(id, scroll = true) {
   el.classList.add("is-current");
   highlightRailEntry(id); // keep the rail's selected entry in step with the reading cursor
   if (scroll) scrollCommentIntoView(el);
+}
+
+// Cancel the selection: drop .is-current from the comment + its rail entry and clear the permalink so
+// the URL no longer points at a now-deselected node. We keep currentId (just hide it via cursorHidden)
+// so the next keyboard move resumes from the last selected position rather than jumping to the top.
+// No-op when there's nothing to cancel.
+function clearCursor() {
+  if (currentId == null || cursorHidden) return;
+  if (elById.has(currentId)) elById.get(currentId).classList.remove("is-current");
+  cursorHidden = true;
+  highlightRailEntry(null); // clears the rail's selected entry (null matches no entry → removes all)
+  try { history.replaceState(history.state, "", location.pathname + location.search); } catch (e) { /* non-fatal */ }
 }
 
 /*
@@ -335,6 +353,10 @@ function isEditable(t) {
   return t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.tagName === "SELECT" || t.isContentEditable;
 }
 
+// Keys that move the reading cursor — the first one after a click-away cancel resumes the cursor at its
+// remembered position instead of moving (see the cursorHidden handling in onKey).
+const MOVE_KEYS = new Set(["j", "k", "h", "l", "L", "J", "K", "g", "G", "n", "N"]);
+
 function onKey(e) {
   if (overlayOpen()) return; // the overlay input owns keys while open
   if (helpOpen()) {
@@ -352,6 +374,18 @@ function onKey(e) {
   }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (!model || !model.ids.length) return;
+
+  // A click-away cancel (clearCursor) hides the cursor but remembers where it was. The first movement
+  // key re-engages there — resume reading from the last selected position rather than the top. The move
+  // itself is consumed; press again to actually move. (If the remembered node is gone, fall through.)
+  if (cursorHidden && MOVE_KEYS.has(e.key)) {
+    if (currentId != null && elById.has(currentId)) {
+      setCursor(currentId); // un-hide: re-highlight, restore the permalink, scroll back into view
+      e.preventDefault();
+      return;
+    }
+    cursorHidden = false;
+  }
 
   const wasAwaitingG = awaitingG;
   if (e.key !== "g") awaitingG = false;
@@ -397,11 +431,19 @@ function onClick(e) {
   // move the reading cursor or clear the Esc-return target. Agreed contract with the composer branch.
   if (e.target.closest(".composer")) return;
   const el = e.target.closest(NAV);
-  if (!el) return; // click landed outside the comment tree (overlay, header, empty space)
-  const id = idOf(el); // closest() returns the innermost comment, so nested replies pick correctly
-  if (!elById.has(id)) return;
-  composeReturnId = null; // a manual reposition invalidates any pending Esc-return target
-  setCursor(id, false); // no scroll: the user clicked something already in view
+  if (el) {
+    const id = idOf(el); // closest() returns the innermost comment, so nested replies pick correctly
+    if (!elById.has(id)) return;
+    composeReturnId = null; // a manual reposition invalidates any pending Esc-return target
+    setCursor(id, false); // no scroll: the user clicked something already in view
+    return;
+  }
+  // Click landed outside the comment tree (overlay, header, rail, empty space). A branch-index entry is
+  // itself a selection — its href="#reply-<id>" fires hashchange, which moves the cursor — so leave that
+  // alone. Everything else cancels the selection: clicking off the thread is the way to deselect.
+  if (e.target.closest("[data-branch-index-entry]")) return;
+  composeReturnId = null;
+  clearCursor();
 }
 
 // Follow genuine hash changes — clicking a branch-index entry or an "in reply to" link (both href to
