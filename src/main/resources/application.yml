@@ -104,3 +104,8 @@ aiforum:
       api-key: ""              # LM Studio ignores it; set e.g. ${LLM_API_KEY:} for hosted servers that need one
       temperature: 0.7
       max-tokens: 1024
+      log-raw-response: false  # DEBUG-log the unparsed HTTP body; the `debug` profile flips it on
+                               # (application-debug.yml) to inspect a model's reasoning shape. Off in prod.
+      disable-thinking: false  # send chat_template_kwargs.enable_thinking=false to turn reasoning off at
+                               # generation time. Only honoured by models with a thinking switch in their
+                               # chat template (Qwen3, vLLM/SGLang); a no-op for Gemma. Off by default.

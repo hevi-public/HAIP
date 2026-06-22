@@ -61,6 +61,33 @@ class OpenAiResponseParserTest {
     }
 
     @Test
+    fun `a split-out reasoning_content field is dropped, content is the answer, flagged ACTUAL`() {
+        val body = """{"choices":[{"index":0,"message":{"role":"assistant",""" +
+            """"content":"Indexes help here.","reasoning_content":"first I weigh the index options"},""" +
+            """"finish_reason":"stop"}]}"""
+        val resp = parse(200, body)
+        assertEquals("Indexes help here.", resp.text, "content is the clean answer")
+        assertEquals(ReasoningLeak.ACTUAL, resp.reasoningLeak, "a populated reasoning field is a dropped leak")
+    }
+
+    @Test
+    fun `the alternative reasoning field is also treated as a dropped leak`() {
+        val body = """{"choices":[{"index":0,"message":{"role":"assistant",""" +
+            """"content":"Use a recursive CTE.","reasoning":"weighing options"},"finish_reason":"stop"}]}"""
+        val resp = parse(200, body)
+        assertEquals("Use a recursive CTE.", resp.text)
+        assertEquals(ReasoningLeak.ACTUAL, resp.reasoningLeak)
+    }
+
+    @Test
+    fun `reasoning present but content blank is empty output`() {
+        // The model put everything in the reasoning channel and gave no actual answer.
+        val body = """{"choices":[{"index":0,"message":{"role":"assistant",""" +
+            """"content":"","reasoning_content":"all of it went here"},"finish_reason":"stop"}]}"""
+        assertThrows(LlmException.EmptyOutput::class.java) { parse(200, body) }
+    }
+
+    @Test
     fun `a 2xx with no choices is empty output`() {
         assertThrows(LlmException.EmptyOutput::class.java) { parse(200, """{"id":"x","choices":[]}""") }
     }

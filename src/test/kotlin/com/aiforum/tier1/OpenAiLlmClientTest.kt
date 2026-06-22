@@ -146,6 +146,34 @@ class OpenAiLlmClientTest {
     }
 
     @Test
+    fun `disable-thinking sends chat_template_kwargs to turn reasoning off at generation time`() {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val client = OpenAiLlmClient(
+            restClientBuilder = builder, baseUrl = "http://localhost:1234/v1", apiKey = "",
+            defaultModel = "gemma", temperature = 0.7, maxTokens = 1024, pollMillis = 5,
+            rateLimitRetryAfterSeconds = 300, disableThinking = true,
+        )
+        server.expect(requestTo(url))
+            .andExpect(jsonPath("\$.chat_template_kwargs.enable_thinking").value(false))
+            .andRespond(withSuccess(envelope("ok"), MediaType.APPLICATION_JSON))
+
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        server.verify()
+    }
+
+    @Test
+    fun `by default no chat_template_kwargs is sent`() {
+        val (client, server) = mockClient()
+        server.expect(requestTo(url))
+            .andExpect(jsonPath("\$.chat_template_kwargs").doesNotExist())
+            .andRespond(withSuccess(envelope("ok"), MediaType.APPLICATION_JSON))
+
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        server.verify()
+    }
+
+    @Test
     fun `a 429 maps to RateLimited`() {
         val (client, server) = mockClient()
         server.expect(requestTo(url)).andRespond(
