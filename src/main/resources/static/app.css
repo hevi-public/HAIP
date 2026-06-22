@@ -445,48 +445,51 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 .thread-row__title a { color: var(--link); }
 .thread-row[data-unread-count="0"] .thread-row__title a { color: var(--muted); font-weight: 400; }
 
-/* thread-row delete — same gated "are you sure" pattern as the reply delete (clay = warning hue), but a
-   compact icon-only trigger parked at the right end of the row. The confirm panel is a flex sibling of
-   the <details> (outside it, not nested) shown via the CSS sibling selector details[open] ~ .confirm.
+/* row delete — shared by the thread list and the members list (rendered by fragments/rowDelete.kte).
+   Same gated "are you sure" pattern as the reply delete (clay = warning hue), but a compact icon-only
+   trigger parked at the right end of the row. The confirm panel is a flex sibling of the <details>
+   (outside it, not nested) shown via the CSS sibling selector .row-delete[open] ~ .row-delete__confirm.
    This keeps it in normal flex flow, avoiding the absolutely-positioned-inside-details browser quirk
    and the overflow:hidden clipping problem. flex-wrap:wrap on the row lets the confirm span a second
    line below the title/icon row when opened. Trigger icon is invisible at rest (revealed on row-hover,
    keyboard focus, or when open). */
 .thread-row { flex-wrap: wrap; }
-.thread-row__delete { margin-left: auto; align-self: center; }
-.thread-row__delete > summary {
+.row-delete { margin-left: auto; align-self: center; }
+.row-delete > summary {
   display: inline-flex; align-items: center;
   list-style: none; cursor: pointer;
   color: var(--muted);
   border: 1px solid transparent; border-radius: var(--r);
   padding: 4px;
 }
-.thread-row__delete > summary::marker,
-.thread-row__delete > summary::-webkit-details-marker { display: none; }
-.thread-row__delete > summary .icon { width: 15px; height: 15px; flex-shrink: 0; }
-.thread-row__delete:not([open]) > summary { opacity: 0; }   /* calm at rest… */
-.thread-row:hover .thread-row__delete > summary,
-.thread-row__delete[open] > summary,
-.thread-row__delete > summary:focus-visible { opacity: 1; }   /* …revealed on row hover, open, or keyboard focus */
-.thread-row__delete > summary:hover,
-.thread-row__delete[open] > summary {
+.row-delete > summary::marker,
+.row-delete > summary::-webkit-details-marker { display: none; }
+.row-delete > summary .icon { width: 15px; height: 15px; flex-shrink: 0; }
+.row-delete:not([open]) > summary { opacity: 0; }   /* calm at rest… */
+.thread-row:hover .row-delete > summary,
+.member-row:hover .row-delete > summary,
+.row-delete[open] > summary,
+.row-delete > summary:focus-visible { opacity: 1; }   /* …revealed on row hover, open, or keyboard focus */
+.row-delete > summary:hover,
+.row-delete[open] > summary {
   color: var(--clay-ink); border-color: var(--clay-line); background: var(--clay-bg);
 }
 /* Confirm panel: hidden by default, revealed when the sibling <details> is open. flex-basis:100% forces
    it to wrap onto its own line below the title/icon row — no absolute positioning needed. */
-.thread-row__delete-confirm { display: none; flex-basis: 100%; }
-.thread-row__delete[open] ~ .thread-row__delete-confirm {
+.row-delete__confirm { display: none; flex-basis: 100%; }
+.row-delete[open] ~ .row-delete__confirm {
   display: block;
   margin-top: 0; padding: 10px 14px 12px;
   background: var(--clay-bg);
   border-top: 1px solid var(--clay-line); border-left: 3px solid var(--clay);
 }
-.thread-row__delete-warning { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--clay-ink); }
-.thread-row__delete-buttons { display: flex; align-items: center; gap: 8px; }
+.row-delete__warning { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--clay-ink); }
+.row-delete__buttons { display: flex; align-items: center; gap: 8px; }
 
-/* members list — same index frame, no unread spine */
+/* members list — same index frame, no unread spine. flex-wrap lets the delete-confirm panel drop onto
+   its own line; the trigger sits just past the right-aligned descriptor (which keeps the margin-auto). */
 .member-row {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
   padding: 10px 14px;
   border-top: 1px dotted var(--line-dotted);
 }
@@ -494,6 +497,7 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 .member-row:hover { background: var(--row-hover); }
 .member-row .thread-row__title { font-weight: 700; font-size: 14px; }
 .member-row .reply__handle { margin-left: auto; color: var(--muted); }
+.member-row .row-delete { margin-left: 8px; }
 
 /* ---------------------------------------------------------------- thread */
 /* Three-region scaffold mirroring the home page's left:nav / main / right:feeds frame. The LEFT rail

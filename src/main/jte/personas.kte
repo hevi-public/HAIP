@@ -14,6 +14,7 @@
                     <span class="monogram" aria-hidden="true" style="--mono-h: ${Avatar.hueForIndex(persona.colorIndex)}">${persona.name.take(2).uppercase()}</span>
                     <span class="thread-row__title"><a href="/personas/${persona.slug}">${persona.name}</a></span>
                     <span class="reply__handle">${persona.descriptor}</span>
+                    @template.fragments.rowDelete(postUrl = "/personas/${persona.slug}/delete", rowSelector = ".member-row", label = "Delete persona", warning = "Delete this persona? This can't be undone.")
                 </div>
             @endfor
         </div>

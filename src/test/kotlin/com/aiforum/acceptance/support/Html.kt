@@ -21,6 +21,12 @@ object Html {
         return Regex("${Regex.escape(attr)}=\"([^\"]*)\"").find(tag)?.groupValues?.get(1)
     }
 
+    /** The value of [attr] on the member row whose data-persona-name == [name], or null. */
+    fun memberRowAttr(html: String, name: String, attr: String): String? {
+        val tag = Regex("<[^>]*data-persona-name=\"${Regex.escape(name)}\"[^>]*>").find(html)?.value ?: return null
+        return Regex("${Regex.escape(attr)}=\"([^\"]*)\"").find(tag)?.groupValues?.get(1)
+    }
+
     /** True if any element carries data-[name]="[value]". */
     fun hasAttr(html: String, name: String, value: String): Boolean =
         Regex("$name=\"${Regex.escape(value)}\"").containsMatchIn(html)

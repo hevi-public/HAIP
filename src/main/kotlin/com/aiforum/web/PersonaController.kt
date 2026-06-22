@@ -77,6 +77,19 @@ class PersonaController(
         @RequestParam allParams: Map<String, String>,
     ): String = composer.compose(PersonaSpec(name, descriptor, Abilities.parse(abilities), dialsFrom(allParams)))
 
+    /**
+     * Delete a persona (modelled on ThreadController.delete, §8). Resolved by slug like the other
+     * persona routes; the members-list button outerHTML-swaps the member row away with this empty
+     * response. No dependents to cascade — comment authorship is a plain string, not an FK to
+     * persona(id) — so historical comments keep their byline. No-op if the slug is unknown.
+     */
+    @PostMapping("/personas/{slug}/delete")
+    @ResponseBody
+    fun delete(@PathVariable slug: String): String {
+        personas.findBySlug(slug)?.let { personas.delete(it.id) }
+        return ""
+    }
+
     @GetMapping("/personas/{slug}/edit")
     fun editForm(@PathVariable slug: String, model: Model): String {
         val persona = personas.findBySlug(slug) ?: return "redirect:/personas"
