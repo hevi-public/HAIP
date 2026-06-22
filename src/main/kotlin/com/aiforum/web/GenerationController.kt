@@ -1,5 +1,7 @@
 package com.aiforum.web
 
+import com.aiforum.domain.Comment
+import com.aiforum.domain.budget.DepthBudget
 import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ReplyView
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestParam
 import java.util.UUID
 
 /** Request body for POST /threads/{id}/generate. */
@@ -113,6 +116,41 @@ class GenerationController(
     fun retry(@PathVariable id: String, model: Model): String {
         val reply = generation.retry(id)
         return renderNode(model, reply, comments.findById(id)?.threadId)
+    }
+
+    /**
+     * The owner posts a note — an ordinary visible comment that flows into generation context like any
+     * owner comment, but does not summon any persona. Mirrors the thread-scoped URL of /generate so the
+     * main composer can route here without knowing the branch root node ID up front.
+     */
+    @PostMapping("/threads/{threadId}/note", consumes = [MediaType.APPLICATION_FORM_URLENCODED_VALUE])
+    fun noteForm(
+        @PathVariable threadId: String,
+        @RequestParam(required = false) text: String?,
+        @RequestParam(required = false) parentId: String?,
+        model: Model,
+    ): String {
+        if (text.isNullOrBlank()) {
+            model.addAttribute("replies", emptyList<ReplyView>())
+            return "fragments/replyList"
+        }
+        val parentDepth = parentId?.let { comments.findById(it)?.depth } ?: 0
+        val node = Comment(
+            id = UUID.randomUUID().toString(),
+            threadId = threadId,
+            parentId = parentId,
+            authorId = "owner",
+            body = text,
+            state = GenerationState.POSTED,
+            failureCategory = null,
+            depth = parentDepth + 1,
+            depthBudget = DepthBudget.granted(),
+        )
+        comments.insert(node)
+        model.addAttribute("replies", listOf(node.toReplyView()))
+        model.addAttribute("threadId", threadId)
+        model.addAttribute("personas", personaViews())
+        return "fragments/replyList"
     }
 
     /**
