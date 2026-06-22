@@ -5,23 +5,6 @@
 @template.layout(title = "Members · AI Forum", activeNav = "members", content = @`
     <div data-page="members">
         <h1 class="home__title">Members</h1>
-        <%-- Add a persona: a plain form POST (form-urlencoded) to /personas → PRG redirect onto the new
-             profile. The descriptor is the persona's CHARACTER — it drives the system prompt the model
-             is summoned with, so it's a textarea, not a one-liner. --%>
-        <form class="new-persona" data-new-persona method="post" action="/personas">
-            <input class="new-persona__name" type="text" name="name" required
-                   placeholder="Name (e.g. Sol)">
-            <textarea class="new-persona__descriptor" name="descriptor" required
-                      placeholder="Character — who is this persona? Their voice, expertise, point of view…"></textarea>
-            <select class="new-persona__model" name="model">
-                <option value="">default model</option>
-                <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast)</option>
-                <option value="claude-sonnet-4-6">Sonnet 4.6</option>
-                <option value="claude-opus-4-8">Opus 4.8</option>
-                <option value="claude-fable-5">Fable 5</option>
-            </select>
-            <button class="btn" type="submit">Add member ▸</button>
-        </form>
         <div class="thread-index">
             @for(persona in personas)
                 <div class="member-row" data-persona-id="${persona.id}" data-persona-name="${persona.name}">
@@ -31,5 +14,35 @@
                 </div>
             @endfor
         </div>
+        <%-- Add a persona: a click-to-reveal composer that mirrors the home page's new-thread card — and
+             like it, sits below the index it adds to. The <summary> is the "Add a member" card; opening the
+             <details> discloses the form (form-urlencoded POST to /personas → PRG redirect onto the new
+             profile). The form lives in the DOM even while collapsed, so it still posts with JS off. The
+             descriptor is the persona's CHARACTER — it drives the system prompt the model is summoned with,
+             so it's a textarea, not a one-liner. On an empty forum there's nothing to browse, so it starts
+             open. Enter submits (Shift+Enter = newline; app.js, [data-new-persona]). --%>
+        <details class="ask-card" id="new-member" data-add-member open="${personas.isEmpty()}">
+            <summary class="ask-card__summary">
+                <span class="ask-card__title">Add a member</span>
+                <span class="ask-card__lead">Summon a new persona to the forum.</span>
+                <span class="btn btn--block ask-card__cta" data-add-member-cta>+ Add member</span>
+            </summary>
+            <form class="new-persona" data-new-persona method="post" action="/personas">
+                <input class="new-persona__name" type="text" name="name" required
+                       placeholder="Name (e.g. Sol)">
+                <textarea class="new-persona__descriptor" name="descriptor" required rows="3"
+                          placeholder="Character — who is this persona? Their voice, expertise, point of view…"></textarea>
+                <div class="new-persona__actions">
+                    <select class="new-persona__model" name="model">
+                        <option value="">default model</option>
+                        <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast)</option>
+                        <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+                        <option value="claude-opus-4-8">Opus 4.8</option>
+                        <option value="claude-fable-5">Fable 5</option>
+                    </select>
+                    <button class="btn" type="submit">Add member ▸</button>
+                </div>
+            </form>
+        </details>
     </div>
 `)
