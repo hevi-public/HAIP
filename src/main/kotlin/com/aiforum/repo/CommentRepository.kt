@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Repository
 import java.time.Clock
+import java.time.Instant
 
 /**
  * JdbcTemplate persistence for the comment tree (see the sqlite-spring-jdbc skill — deliberately not
@@ -52,6 +53,7 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
             depthBudget = rs.getInt("depth_budget"),
             starred = rs.getInt("starred") != 0,
             reasoningLeak = rs.getString("reasoning_leak")?.let { ReasoningLeak.valueOf(it) },
+            updatedAt = rs.getString("updated_at")?.let { Instant.parse(it) },
         )
     }
 
@@ -80,6 +82,16 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
             c.reasoningLeak?.name, c.id,
         )
     }
+
+    /**
+     * Edit a comment's body (§7) — the owner revising their own note or correcting an AI persona's
+     * reply. Stamps updated_at so the node renders the "(edited)" marker; deliberately separate from
+     * [update] (the generation lifecycle) so a settle/retry never looks like an owner edit. Returns true
+     * if a row was updated. The corrected body flows into future generation context automatically: branch
+     * context is reassembled from the stored bodies at summon time.
+     */
+    fun editBody(id: String, body: String): Boolean =
+        jdbc.update("UPDATE comment SET body=?, updated_at=? WHERE id=?", body, clock.instant().toString(), id) > 0
 
     /**
      * Flip a comment's star and return the new state. Toggled atomically in SQL (CASE) so concurrent

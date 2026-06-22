@@ -22,6 +22,9 @@ data class ReplyView(
     // When set, the model leaked chain-of-thought into this reply; the body is already cleaned. Drives a
     // "reasoning leak" badge + the data-reasoning-leak hook on the node. Null => clean.
     val reasoningLeak: ReasoningLeak? = null,
+    // True once the owner has edited this body (§7) — drives the subtle "(edited)" marker and the
+    // data-edited hook. Trailing default so positional constructions stay valid.
+    val edited: Boolean = false,
     // The comment this reply answers, for the "in reply to" anchor. Null for top-level replies (they
     // answer the post, which has no comment node). Populated on the full thread-page render.
     val parent: ParentRef? = null,

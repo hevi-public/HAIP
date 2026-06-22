@@ -6,6 +6,7 @@ import com.aiforum.dto.ParentRef
 import com.aiforum.dto.ReasoningLeak
 import com.aiforum.dto.ReplyView
 import com.aiforum.markdown.MarkdownRenderer
+import java.time.Instant
 
 /** Persisted comment-tree node. */
 data class Comment(
@@ -28,6 +29,9 @@ data class Comment(
     // Set when the model leaked chain-of-thought into this reply (ReplySanitizer): the body is already
     // cleaned, this only drives the UI badge. Trailing default so positional constructors keep compiling.
     val reasoningLeak: ReasoningLeak? = null,
+    // When the owner last edited this body (§7), or null if never edited (V11). Drives the "(edited)"
+    // marker on the node; only the edit endpoint stamps it, so a generation settle never sets it.
+    val updatedAt: Instant? = null,
 ) {
     fun toReplyView(
         voteCount: Int = 0,
@@ -48,6 +52,7 @@ data class Comment(
         depthBudget = depthBudget,
         starred = starred,
         reasoningLeak = reasoningLeak,
+        edited = updatedAt != null,
         parent = parent,
         children = children,
     )

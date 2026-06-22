@@ -34,6 +34,7 @@
          data-retry-after="${reply.retryAfterSeconds?.toString() ?: ""}"
          data-vote-count="${reply.voteCount.toString()}"
          data-reasoning-leak="${reply.reasoningLeak?.name?.lowercase() ?: ""}"
+         data-edited="${reply.edited.toString()}"
          data-depth="${reply.depth.toString()}">
     <header class="reply__head">
         <span class="monogram" aria-hidden="true" style="--mono-h: ${AuthorColor.hue(reply.authorId, personas)}">${reply.authorId.take(2).uppercase()}</span>
@@ -49,6 +50,11 @@
                   title="The model leaked its reasoning into this reply; the body shown has been cleaned.">
                 ${if (reply.reasoningLeak == ReasoningLeak.ACTUAL) "reasoning leak" else "possible reasoning leak"}
             </span>
+        @endif
+        <%-- The owner has revised this body (their own or an AI reply, §7). Subtle, honest marker — it
+             matters most on a persona's node, where it signals the owner changed what the persona "said". --%>
+        @if(reply.edited)
+            <span class="reply__edited" data-edited-marker>(edited)</span>
         @endif
     </header>
     @if(reply.parent != null)
@@ -113,6 +119,12 @@
                     hx-post="/replies/${reply.id}/retry"
                     hx-target="closest article"
                     hx-swap="outerHTML">Retry</button>
+        @endif
+        <%-- Edit (§7): revise this body — the owner's own note or an AI persona's reply (to correct
+             context it misread). Only on a POSTED node; a drafting/failed node has nothing settled to
+             edit. The disclosure prefills with the raw markdown and saves in place (see editForm). --%>
+        @if(reply.state == GenerationState.POSTED)
+            @template.fragments.editForm(reply = reply)
         @endif
         <%-- Delete cascades to the whole subtree (§8 node operations), pushed to the bottom-right of the action row. The
              trash trigger opens an inline "are you sure" panel (a <details> disclosure) instead of the

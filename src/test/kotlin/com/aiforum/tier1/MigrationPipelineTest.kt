@@ -54,7 +54,7 @@ class MigrationPipelineTest {
             }
         }
 
-        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending V4–V11).
+        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending V4–V12).
         flyway(url, null).migrate()
 
         // 4. The old rows survived, and the new columns carry their migration default / backfill.
@@ -81,18 +81,26 @@ class MigrationPipelineTest {
                     assertEquals("", rs.getString("body"), "the pre-existing thread reads '' after V7/V8")
                 }
 
-                // The pre-existing comment survived; V9's NOT NULL DEFAULT 0 left it unstarred and V11's
-                // nullable reasoning_leak column reads NULL (no leak) for a row that predates it.
-                st.executeQuery("SELECT starred, reasoning_leak FROM comment WHERE id = 'C1'").use { rs ->
+                // The pre-existing comment survived; V9's NOT NULL DEFAULT 0 left it unstarred, V11's
+                // nullable updated_at leaves it NULL (never edited), and V12's nullable reasoning_leak
+                // reads NULL (no leak) — both new nullable columns are absent on a row that predates them.
+                st.executeQuery("SELECT starred, updated_at, reasoning_leak FROM comment WHERE id = 'C1'").use { rs ->
                     rs.next()
                     assertEquals(0, rs.getInt("starred"), "V9 DEFAULT 0 applies to the pre-existing comment")
-                    assertEquals(null, rs.getString("reasoning_leak"), "V11's nullable column reads NULL for the pre-existing comment")
+                    assertEquals(null, rs.getString("updated_at"), "V11 leaves the pre-existing comment unedited (NULL)")
+                    assertEquals(null, rs.getString("reasoning_leak"), "V12's nullable column reads NULL for the pre-existing comment")
                 }
 
-                // flyway_schema_history records the full V1..V11 chain as applied.
+                // The pre-existing thread is likewise unedited after V11.
+                st.executeQuery("SELECT updated_at FROM thread WHERE id = 'T1'").use { rs ->
+                    rs.next()
+                    assertEquals(null, rs.getString("updated_at"), "V11 leaves the pre-existing thread unedited (NULL)")
+                }
+
+                // flyway_schema_history records the full V1..V12 chain as applied.
                 st.executeQuery("SELECT MAX(CAST(version AS INTEGER)) AS v FROM flyway_schema_history").use { rs ->
                     rs.next()
-                    assertEquals(11, rs.getInt("v"), "all eleven migrations should be recorded as applied")
+                    assertEquals(12, rs.getInt("v"), "all twelve migrations should be recorded as applied")
                 }
             }
         }

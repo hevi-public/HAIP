@@ -4,6 +4,7 @@ import com.aiforum.domain.Comment
 import com.aiforum.domain.budget.DepthBudget
 import com.aiforum.dto.GenerationState
 import com.aiforum.repo.CommentRepository
+import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.VoteRepository
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -22,7 +23,37 @@ import java.util.UUID
 class OwnerControlsController(
     private val votes: VoteRepository,
     private val comments: CommentRepository,
+    private val personas: PersonaRepository,
+    private val replyTree: ReplyTreeAssembler,
 ) {
+
+    /**
+     * Edit a posted comment body (§7) — the owner fixing their own wording, or correcting an AI persona's
+     * reply when it misread the context (the corrected text then seeds future summons in this branch). The
+     * inline edit form (a collapsed disclosure on the node) outerHTML-swaps the closest <article> with the
+     * re-rendered node, so we return the WHOLE subtree (replyTree.subtree) — a bare node would drop the
+     * children nested inside this article. Only POSTED nodes are editable and a blank body is rejected; in
+     * either case we re-render the node unchanged so the swap restores it cleanly.
+     */
+    @PostMapping("/replies/{id}/edit")
+    fun edit(
+        @PathVariable id: String,
+        @RequestParam(required = false) text: String?,
+        model: Model,
+    ): String {
+        val comment = comments.findById(id) ?: error("no reply $id")
+        if (comment.state == GenerationState.POSTED && !text.isNullOrBlank()) {
+            comments.editBody(id, text.trim())
+        }
+        val node = replyTree.subtree(id) ?: comment.toReplyView()
+        model.addAttribute("reply", node)
+        model.addAttribute("threadId", comment.threadId)
+        model.addAttribute("personas", personaViews())
+        return "fragments/replyNode"
+    }
+
+    private fun personaViews(): List<PersonaView> =
+        personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug, colorIndex = it.colorIndex) }
     @PostMapping("/replies/{id}/plus-one")
     fun plusOne(@PathVariable id: String, model: Model): String {
         votes.add(id, voterId = "owner")
