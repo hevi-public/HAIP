@@ -14,7 +14,12 @@
      below (persona chips, slash palette, @mention menu — §4) are progressive enhancement driven by
      app.js: with JS off the checkbox-backed chips still bind personaIds and the textarea still posts
      text. --%>
-<form class="composer composer--${placement}"
+<%-- data-note-mode="1" makes Note the DEFAULT: app.js's configRequest handler reads it and rewrites
+     the POST from /generate down to /note (a silent owner comment, no AI summon). The owner opts into
+     summoning with /ask (or the footer toggle) — or simply by tagging a persona (@mention / chip),
+     which always asks even from the note default (see resolvePath in composer-core). The static
+     hx-post stays /generate so it's the canonical path the rewrite peels back from. --%>
+<form class="composer composer--${placement}" data-note-mode="1"
       data-composer="${placement}" data-target-id="${targetId}" data-scope="${scope}"
       <%-- Multipart so the form can carry an image part (name="images"). With no file chosen the browser
            sends an empty part, which the multipart controllers treat exactly as the urlencoded submit;
@@ -23,7 +28,7 @@
       hx-post="/threads/${threadId}/generate"
       hx-target="${if (placement == "bottom") ".reply-list" else "closest article"}"
       hx-swap="beforeend"
-      <%-- While the generation request is in flight, disable the Ask button (so a second submit can't
+      <%-- While the request is in flight, disable the submit button (so a second submit can't
            race) and reveal the inline spinner (htmx toggles .htmx-request on the indicator). Mirrors the
            auto-grow pattern in thread.kte. --%>
       hx-disabled-elt="find button[type='submit']"
@@ -52,7 +57,7 @@
 
     <div class="composer__editor" data-composer-editor>
         <textarea name="text" data-composer-text
-                  placeholder="Write a reply…   type / for commands, @ to summon a persona"></textarea>
+                  placeholder="Write a note…   /ask or @tag a persona to summon a reply"></textarea>
 
         <%-- Attach an image (owner-authored, caption-only to the model — see AttachmentService). Multiple
              allowed; the server sniffs magic bytes and rejects non-images. data-composer-images is the
@@ -69,8 +74,8 @@
             <div class="palette__cap">commands · control how the reply is generated</div>
             <button type="button" class="palette__row" data-slash-cmd="branch"><span class="palette__key">/branch</span><span class="palette__desc">context = this branch</span></button>
             <button type="button" class="palette__row" data-slash-cmd="topic"><span class="palette__key">/topic</span><span class="palette__desc">context = whole topic</span></button>
-            <button type="button" class="palette__row" data-slash-cmd="note"><span class="palette__key">/note</span><span class="palette__desc">post your comment · no AI reply</span></button>
-            <button type="button" class="palette__row" data-slash-cmd="ask"><span class="palette__key">/ask</span><span class="palette__desc">back to summoning · AI replies</span></button>
+            <button type="button" class="palette__row" data-slash-cmd="ask"><span class="palette__key">/ask</span><span class="palette__desc">summon a persona · AI replies</span></button>
+            <button type="button" class="palette__row" data-slash-cmd="note"><span class="palette__key">/note</span><span class="palette__desc">post your comment · no AI reply (default)</span></button>
         </div>
 
         <%-- @mention menu (app.js shows + filters it while typing an @handle). Picking a row inserts the
@@ -109,14 +114,15 @@
     </div>
 
     <div class="composer__row">
-        <%-- One-click /note shortcut, left-anchored like /more on a reply. Same hook the slash palette
-             uses (data-slash-cmd="note"), so app.js's slash handler flips the composer into note mode —
-             the submit button relabels to "Note ▸" and the form posts to /note (no AI summon).
-             data-composer-shortcut is the stable assertion hook for the footer button itself. The hint
-             below carries margin-left:auto, so it and everything after it (spinner, Ask) sit on the
-             right while this button stays on the left. --%>
+        <%-- One-click /ask shortcut, left-anchored like /more on a reply. Note is the default, so the
+             footer toggle offers the OTHER mode: same hook the slash palette uses (data-slash-cmd="ask"),
+             so app.js's slash handler flips the composer into ask mode — the submit button relabels to
+             "Ask ▸" and the form posts to /generate (summon). Once in ask mode app.js relabels this to
+             /note so the owner can switch back. data-composer-shortcut is the stable assertion hook for
+             the footer button itself. The hint below carries margin-left:auto, so it and everything after
+             it (spinner, submit) sit on the right while this button stays on the left. --%>
         <button type="button" class="btn btn--ghost composer__shortcut"
-                data-slash-cmd="note" data-composer-shortcut="note">/note</button>
+                data-slash-cmd="ask" data-composer-shortcut="ask">/ask</button>
         <%-- When "Anyone" is chosen, this scopes what the dispatcher reads to decide WHO replies: the
              whole topic (default) or just this branch. Ignored when a specific persona is named. Inline
              only: the bottom composer is top-level (no ancestor path), so "this branch" == "whole topic"
@@ -130,8 +136,8 @@
         @endif
         <span class="composer__hint"><b>/</b> commands · <b>@</b> summon</span>
         <span class="htmx-indicator composer__spinner" data-composer-spinner aria-live="polite">
-            <span class="spinner" aria-hidden="true"></span>Asking…
+            <span class="spinner" aria-hidden="true"></span>Posting…
         </span>
-        <button class="btn" type="submit">Ask ▸</button>
+        <button class="btn" type="submit">Note ▸</button>
     </div>
 </form>

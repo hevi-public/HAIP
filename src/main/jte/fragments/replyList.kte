@@ -1,11 +1,20 @@
 @import com.aiforum.dto.ReplyView
+@import com.aiforum.dto.BranchIndexEntry
 @import com.aiforum.web.PersonaView
 @param replies: List<ReplyView>
 @param threadId: String? = null
 @param personas: List<PersonaView> = emptyList()
+@param branchIndex: List<BranchIndexEntry>? = null
 
 <div class="reply-list">
     @for(reply in replies)
         @template.fragments.replyNode(reply = reply, threadId = threadId, personas = personas)
     @endfor
 </div>
+<%-- When this list is a fragment response to a post that changed the posted set (a new owner node, a
+     /note, an auto-grown branch), carry a fresh branch index as an out-of-band swap so the rail's TOC
+     refreshes alongside the appended nodes. Null on the full-page render (the rail is rendered there
+     directly), so no stray duplicate section ships with the page. --%>
+@if(branchIndex != null)
+    @template.fragments.branchIndex(entries = branchIndex, oob = true)
+@endif

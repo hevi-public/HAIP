@@ -5,7 +5,7 @@
  * enhancement — the forms work without it. Re-bound after every htmx swap so textareas injected into the
  * tree (inline composers) or swapped in place (a regenerated prompt) behave the same.
  */
-import { submitLabel, toggleLabel, toggleCmd, notePath } from "./composer-core.mjs";
+import { submitLabel, toggleLabel, toggleCmd, effectiveMode, resolvePath } from "./composer-core.mjs";
 
 (function () {
   var SELECTOR = ".composer textarea, .new-persona__descriptor, .new-persona__prompt";
@@ -185,6 +185,8 @@ import { submitLabel, toggleLabel, toggleCmd, notePath } from "./composer-core.m
     var mention = form.querySelector("[data-mention-menu]");
     var tok = tokenAtCaret(e.target);
     hide(slash); hide(mention);
+    // Typing or deleting a resolvable @handle flips whether this submit will summon — keep the verb honest.
+    applyMode(form);
     if (!tok) return;
     // Re-highlight the first row each keystroke so Enter completes the top match (the user's ask).
     if (tok.kind === "/" && slash && filterMenu(slash, ["data-slash-cmd"], tok.query)) { show(slash); highlight(slash, 0); }
@@ -224,12 +226,41 @@ import { submitLabel, toggleLabel, toggleCmd, notePath } from "./composer-core.m
     }
   });
 
-  // Apply a composer mode ("ask" | "note") to a form's two buttons: the submit verb and the footer
-  // toggle (its label + the command it now fires). Pure-logic decisions come from composer-core; this
-  // is just the DOM application. The endpoint swap is handled by the callers below.
-  function setComposerMode(form, mode) {
+  // The composer's current toggle mode, read straight off the form. Note is the default (the template
+  // renders data-note-mode="1"); /ask drops the marker.
+  function formMode(form) {
+    return form.getAttribute("data-note-mode") === "1" ? "note" : "ask";
+  }
+
+  // Does the message tag a specific persona? Tagging always summons (ask), even from the note default —
+  // naming someone is a deliberate request for their reply (see effectiveMode/resolvePath). A tag is
+  // either a named persona chip selected, or a resolvable @handle typed in the message (matched against
+  // the same handles/names the @mention menu offers, mirroring the server-side MentionParser).
+  function tagsPersona(form) {
+    var chips = form.querySelectorAll("[data-persona-chip] input");
+    for (var i = 0; i < chips.length; i++) { if (chips[i].checked) return true; }
+    var ta = form.querySelector("[data-composer-text]");
+    if (!ta || ta.value.indexOf("@") < 0) return false;
+    var handles = {};
+    form.querySelectorAll("[data-mention-pick]").forEach(function (row) {
+      var h = row.getAttribute("data-mention-handle");
+      var n = row.getAttribute("data-mention-name");
+      if (h) handles[h.toLowerCase()] = true;
+      if (n) handles[n.toLowerCase()] = true;
+    });
+    var re = /(^|[^\w@])@([\w-]+)/g, m;
+    while ((m = re.exec(ta.value)) !== null) { if (handles[m[2].toLowerCase()]) return true; }
+    return false;
+  }
+
+  // Reflect the form's current mode (and any persona tag) onto its two buttons: the submit verb shows
+  // what pressing it does RIGHT NOW — a tag forces "Ask ▸" even in the note default — and the footer
+  // toggle offers the other mode. Pure-logic decisions come from composer-core; this is just the DOM
+  // application. The endpoint swap is handled at submit time (htmx:configRequest below).
+  function applyMode(form) {
+    var mode = formMode(form);
     var submit = form.querySelector("button[type='submit']");
-    if (submit) submit.textContent = submitLabel(mode);
+    if (submit) submit.textContent = submitLabel(effectiveMode(mode, tagsPersona(form)));
     var toggle = form.querySelector("[data-composer-shortcut]");
     if (toggle) {
       toggle.textContent = toggleLabel(mode);
@@ -238,30 +269,36 @@ import { submitLabel, toggleLabel, toggleCmd, notePath } from "./composer-core.m
     }
   }
 
-  // Leave note mode: drop the marker and reset both buttons. The request URL is decided at submit time
+  // Enter note mode (the default): mark the form so configRequest retargets the POST at /note, and
+  // relabel the buttons. A typed @tag / named chip still overrides this at submit time (resolvePath).
+  function enterNoteMode(form) {
+    form.setAttribute("data-note-mode", "1");
+    applyMode(form);
+  }
+
+  // Leave note mode (/ask): drop the marker and relabel. The request URL is decided at submit time
   // (htmx:configRequest below) from data-note-mode, so there's no hx-post attribute to restore.
   function clearNoteMode(form) {
     form.removeAttribute("data-note-mode");
-    setComposerMode(form, "ask");
+    applyMode(form);
   }
 
-  // The note/ask switch, where it actually bites: rewrite the POST target to /note when the composer is
-  // in note mode. We do NOT mutate hx-post — htmx caches the form's path on process, so a setAttribute
-  // is silently ignored and the request still hits /generate (summoning the personas — the bug this
-  // fixes). configRequest fires at request time, so rewriting evt.detail.path here always takes effect.
+  // The note/ask switch, where it actually bites: rewrite the POST target to /note in note mode (the
+  // default) UNLESS a persona is tagged, which keeps the summon on /generate. We do NOT mutate hx-post —
+  // htmx caches the form's path on process, so a setAttribute is silently ignored and the request still
+  // hits /generate. configRequest fires at request time, so rewriting evt.detail.path here always takes
+  // effect. resolvePath folds the mode + tag decision (composer-core) into the final endpoint.
   document.body.addEventListener("htmx:configRequest", function (evt) {
     var elt = evt.detail && evt.detail.elt;
     var form = elt && elt.closest ? elt.closest("form[data-composer]") : null;
-    if (form && form.getAttribute("data-note-mode") === "1") {
-      evt.detail.path = notePath(evt.detail.path);
-    }
+    if (form) evt.detail.path = resolvePath(evt.detail.path, formMode(form), tagsPersona(form));
   });
 
-  // After a successful submit the composer resets — restore note-mode overrides so the next message
-  // goes back through /generate unless the owner picks /note again.
+  // After a successful submit the composer resets — return it to the note default so the next message
+  // is a silent note unless the owner opts back into summoning (/ask, or tagging a persona).
   document.body.addEventListener("reset", function (e) {
     var form = composerOf(e.target);
-    if (form) clearNoteMode(form);
+    if (form) { enterNoteMode(form); syncChips(form); }
   });
 
   // ---- clicks: chips, slash commands, mention picks ----
@@ -276,8 +313,7 @@ import { submitLabel, toggleLabel, toggleCmd, notePath } from "./composer-core.m
       if (cmd === "note") {
         // Enter note mode: mark the form (the configRequest handler reads this to retarget the POST at
         // /note, so no LLM is summoned) and relabel the buttons. No hx-post mutation — see below.
-        sForm.setAttribute("data-note-mode", "1");
-        setComposerMode(sForm, "note");
+        enterNoteMode(sForm);
       } else {
         // /ask explicitly returns to ask mode; /branch and /topic also leave note mode (their scope
         // only applies to a real summon). clearNoteMode restores the /generate endpoint + relabels.
@@ -305,6 +341,7 @@ import { submitLabel, toggleLabel, toggleCmd, notePath } from "./composer-core.m
       if (ta2) replaceToken(ta2, "@" + pick.getAttribute("data-mention-handle") + " ");
       var chip = chipInputFor(mForm, pick.getAttribute("data-mention-pick"));
       if (chip) { chip.checked = true; syncChips(mForm, chip); }
+      applyMode(mForm); // a tag was added — the submit verb becomes "Ask ▸" even in the note default
       hide(mForm.querySelector("[data-mention-menu]"));
       return;
     }
@@ -316,7 +353,11 @@ import { submitLabel, toggleLabel, toggleCmd, notePath } from "./composer-core.m
 
   // ---- chip checkbox toggled directly (keyboard / no-JS-style click on the label) ----
   document.body.addEventListener("change", function (e) {
-    if (e.target.matches('.chip input[name="personaIds"]')) syncChips(composerOf(e.target), e.target);
+    if (e.target.matches('.chip input[name="personaIds"]')) {
+      var form = composerOf(e.target);
+      syncChips(form, e.target);
+      applyMode(form); // selecting/clearing a named chip changes whether the submit will ask
+    }
   });
 })();
 
