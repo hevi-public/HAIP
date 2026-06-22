@@ -391,23 +391,32 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 .member-row .reply__handle { margin-left: auto; color: var(--muted); }
 
 /* ---------------------------------------------------------------- thread */
-/* Two-region scaffold: main reply column + a reserved side rail. The rail is `hidden` until it gets
-   content, so today the main column spans the full width. Dropping boxes into .thread__rail (and
-   dropping the `hidden` attr) flips it to two columns with zero further layout work — the future
-   side boxes are "factored in" here. */
+/* Three-region scaffold mirroring the home page's left:nav / main / right:feeds frame. The LEFT rail
+   carries this thread's navigation (branch index + context legend); the RIGHT rail carries the
+   forum-wide feeds (recent comments + active threads) — the same boxes, same side, as the home page.
+   Below the breakpoint everything stacks to one column (main, then both rails in DOM order). */
 .thread { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gutter); align-items: start; }
 .thread__main { min-width: 0; }   /* let the grid track shrink the tree instead of overflowing */
-@media (min-width: 1000px) {       /* two columns when there's room; rail stacks below on narrow screens */
-  .thread:has(.thread__rail) { grid-template-columns: minmax(0, 1fr) var(--rail); }
-}
-.thread__rail { display: flex; flex-direction: column; gap: 14px; }
-@media (min-width: 1000px) {       /* rail follows as the tree scrolls and caps to the viewport. Rather than
-                                      scrolling the whole rail, only the branch-index list scrolls inside its
-                                      own box, so the context legend below stays visible however long the index
-                                      gets (a sticky rail taller than the viewport would pin its top and hide
-                                      its tail). The branch-index box is the one allowed to shrink; the legend
-                                      holds its full height. */
-  .thread__rail { position: sticky; top: 18px; max-height: calc(100vh - 36px); }
+.thread__rail, .thread__rail-right { display: flex; flex-direction: column; gap: 14px; }
+@media (min-width: 1024px) {       /* three columns when there's room; rails stack below on narrow screens */
+  .thread {
+    grid-template-columns: var(--rail) minmax(0, 1fr) 248px;
+    grid-template-areas: "left main right";
+  }
+  .thread__main { grid-area: main; }
+  .thread__rail { grid-area: left; }
+  .thread__rail-right { grid-area: right; }
+  /* Both rails follow as the tree scrolls. In the LEFT rail, rather than scrolling the whole rail, only
+     the branch-index list scrolls inside its own box, so the context legend below stays visible however
+     long the index gets (a sticky rail taller than the viewport would pin its top and hide its tail).
+     The branch-index box is the one allowed to shrink; the legend holds its full height. The RIGHT
+     feeds rail just pins its top like the home page's right rail (no internal scroll). */
+  .thread__rail, .thread__rail-right { position: sticky; top: 18px; }
+  /* Cap to the visible space so the legend never drops below the fold. The header (48px) isn't sticky,
+     so at the top of the page the rail sits at 48 + 20 (container top pad) = 68px down — its tallest
+     offset from the viewport. Budget that plus an 18px bottom gap (68 + 18 = 86). Once scrolled, the
+     header leaves and the rail pins to top:18 with room to spare; this cap just stays conservative. */
+  .thread__rail { max-height: calc(100vh - 86px); }
   .thread__rail .rail-box[data-rail-box="branch-index"] { display: flex; flex-direction: column; min-height: 0; }
   .thread__rail .rail-box[data-rail-box="branch-index"] .branch-index { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .thread__rail .rail-box[data-rail-box="context-legend"] { flex-shrink: 0; }
