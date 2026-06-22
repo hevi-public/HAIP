@@ -9,6 +9,16 @@ spring:
     driver-class-name: org.sqlite.JDBC
     hikari:
       maximum-pool-size: 5
+  # Static assets (app.css, app.js, *.mjs) carry no fingerprint in their URLs, so a renamed CSS class
+  # or changed script would otherwise be styled/run against a browser-cached copy until heuristic
+  # freshness expires — e.g. all the delete-confirm panels falling open after .thread-row__delete-* was
+  # renamed to .row-delete-*. no-cache forces the browser to revalidate every fetch; the existing
+  # Last-Modified header then yields a cheap 304 when nothing changed and fresh bytes the instant it does.
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          no-cache: true
 
 aiforum:
   backups:
