@@ -389,6 +389,24 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 }
 .new-persona__model:focus { outline: none; border-color: #9aa882; }
 
+/* Personality dials: lay the sliders out in a horizontal row (wrapping on narrow widths) rather than a
+   tall vertical stack — each dial is a compact labelled column (label above its slider). */
+.new-persona__dials {
+  /* width:100% + min-inline-size:0 override the <fieldset> min-content quirk that otherwise shrinks it
+     to one column's width, forcing the row to wrap into a vertical stack. */
+  width: 100%; box-sizing: border-box; min-inline-size: 0;
+  margin: 0; padding: 10px 12px;
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  display: flex; flex-wrap: wrap; gap: 12px 18px;
+}
+.new-persona__dials legend {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: #6b6e48; padding: 0 4px;
+}
+.dial { display: flex; flex-direction: column; gap: 5px; flex: 1 1 160px; min-width: 150px; }
+.dial__label { font-size: 11.5px; color: var(--muted); }
+.dial input[type="range"] { width: 100%; accent-color: var(--spine-live); }
+
 .thread-index {
   background: var(--card);
   border: 1px solid var(--line);
