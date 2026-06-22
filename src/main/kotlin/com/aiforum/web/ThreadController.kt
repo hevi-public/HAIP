@@ -47,6 +47,7 @@ class ThreadController(
     private val votes: VoteRepository,
     private val threadReads: ThreadReadRepository,
     private val generation: GenerationService,
+    private val railFeeds: RailFeeds,
 ) {
 
     // Two bindings, one creation path: the browser's new-thread form posts form-urlencoded and wants a
@@ -126,6 +127,9 @@ class ThreadController(
         // drafts in flight, so a fresh thread shows the room responding rather than an empty wait.
         model.addAttribute("waitingOnRoom", all.none { it.state == GenerationState.POSTED } && drafting.isEmpty())
         model.addAttribute("personas", personaViews)
+        // Right-rail forum-wide feeds — the same boxes (same side) the home page carries, via RailFeeds.
+        model.addAttribute("activeThreads", railFeeds.activeThreads())
+        model.addAttribute("recentComments", railFeeds.recentComments())
         return "thread"
     }
 
