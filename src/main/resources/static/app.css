@@ -274,7 +274,15 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   .home__rail { grid-area: left; margin-bottom: 0; }
   .home__main { grid-area: main; }
   .home__rail-right { grid-area: right; margin-top: 0; }
-  .home__rail, .home__rail-right { position: sticky; top: 18px; }
+  /* The LEFT nav rail pins as the page scrolls so the forum nav + members stay reachable. Cap it to the
+     visible space (same 86px budget as the thread rail — see its note) and let overflow scroll inside,
+     so a rail taller than the viewport doesn't glue its top and hide its tail. The RIGHT feeds rail is
+     deliberately NOT sticky: on a page longer than the rail, pinning leaves the boxes frozen over a
+     growing blank gap, so it just scrolls away with the page like normal content. */
+  .home__rail {
+    position: sticky; top: 18px;
+    max-height: calc(100vh - 86px); overflow-y: auto;
+  }
 }
 
 /* Forum-nav box — the "~/forum" terminal listing in the left rail. Shares .rail-box card chrome. */
@@ -493,16 +501,17 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   .thread__main { grid-area: main; }
   .thread__rail { grid-area: left; }
   .thread__rail-right { grid-area: right; }
-  /* Both rails follow as the tree scrolls. In the LEFT rail, rather than scrolling the whole rail, only
-     the branch-index list scrolls inside its own box, so the context legend below stays visible however
-     long the index gets (a sticky rail taller than the viewport would pin its top and hide its tail).
-     The branch-index box is the one allowed to shrink; the legend holds its full height. The RIGHT
-     feeds rail just pins its top like the home page's right rail (no internal scroll). */
-  .thread__rail, .thread__rail-right { position: sticky; top: 18px; }
-  /* Cap to the visible space so the legend never drops below the fold. The header (48px) isn't sticky,
-     so at the top of the page the rail sits at 48 + 20 (container top pad) = 68px down — its tallest
-     offset from the viewport. Budget that plus an 18px bottom gap (68 + 18 = 86). Once scrolled, the
-     header leaves and the rail pins to top:18 with room to spare; this cap just stays conservative. */
+  /* The LEFT nav rail follows as the tree scrolls so the branch index stays reachable; rather than
+     scrolling the whole rail, only the branch-index list scrolls inside its own box, so the context
+     legend below stays visible however long the index gets (a sticky rail taller than the viewport would
+     pin its top and hide its tail). The branch-index box is the one allowed to shrink; the legend holds
+     its full height. The RIGHT feeds rail is deliberately NOT sticky: on a thread longer than the rail,
+     pinning leaves the boxes frozen over a growing blank gap, so it just scrolls away with the page. */
+  .thread__rail { position: sticky; top: 18px; }
+  /* Cap to the visible space so the lower boxes never drop below the fold. The header (48px) isn't
+     sticky, so at the top of the page the rail sits at 48 + 20 (container top pad) = 68px down — its
+     tallest offset from the viewport. Budget that plus an 18px bottom gap (68 + 18 = 86). Once scrolled,
+     the header leaves and the rail pins to top:18 with room to spare; this cap just stays conservative. */
   .thread__rail { max-height: calc(100vh - 86px); }
   .thread__rail .rail-box[data-rail-box="branch-index"] { display: flex; flex-direction: column; min-height: 0; }
   .thread__rail .rail-box[data-rail-box="branch-index"] .branch-index { flex: 1 1 auto; min-height: 0; overflow-y: auto; }

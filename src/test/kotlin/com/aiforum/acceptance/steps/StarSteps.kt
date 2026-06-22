@@ -3,6 +3,7 @@ package com.aiforum.acceptance.steps
 import com.aiforum.acceptance.support.Html
 import com.aiforum.acceptance.support.HttpClient
 import com.aiforum.acceptance.support.ScenarioWorld
+import io.cucumber.java.en.Given
 import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -17,6 +18,14 @@ class StarSteps(
     private val world: ScenarioWorld,
     private val http: HttpClient,
 ) {
+    // Precondition variant: star a reply without updating world.lastBody, so the scenario can
+    // continue with a fresh page load as the assertion target (not the star-fragment response).
+    @Given("the owner has starred {string}'s reply")
+    fun ownerHasStarred(persona: String) {
+        val id = world.replyIds["$persona's reply"] ?: error("no remembered reply for $persona")
+        http.post("/replies/$id/star")
+    }
+
     @When("the owner stars {string}'s reply")
     fun starReply(persona: String) {
         val id = world.replyIds["$persona's reply"] ?: error("no remembered reply for $persona")

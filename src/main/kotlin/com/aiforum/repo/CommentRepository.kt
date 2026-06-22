@@ -22,6 +22,16 @@ data class RecentComment(
     val createdAt: String,
 )
 
+/** A starred POSTED comment with its thread title, for the starred rail box and the /starred page. */
+data class StarredComment(
+    val id: String,
+    val threadId: String,
+    val threadTitle: String,
+    val authorId: String,
+    val body: String,
+    val createdAt: String,
+)
+
 @Repository
 class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock) {
 
@@ -146,6 +156,33 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
                SELECT COUNT(*) - 1 FROM sub""",
             Int::class.java, nodeId,
         ) ?: 0
+
+    /**
+     * Starred POSTED comments joined with their thread title, newest first. Pass a limit for the
+     * rail box; null for the /starred page (all of them).  The JOIN is safe here: every comment
+     * must have a thread_id that references an existing thread row.
+     */
+    fun starredPosted(limit: Int): List<StarredComment> = starredQuery(limit)
+
+    fun allStarredPosted(): List<StarredComment> = starredQuery(null)
+
+    private fun starredQuery(limit: Int?): List<StarredComment> {
+        val sql = buildString {
+            append(
+                """SELECT c.id, c.thread_id, t.title AS thread_title, c.author_id, c.body, c.created_at
+                   FROM comment c JOIN thread t ON c.thread_id = t.id
+                   WHERE c.starred = 1 AND c.state = 'POSTED'
+                   ORDER BY c.created_at DESC""",
+            )
+            if (limit != null) append(" LIMIT $limit")
+        }
+        return jdbc.query(sql) { rs, _ ->
+            StarredComment(
+                rs.getString("id"), rs.getString("thread_id"), rs.getString("thread_title"),
+                rs.getString("author_id"), rs.getString("body"), rs.getString("created_at"),
+            )
+        }
+    }
 
     /**
      * Delete [nodeId] and its entire subtree (§8) — a deleted parent takes its replies with it, so no

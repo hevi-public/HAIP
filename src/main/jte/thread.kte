@@ -3,6 +3,7 @@
 @import com.aiforum.web.PersonaView
 @import com.aiforum.web.ActiveThreadRow
 @import com.aiforum.web.RecentCommentRow
+@import com.aiforum.web.StarredCommentRow
 @param threadId: String
 @param title: String
 @param body: String
@@ -13,6 +14,7 @@
 @param personas: List<PersonaView>
 @param recentComments: List<RecentCommentRow>
 @param activeThreads: List<ActiveThreadRow>
+@param starredComments: List<StarredCommentRow>
 
 @template.layout(title = title, activeNav = "threads", content = @`
     <div class="thread" data-thread-id="${threadId}" data-thread-title="${title}">
@@ -56,6 +58,7 @@
       <%-- Right rail: forum-wide feeds — the same boxes, on the same side, as the home page's right rail,
            so "what's happening elsewhere" lives in one consistent place across pages. --%>
       <aside class="thread__rail-right" data-thread-rail-right>
+          @template.fragments.starredCommentsBox(starred = starredComments)
           @template.fragments.recentCommentsBox(comments = recentComments)
           @template.fragments.activeThreadsBox(threads = activeThreads)
       </aside>

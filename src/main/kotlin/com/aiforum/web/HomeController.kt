@@ -16,6 +16,9 @@ data class ActiveThreadRow(val id: String, val title: String, val ago: String)
 /** A row in the right-rail "Recent comments" box: a quoted snippet linking to the comment in its thread. */
 data class RecentCommentRow(val threadId: String, val id: String, val author: String, val snippet: String, val ago: String)
 
+/** A row in the right-rail "Starred" box and the /starred page: a cross-thread bookmark. */
+data class StarredCommentRow(val threadId: String, val id: String, val threadTitle: String, val author: String, val snippet: String, val ago: String)
+
 /**
  * Renders the front page (GET /): empty state when no threads exist; otherwise a list of thread
  * rows with unread reply counts (§2). The left rail's Members box lists the roster; the right rail's
@@ -44,6 +47,7 @@ class HomeController(
         // Right-rail feeds — shared with the thread page via RailFeeds so they read identically there.
         model.addAttribute("activeThreads", railFeeds.activeThreads())
         model.addAttribute("recentComments", railFeeds.recentComments())
+        model.addAttribute("starredComments", railFeeds.starredComments())
         return "index"
     }
 }

@@ -146,6 +146,7 @@ class ThreadController(
         // Right-rail forum-wide feeds — the same boxes (same side) the home page carries, via RailFeeds.
         model.addAttribute("activeThreads", railFeeds.activeThreads())
         model.addAttribute("recentComments", railFeeds.recentComments())
+        model.addAttribute("starredComments", railFeeds.starredComments())
         return "thread"
     }
 
