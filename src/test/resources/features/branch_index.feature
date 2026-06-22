@@ -30,3 +30,18 @@ Feature: The thread rail shows a branch index
     Then the thread rail shows a branch index
     And the branch index lists 0 entries
     And the branch index shows an empty state
+
+  Scenario: Posting a comment refreshes the rail in the same response (no reload needed)
+    # The bug: the rail's branch index only rebuilt on a full page load, so a freshly-posted comment
+    # never appeared in the TOC until reload. Every fragment response that changes the posted set now
+    # carries the branch index as an out-of-band swap — here the /note fragment the browser swaps in.
+    Given a posted reply from "sol" saying "Indexes help here"
+    When the owner posts a note "WAL mode too"
+    Then the thread rail shows a branch index
+    And the branch index lists 2 entries
+    And the branch index has an entry for "sol"'s reply
+
+  Scenario: Editing a comment refreshes its branch index preview in the same response
+    Given a posted reply from "sol" saying "Indexes help here"
+    When the owner edits "sol"'s reply to say "Actually WAL mode is the real lever"
+    Then the branch index entry for "sol"'s reply shows "Actually WAL mode"

@@ -1,4 +1,5 @@
 @import com.aiforum.dto.ReplyView
+@import com.aiforum.dto.BranchIndexEntry
 @import com.aiforum.dto.GenerationState
 @import com.aiforum.dto.FailureCategory
 @import com.aiforum.web.AuthorColor
@@ -6,6 +7,10 @@
 @param reply: ReplyView
 @param threadId: String? = null
 @param personas: List<PersonaView> = emptyList()
+<%-- Only set on a top-level fragment response whose settle changed the posted set (a draft polling to
+     POSTED, a retry, an edit). Carries a fresh branch index as an out-of-band swap so the rail refreshes
+     when the node lands. Left null on the recursive child renders and the full-page render. --%>
+@param branchIndex: List<BranchIndexEntry>? = null
 
 <%-- Indentation comes from DOM nesting (children render inside this <article>); state styling is
      driven off data-state / data-failure-category in app.css. All data-* hooks stay on this one
@@ -151,3 +156,6 @@
         @template.fragments.replyNode(reply = child, threadId = threadId, personas = personas)
     @endfor
 </article>
+@if(branchIndex != null)
+    @template.fragments.branchIndex(entries = branchIndex, oob = true)
+@endif
