@@ -77,9 +77,13 @@ class ThreadController(
         // sentinel (the AI dispatcher picks who replies); WHOLE_THREAD for both scopes is "Whole Topic"
         // — the dispatcher reads the whole topic (the opening post) to route, and the chosen persona then
         // reads the whole topic too. No owner message to post (the opening post lives on the thread body
-        // and seeds context via the OP node), so postAsOwner stays false. Async — settles on a worker
-        // thread while the request returns; the drafts surface on the thread page and self-poll.
-        generation.startGeneration(
+        // and seeds context via the OP node), so postAsOwner stays false.
+        //
+        // summonAsync (not startGeneration): the dispatcher's routing LLM call runs on the worker too, so
+        // POST /threads returns at once instead of blocking on the model — critical with a slow local
+        // backend (LM Studio). The thread page polls /threads/{id}/room and swaps the drafts in once
+        // routing picks who replies; each draft then self-polls to settle.
+        generation.summonAsync(
             threadId = id,
             parentId = null,
             personaIds = listOf(GenerationService.AUTO_PERSONA),
@@ -131,6 +135,12 @@ class ThreadController(
         val rendered = collectIds(tree)
         val drafting = generation.inFlightViews(id).filter { it.id !in rendered }
         model.addAttribute("replies", tree + drafting)
+        // A create-time summon routes (the dispatcher's "who replies" LLM call) on a worker, so right
+        // after the create redirect there may be no drafts yet. While that routing is in flight, the page
+        // shows a poller (see thread.kte) that swaps the drafts in once they land, instead of the static
+        // waiting state.
+        val summoning = generation.isSummoning(id)
+        model.addAttribute("summoning", summoning)
         // Persona views carry each persona's stored colour slot, so the branch-index dots resolve to the
         // same hue as the reply monograms (see AuthorColor).
         val personaViews = personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug, colorIndex = it.colorIndex) }
@@ -138,10 +148,11 @@ class ThreadController(
         // page renders them, so the rail reads top-to-bottom alongside the thread. Drafting nodes are not
         // posted, so they stay out of the rail until they settle.
         model.addAttribute("branchIndex", branchIndex(tree, personaViews))
-        // "Waiting on the room" only when nothing has posted AND nothing is drafting — i.e. the room
-        // hasn't been summoned (no personas to route to). With the create-time summon there are normally
-        // drafts in flight, so a fresh thread shows the room responding rather than an empty wait.
-        model.addAttribute("waitingOnRoom", all.none { it.state == GenerationState.POSTED } && drafting.isEmpty())
+        // "Waiting on the room" only when nothing has posted, nothing is drafting, AND no summon is
+        // routing — i.e. the room was never summoned (no personas to route to). With the create-time
+        // summon a fresh thread normally shows the summoning poller (then the drafts), so this empty state
+        // is reserved for threads with no room to route to.
+        model.addAttribute("waitingOnRoom", all.none { it.state == GenerationState.POSTED } && drafting.isEmpty() && !summoning)
         model.addAttribute("personas", personaViews)
         // Right-rail forum-wide feeds — the same boxes (same side) the home page carries, via RailFeeds.
         model.addAttribute("activeThreads", railFeeds.activeThreads())

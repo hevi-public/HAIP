@@ -74,8 +74,14 @@ aiforum:
           Stays domain-agnostic, poking at assumptions with "what did you expect to happen, and what
           actually did?" and "have you checked that's really true?" Speaks up with substance only when it
           genuinely matters.
-  # ProcessLlmClient (dev/prod only; the test profile swaps in a scriptable fake). Defaults shown.
+  # LLM backend (dev/prod only; the test profile swaps in a scriptable fake). Defaults shown.
+  # `provider` selects which real LlmClient loads: cli => ProcessLlmClient (claude -p), openai =>
+  # OpenAiLlmClient (any OpenAI-compatible HTTP server, e.g. LM Studio). Flip to openai via the `openai`
+  # profile (application-openai.yml), an OVERLAY run alongside a base profile, e.g.
+  # SPRING_PROFILES_ACTIVE=dev,openai. The command/working-dir/web-fetch-* keys are cli-only; the
+  # openai: block is openai-only; default-model is shared (the per-provider model fallback).
   llm:
+    provider: cli              # cli (claude -p, default) | openai (OpenAI-compatible HTTP, e.g. LM Studio)
     command: claude            # the CLI binary on PATH
     default-model: ""          # fallback model used when a persona doesn't pin its own (persona.model,
                                # V4); blank => the CLI's default model. e.g. "opus" to pin one fleet-wide.
@@ -91,3 +97,10 @@ aiforum:
     web-fetch-enabled: false
     web-fetch-allowed-domains: ""   # blank => any host; else comma-separated allowlist, e.g.
                                     # "news.ycombinator.com,github.com" → personas can only fetch those
+    # OpenAiLlmClient (provider: openai only). Talks the OpenAI Chat Completions API over HTTP. The model
+    # name reuses `default-model` above (and per-persona PersonaRef.model) — no separate model key here.
+    openai:
+      base-url: http://localhost:1234/v1   # LM Studio's local server (OpenAI-compatible)
+      api-key: ""              # LM Studio ignores it; set e.g. ${LLM_API_KEY:} for hosted servers that need one
+      temperature: 0.7
+      max-tokens: 1024

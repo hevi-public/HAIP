@@ -28,6 +28,22 @@ class GenerationSettle(private val http: HttpClient) {
     /** Settle every node and concatenate the fragments, so count-based assertions see the whole room. */
     fun awaitAllSettled(ids: List<String>): String = ids.joinToString("\n") { awaitSettled(it) }
 
+    /**
+     * Poll the create-time room summon until the drafts appear (§4). The summon now routes on a worker
+     * (summonAsync), so the create response carries no drafts — GET /threads/{id}/room returns the
+     * "summoning" poller while the dispatcher is still choosing, then the drafts as a reply-list fragment
+     * once they're registered. Returns the draft node ids (empty if none land before the deadline).
+     */
+    fun awaitRoomDrafts(threadId: String): List<String> {
+        val deadline = System.currentTimeMillis() + TIMEOUT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val ids = Html.allReplyIds(http.get("/threads/$threadId/room").body ?: "")
+            if (ids.isNotEmpty()) return ids
+            Thread.sleep(POLL_MS)
+        }
+        return emptyList()
+    }
+
     private companion object {
         const val TIMEOUT_MS = 5_000L
         const val POLL_MS = 20L

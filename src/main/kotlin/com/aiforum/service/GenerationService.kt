@@ -116,6 +116,56 @@ class GenerationService(
         return owner?.let { listOf(it.toReplyView(children = drafts)) } ?: drafts
     }
 
+    /**
+     * Fully-async summon (§4): unlike [startGeneration], the dispatcher's routing call ALSO runs on the
+     * worker, so the request thread never blocks on the LLM and the create page can render/redirect at
+     * once. The thread is marked "summoning" until routing finishes and the per-persona drafts are
+     * registered, then each settles. Used by the create path (ThreadController): the room is summoned
+     * "Whole Topic + Anyone" and the thread page polls /threads/{id}/room, swapping the drafts in as they
+     * appear. Returns nothing — there are no synchronously-known drafts to hand back.
+     *
+     * Without this, [resolvePersonas] (the "Anyone" dispatcher's LLM call) ran on the request thread, so
+     * a slow model left the new-thread page blank until it answered — the one place the otherwise-async
+     * summon path wasn't actually async.
+     */
+    fun summonAsync(
+        threadId: String,
+        parentId: String?,
+        personaIds: List<String>,
+        text: String,
+        scope: ScopeMode = ScopeMode.WHOLE_THREAD,
+        includeSiblings: Boolean = false,
+        postAsOwner: Boolean = false,
+        routingScope: ScopeMode = ScopeMode.WHOLE_THREAD,
+    ) {
+        inFlight.beginSummon(threadId)
+        inFlight.submit {
+            val started = try {
+                val owner = ownerComment(threadId, parentId, text, postAsOwner)
+                val anchorId = owner?.id ?: parentId
+                val resolvedIds = resolvePersonas(threadId, anchorId, routingScope, personaIds, text)
+                planGeneration(threadId, anchorId, resolvedIds, scope, includeSiblings).map { plan ->
+                    plan to inFlight.register(plan.id, plan.threadId, draftView(plan))
+                }
+            } catch (_: Throwable) {
+                // Routing/planning failed before any draft was registered — nothing to settle; the page's
+                // poller drops once `summoning` clears in the finally below.
+                emptyList()
+            } finally {
+                // Routing phase over: the drafts (if any) are now visible to the room poller, so it stops
+                // showing "summoning" and swaps them in.
+                inFlight.endSummon(threadId)
+            }
+            started.forEach { (plan, token) ->
+                try {
+                    settleOne(plan, token)
+                } finally {
+                    inFlight.markDone(plan.id)
+                }
+            }
+        }
+    }
+
     /** Trip the in-flight token for [replyId] and wait (bounded) for the worker to settle it (§4). */
     fun cancel(replyId: String) = inFlight.cancel(replyId)
 
@@ -129,6 +179,9 @@ class GenerationService(
      * a PRG redirect with no fragment to carry the drafts.
      */
     fun inFlightViews(threadId: String): List<ReplyView> = inFlight.viewsFor(threadId)
+
+    /** True while a create-time summon's dispatcher routing is still in flight (no drafts registered yet). */
+    fun isSummoning(threadId: String): Boolean = inFlight.isSummoning(threadId)
 
     /**
      * Synchronous summon/fan-out: settle every persona inline and return the settled views. Kept for the

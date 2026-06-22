@@ -36,6 +36,13 @@ class InFlightGenerations {
 
     private val inFlight = ConcurrentHashMap<String, Holder>()
 
+    // Threads with a summon whose ROUTING is still in flight: the async create path (§4) hands the
+    // dispatcher's "who replies" LLM call to the worker, so there's a window after the request returns
+    // but before any per-persona draft is registered. The thread page polls /threads/{id}/room while
+    // this is set, then swaps in the drafts once they appear. Count, not flag, so a thread summoned twice
+    // in quick succession only clears once both routings finish. Cleared in [reset] between scenarios.
+    private val summoning = ConcurrentHashMap<String, Int>()
+
     // corePoolSize 0 → no threads exist until the first submit, so the default instance the Tier-2
     // unit test constructs (which never submits) spins nothing.
     private val threadCount = AtomicLong()
@@ -54,6 +61,19 @@ class InFlightGenerations {
     fun submit(task: () -> Unit) {
         pool.execute(task)
     }
+
+    /** Mark a summon's routing phase as started for [threadId] (the page shows "summoning" until it ends). */
+    fun beginSummon(threadId: String) {
+        summoning.merge(threadId, 1, Int::plus)
+    }
+
+    /** Routing done (drafts registered, or it failed): decrement, removing the key when it hits zero. */
+    fun endSummon(threadId: String) {
+        summoning.merge(threadId, -1) { current, delta -> (current + delta).takeIf { it > 0 } }
+    }
+
+    /** True while a summon's dispatcher routing is still in flight for [threadId] (no drafts registered yet). */
+    fun isSummoning(threadId: String): Boolean = summoning.containsKey(threadId)
 
     /** The transient DRAFTING view while in flight — the poll's fallback before the settle row exists. */
     fun view(id: String): ReplyView? = inFlight[id]?.view
@@ -96,6 +116,7 @@ class InFlightGenerations {
         holders.forEach { it.token.cancel() }
         holders.forEach { it.done.await(RESET_AWAIT_MILLIS, TimeUnit.MILLISECONDS) }
         inFlight.clear()
+        summoning.clear()
     }
 
     @PreDestroy
