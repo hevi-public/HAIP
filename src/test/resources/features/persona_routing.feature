@@ -24,6 +24,16 @@ Feature: Anyone — the room decides who replies
     Then the reply is "posted"
     And the reply body contains "Happy to take a look"
 
+  # The dispatcher now reads each persona's structured abilities (V10), not just their name, so it can
+  # match the topic to who's actually equipped for it. See plan_docs/persona-traits-routing.md.
+  Scenario: The dispatcher's roster carries each persona's skills, not just their name
+    Given a persona "Dana" skilled in "design" exists
+    And the LLM will respond with "Sol"
+    And the LLM will respond with "indexes help here"
+    When the owner asks the room "how do we make these queries faster?"
+    Then the reply is "posted"
+    And the dispatcher's roster lists "design"
+
   # The owner's "looking at" selector scopes WHAT the dispatcher reads to decide who replies — the whole
   # topic (default) or just the branch being replied to — independent of the persona's generation scope.
   Rule: The dispatcher's "looking at" scope is selectable

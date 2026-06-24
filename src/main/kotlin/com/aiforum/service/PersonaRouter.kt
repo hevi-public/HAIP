@@ -2,6 +2,8 @@ package com.aiforum.service
 
 import com.aiforum.domain.Comment
 import com.aiforum.domain.context.ContextAssembler
+import com.aiforum.dto.ScopeMode
+import com.aiforum.persona.Dials
 import com.aiforum.llm.CancellationToken
 import com.aiforum.llm.LlmClient
 import com.aiforum.llm.LlmRequest
@@ -40,11 +42,12 @@ import java.time.Duration
  *     plan_docs/persona-routing-observability.md).
  *  2. **Numbered menu.** Present the roster as a numbered list and ask the model to reply with the
  *     number(s); digits are far less ambiguous than names and don't collide with ordinary prose.
- *  3. **Match descriptors too, not just names.** Fall back to keyword/semantic matching on each persona's
- *     descriptor ("backend" -> Sol) when no name hits. More forgiving, but risks false positives.
- *     SUPERSEDED by the structured **abilities** tags (V10): a bounded, owner-curated tag set is a cleaner
- *     topic-match signal than free-text descriptors, and the **dials** let a fan-out pick deliberately
- *     COMPLEMENTARY personas (a contrarian + an agreeable one). See plan_docs/persona-traits-routing.md.
+ *  3. **Use the structured traits, not just names.** DONE: the roster lines the dispatcher sees now carry
+ *     each persona's **abilities** tags (V10) and an adjective summary of their off-centre **dials** (see
+ *     [rosterLine]), so the model's pick is topic- AND temperament-aware — a cleaner signal than free-text
+ *     descriptor matching. And when a fan-out is capped, [diversify] selects a set that SPANS the
+ *     agreeableness axis (a contrarian + an agreeable voice) rather than three alike. This enriches the
+ *     model's single existing call rather than adding a second seam. See plan_docs/persona-traits-routing.md.
  *  4. **Reprompt once on a miss** before widening — "Reply with ONLY the exact names" — trading one extra
  *     call for a tighter answer; only then fall back.
  *  5. **Constrained/tool output (the principled fix).** Have the model select from an enum of valid
@@ -56,19 +59,54 @@ import java.time.Duration
  *     reasoning about the topic.
  */
 @Component
-class PersonaRouter(private val llm: LlmClient) {
+class PersonaRouter(
+    private val llm: LlmClient,
+    // Where each routing outcome is recorded (plan_docs/persona-routing-observability.md). Defaulted to
+    // the no-op so the Tier-2 `PersonaRouter(llm)` constructions stay metrics-free; Spring injects the
+    // real persisting adapter (RoutingEventRepository). A pure addition — it never changes the pick.
+    private val metrics: RoutingMetrics = NoOpRoutingMetrics,
+) {
 
-    /** Pick the persona(s) that should reply to [context] from [roster]; never returns empty for a non-empty roster. */
-    fun pick(roster: List<Persona>, context: List<Comment>): List<Persona> {
+    /**
+     * Pick the persona(s) that should reply to [context] from [roster]; never returns empty for a
+     * non-empty roster. [routingScope] is recorded alongside the outcome (whole-topic vs this-branch) for
+     * later drill-down; it does not affect the pick (the caller already scoped [context]).
+     */
+    fun pick(
+        roster: List<Persona>,
+        context: List<Comment>,
+        routingScope: ScopeMode = ScopeMode.WHOLE_THREAD,
+    ): List<Persona> {
         // A lone persona is the only possible answer — don't spend an LLM call to "choose" it.
-        if (roster.size <= 1) return roster
+        if (roster.size <= 1) {
+            metrics.record(RoutingOutcome.SINGLE_PERSONA, roster.size, roster.size, routingScope, null)
+            return roster
+        }
         val reply = runCatching {
             llm.generate(
                 LlmRequest(ContextAssembler.assemble(systemPrompt(roster), context), ROUTER, TIMEOUT),
                 CancellationToken(),
             ).text
-        }.getOrNull() ?: return roster
-        return parseChosen(reply, roster).ifEmpty { roster }
+        }.getOrNull()
+        if (reply == null) {
+            // The seam errored/timed out — fall back to the whole room, but record it as seam health, not
+            // a parse miss, so a flaky model doesn't inflate the parse-miss rate.
+            metrics.record(RoutingOutcome.FAILED_GENERATION, roster.size, roster.size, routingScope, null)
+            return roster
+        }
+        // Every name the model matched, ordered by where it appears (most relevant first)...
+        val matched = parseChosen(reply, roster, max = roster.size)
+        if (matched.isEmpty()) {
+            // The model answered but named no one we recognise: the failure mode firing. Keep the raw reply
+            // so the stats page can show *why* matching missed.
+            metrics.record(RoutingOutcome.WIDENED_NO_MATCH, roster.size, roster.size, routingScope, reply)
+            return roster
+        }
+        // ...then cap the fan-out with a diversity-aware selection so a roomful spans the agreeableness
+        // axis (a contrarian AND an agreeable builder) instead of three voices that'd all say the same.
+        val chosen = diversify(matched, MAX_PICKS)
+        metrics.record(RoutingOutcome.MATCHED, roster.size, chosen.size, routingScope, null)
+        return chosen
     }
 
     companion object {
@@ -90,17 +128,79 @@ class PersonaRouter(private val llm: LlmClient) {
                 Regex("\\b${Regex.escape(p.name)}\\b", RegexOption.IGNORE_CASE).find(reply)?.let { p to it.range.first }
             }.sortedBy { it.second }.take(max).map { it.first }
 
+        /**
+         * Narrow [candidates] (already ordered most-relevant-first) to at most [max], chosen to SPAN the
+         * agreeableness axis so a roomful reads like a room with friction — a contrarian and an agreeable
+         * builder — not a chorus of the same temperament. Pure — Tier-0 testable.
+         *
+         * The model's top pick is always kept (relevance leads); each further slot greedily takes the
+         * candidate whose agreeableness is farthest from the mean of those already chosen. When dials are
+         * absent or identical, every distance is 0, ties resolve to the model's order, and this degrades to
+         * the old "take the first [max]" — so trait-less rosters are unaffected.
+         */
+        fun diversify(candidates: List<Persona>, max: Int = MAX_PICKS): List<Persona> {
+            if (candidates.size <= max) return candidates
+            val chosen = mutableListOf(candidates.first())
+            val rest = candidates.drop(1).toMutableList()
+            while (chosen.size < max && rest.isNotEmpty()) {
+                val mean = chosen.map { agreeableness(it) }.average()
+                // maxByOrNull keeps the FIRST maximal element, so ties preserve the model's relevance order.
+                val next = rest.maxByOrNull { kotlin.math.abs(agreeableness(it) - mean) }!!
+                chosen += next
+                rest -= next
+            }
+            return chosen
+        }
+
+        private fun agreeableness(p: Persona): Int = p.dials["agreeableness"] ?: Dials.DEFAULT
+
+        /**
+         * One roster line for the dispatcher prompt: name + descriptor, plus the STRUCTURED traits the
+         * router used to throw away — abilities (topic match) and the off-centre dials rendered as a few
+         * adjectives (temperament). Giving the model these makes its pick topic- and texture-aware, which
+         * is the whole point of lifting personality into comparable fields. Pure — Tier-0 testable.
+         */
+        fun rosterLine(p: Persona): String {
+            val clauses = buildList {
+                if (p.descriptor.isNotBlank()) add(p.descriptor)
+                if (p.abilities.isNotEmpty()) add("skills: ${p.abilities.joinToString(", ")}")
+                traitWords(p.dials).takeIf { it.isNotEmpty() }?.let { add("style: ${it.joinToString(", ")}") }
+            }
+            return "- ${p.name}" + if (clauses.isEmpty()) "" else ": ${clauses.joinToString("; ")}"
+        }
+
+        /**
+         * Turn the fixed dial schema into a few adjectives, naming ONLY axes set notably off-centre (a
+         * value at the default carries no signal, so it's omitted to keep the line terse). Mirrors the dial
+         * labels' poles (see [Dials]).
+         */
+        fun traitWords(dials: Map<String, Int>): List<String> {
+            val high = Dials.DEFAULT + 2   // ≥7 reads as the high pole
+            val low = Dials.DEFAULT - 2    // ≤3 reads as the low pole
+            fun word(key: String, lowWord: String, highWord: String): String? = dials[key]?.let {
+                when {
+                    it >= high -> highWord
+                    it <= low -> lowWord
+                    else -> null
+                }
+            }
+            return listOfNotNull(
+                word("agreeableness", "contrarian", "agreeable"),
+                word("verbosity", "terse", "expansive"),
+                word("rigor", "intuitive", "evidence-led"),
+                word("warmth", "blunt", "warm"),
+            )
+        }
+
         private fun systemPrompt(roster: List<Persona>): String = buildString {
             append("You are the forum's dispatcher. You do NOT answer the question yourself. Given the ")
             append("discussion below, decide which participant(s) from the roster are best suited to reply, ")
-            append("based on the topic. Pick the most relevant — usually one or two, at most three. ")
+            append("based on the topic — match their skills to it, and when more than one should weigh in, ")
+            append("prefer a mix of temperaments (a contrarian and an agreeable voice) over three alike. ")
+            append("Pick the most relevant — usually one or two, at most three. ")
             append("Respond with ONLY their names, comma-separated, most relevant first. Nothing else.\n\n")
             append("Roster:\n")
-            roster.forEach { p ->
-                append("- ${p.name}")
-                if (p.descriptor.isNotBlank()) append(": ${p.descriptor}")
-                append("\n")
-            }
+            roster.forEach { append(rosterLine(it)).append("\n") }
         }
     }
 }

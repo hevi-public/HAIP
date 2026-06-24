@@ -2,8 +2,8 @@
 
 <%-- The site chrome header, injected once by layout.kte so every page shares one source (no per-page
      copies). Sticky on desktop + click-the-bare-chrome-to-scroll-to-top live in app.css / header.js,
-     keyed off the data-scroll-top hook below. activeNav ("threads" | "members") underlines the current
-     section. --%>
+     keyed off the data-scroll-top hook below. activeNav ("threads" | "members" | "admin") underlines the
+     current section. --%>
 <header class="site-header" data-scroll-top>
     <a class="site-header__brand" href="/">
         <span class="site-header__logo" aria-hidden="true">~/</span>
@@ -12,6 +12,7 @@
     <nav class="site-nav">
         <a href="/" aria-current="${if (activeNav == "threads") "page" else null}">threads</a>
         <a href="/personas" aria-current="${if (activeNav == "members") "page" else null}">members</a>
+        <a href="/admin/stats" aria-current="${if (activeNav == "admin") "page" else null}">stats</a>
     </nav>
     <%-- Layout controls: collapse either side rail for more reading width, or one-click full-screen
          (both). aria-pressed reflects collapsed state; layout.js keeps these in sync with the

@@ -36,6 +36,12 @@ class CommonSteps(
         data.insertPersona(id = name, name = name)
     }
 
+    @Given("a persona {string} skilled in {string} exists")
+    fun personaSkilledExists(name: String, ability: String) {
+        // The structured abilities tag (V10) the "Anyone" dispatcher now reads to match topic -> persona.
+        data.insertPersona(id = name, name = name, abilities = listOf(ability))
+    }
+
     @Given("a posted reply from {string} saying {string}")
     fun postedReply(persona: String, body: String) {
         val id = data.insertComment(world.threadId!!, authorId = persona, body = body)
