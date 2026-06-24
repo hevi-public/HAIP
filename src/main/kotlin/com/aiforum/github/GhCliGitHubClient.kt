@@ -1,7 +1,7 @@
 package com.aiforum.github
 
+import com.aiforum.observability.event
 import org.slf4j.LoggerFactory
-import org.slf4j.spi.LoggingEventBuilder
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
@@ -161,9 +161,6 @@ open class GhCliGitHubClient(
             .event(EV_LIST_FAILED).addKeyValue("list", list).addKeyValue("detail", detail)
             .log()
     }
-
-    /** Tag a structured event id onto a fluent log builder — the stable identity tooling selects on. */
-    private fun LoggingEventBuilder.event(id: String): LoggingEventBuilder = addKeyValue("event", id)
 
     private fun <T> parseOr(fallback: T, parse: () -> T): T =
         try {

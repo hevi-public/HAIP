@@ -1,5 +1,7 @@
 package com.aiforum.llm
 
+import com.aiforum.observability.event
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Profile
@@ -62,14 +64,32 @@ open class ProcessLlmClient(
     @Value("\${aiforum.llm.github-mcp-server-name:gh-readonly}") private val githubMcpServerName: String = "gh-readonly",
 ) : LlmClient {
 
+    // Explicit class (not javaClass) so the logger name is stable across the test subclasses that override
+    // spawn() — the log output is a tested contract (see the bdd-tiered-testing skill, "Logging is IO").
+    private val log = LoggerFactory.getLogger(ProcessLlmClient::class.java)
+
     private companion object {
         /** Grace after destroyForcibly() to reap the process, so we never return with a SIGKILL in flight. */
         const val KILL_GRACE_MILLIS = 500L
         /** Once the process has exited, its pipes are at EOF; this bounds the reader join so no path can hang. */
         const val STREAM_GRACE_MILLIS = 2_000L
+
+        // Structured log event ids for the generation seam (the `llm.*` namespace — see LogEvents / the
+        // bdd-tiered-testing skill). The id is the contract; reword the message freely.
+        const val EV_SPAWN = "llm.spawn"
+        const val EV_TIMEOUT = "llm.timeout"
+        const val EV_CANCELLED = "llm.cancelled"
     }
 
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
+        // The model actually selected (persona pin > configured default > the CLI's own default), surfaced
+        // for the operator — generation cost/behaviour hinges on it.
+        val model = request.persona.model.ifBlank { defaultModel }.ifBlank { "(cli default)" }
+        log.atDebug().setMessage("spawning {} for persona {} (model {})")
+            .addArgument(command).addArgument(request.persona.name).addArgument(model)
+            .event(EV_SPAWN).addKeyValue("persona", request.persona.name).addKeyValue("model", model)
+            .log()
+
         val process = spawn(buildArgs(request.context.personaSystemPrompt, request.persona.model))
 
         // Feed the prompt on stdin (the CLI reads it there in -p mode) then close. A broken pipe means
@@ -99,11 +119,19 @@ open class ProcessLlmClient(
             while (true) {
                 if (cancellation.isCancelled) {
                     kill(process)
+                    log.atInfo().setMessage("generation for {} cancelled by owner").addArgument(request.persona.name)
+                        .event(EV_CANCELLED).addKeyValue("persona", request.persona.name)
+                        .log()
                     throw LlmException.Cancelled()
                 }
                 if (process.waitFor(pollMs, TimeUnit.MILLISECONDS)) break
                 if (System.nanoTime() - start >= timeoutNanos) {
                     kill(process)
+                    val timeoutMs = request.timeout.toMillis()
+                    log.atWarn().setMessage("generation for {} timed out after {}ms")
+                        .addArgument(request.persona.name).addArgument(timeoutMs)
+                        .event(EV_TIMEOUT).addKeyValue("persona", request.persona.name).addKeyValue("timeoutMs", timeoutMs)
+                        .log()
                     throw LlmException.Timeout()
                 }
             }

@@ -7,6 +7,8 @@ import com.aiforum.llm.LlmRequest
 import com.aiforum.llm.PersonaRef
 import com.aiforum.llm.ProcessLlmClient
 import com.aiforum.llm.PromptContext
+import com.aiforum.testsupport.LogCapture
+import ch.qos.logback.classic.Level
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -215,6 +217,54 @@ class ProcessLlmClientTest {
         Thread { Thread.sleep(50); token.cancel() }.apply { isDaemon = true }.start()
         assertThrows(LlmException.Cancelled::class.java) {
             ShellClient("sleep 5").generate(request(Duration.ofSeconds(30)), token)
+        }
+    }
+
+    // --- logging is IO: pin the generation seam's events (see the bdd-tiered-testing skill) ---
+
+    @Test
+    fun `a spawn logs the llm-spawn event at debug with the resolved model`() {
+        LogCapture.on(ProcessLlmClient::class.java).use { logs ->
+            CapturingClient(defaultModel = "sonnet").generate(request(Duration.ofSeconds(10), personaModel = "opus"), CancellationToken())
+            val e = logs.withEvent("llm.spawn").single()
+            assertEquals(Level.DEBUG, e.level)
+            assertEquals("Sol", logs.keyValue(e, "persona"))
+            assertEquals("opus", logs.keyValue(e, "model"))
+        }
+    }
+
+    @Test
+    fun `with no model pinned the spawn event records the cli default`() {
+        LogCapture.on(ProcessLlmClient::class.java).use { logs ->
+            CapturingClient(defaultModel = "").generate(request(Duration.ofSeconds(10)), CancellationToken())
+            assertEquals("(cli default)", logs.keyValue(logs.withEvent("llm.spawn").single(), "model"))
+        }
+    }
+
+    @Test
+    fun `a timeout logs the llm-timeout event at warn carrying the budget`() {
+        LogCapture.on(ProcessLlmClient::class.java).use { logs ->
+            assertThrows(LlmException.Timeout::class.java) {
+                ShellClient("sleep 5").generate(request(Duration.ofMillis(150)), CancellationToken())
+            }
+            val e = logs.withEvent("llm.timeout").single()
+            assertEquals(Level.WARN, e.level)
+            assertEquals("Sol", logs.keyValue(e, "persona"))
+            assertEquals("150", logs.keyValue(e, "timeoutMs"))
+        }
+    }
+
+    @Test
+    fun `a cancellation logs the llm-cancelled event at info`() {
+        LogCapture.on(ProcessLlmClient::class.java).use { logs ->
+            val token = CancellationToken()
+            Thread { Thread.sleep(50); token.cancel() }.apply { isDaemon = true }.start()
+            assertThrows(LlmException.Cancelled::class.java) {
+                ShellClient("sleep 5").generate(request(Duration.ofSeconds(30)), token)
+            }
+            val e = logs.withEvent("llm.cancelled").single()
+            assertEquals(Level.INFO, e.level)
+            assertEquals("Sol", logs.keyValue(e, "persona"))
         }
     }
 }
