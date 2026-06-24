@@ -1,0 +1,142 @@
+@import com.aiforum.dto.ForumStats
+@param stats: ForumStats
+
+@template.layout(title = "Admin", activeNav = "admin", content = @`
+    <div class="admin" data-admin-page>
+        <h1 class="admin__title">Admin · statistics</h1>
+        <p class="admin__lede">A read-only snapshot of the forum. Each figure links to the items behind it.</p>
+
+        <section class="admin__section">
+            <h2 class="admin__section-title">Overview</h2>
+            <ul class="stat-grid">
+                <li class="stat" data-stat="threads" data-value="${stats.threads}">
+                    <a class="stat__link" href="/">
+                        <span class="stat__num">${stats.threads}</span><span class="stat__label">Threads</span>
+                    </a>
+                </li>
+                <li class="stat" data-stat="personas" data-value="${stats.personas}">
+                    <a class="stat__link" href="/personas">
+                        <span class="stat__num">${stats.personas}</span><span class="stat__label">Personas</span>
+                    </a>
+                </li>
+                <li class="stat" data-stat="comments-total" data-value="${stats.commentsTotal}">
+                    <a class="stat__link" href="/admin/comments">
+                        <span class="stat__num">${stats.commentsTotal}</span><span class="stat__label">Comments</span>
+                    </a>
+                </li>
+                <li class="stat" data-stat="votes" data-value="${stats.votes}">
+                    <a class="stat__link" href="/admin/comments?voted=true">
+                        <span class="stat__num">${stats.votes}</span><span class="stat__label">+1 votes</span>
+                    </a>
+                </li>
+                <li class="stat" data-stat="revisions-regenerated" data-value="${stats.regeneratedComments}">
+                    <a class="stat__link" href="/admin/comments?regenerated=true">
+                        <span class="stat__num">${stats.regeneratedComments}</span><span class="stat__label">Regenerated / edited</span>
+                    </a>
+                </li>
+            </ul>
+        </section>
+
+        <section class="admin__section">
+            <h2 class="admin__section-title">Comments by state</h2>
+            <ul class="stat-grid">
+                <li class="stat" data-stat="comments-posted" data-value="${stats.stateCount("POSTED")}">
+                    <a class="stat__link" href="/admin/comments?state=POSTED">
+                        <span class="stat__num">${stats.stateCount("POSTED")}</span><span class="stat__label">Posted</span>
+                    </a>
+                </li>
+                <li class="stat" data-stat="comments-drafting" data-value="${stats.stateCount("DRAFTING")}">
+                    <a class="stat__link" href="/admin/comments?state=DRAFTING">
+                        <span class="stat__num">${stats.stateCount("DRAFTING")}</span><span class="stat__label">Drafting</span>
+                    </a>
+                </li>
+                <li class="stat" data-stat="comments-failed" data-value="${stats.stateCount("FAILED")}">
+                    <a class="stat__link" href="/admin/comments?state=FAILED">
+                        <span class="stat__num">${stats.stateCount("FAILED")}</span><span class="stat__label">Failed</span>
+                    </a>
+                </li>
+                <li class="stat" data-stat="comments-cancelled" data-value="${stats.stateCount("CANCELLED")}">
+                    <a class="stat__link" href="/admin/comments?state=CANCELLED">
+                        <span class="stat__num">${stats.stateCount("CANCELLED")}</span><span class="stat__label">Cancelled</span>
+                    </a>
+                </li>
+            </ul>
+            @if(!stats.failuresByCategory.isEmpty())
+                <h3 class="admin__subhead">Failures by category</h3>
+                <ul class="stat-list">
+                    @for(entry in stats.failuresByCategory.entries)
+                        <li class="stat-row" data-stat="failure-${entry.key.lowercase()}" data-value="${entry.value}">
+                            <a class="stat-row__link" href="/admin/comments?failure=${entry.key}">
+                                <span class="stat-row__label">${entry.key}</span>
+                                <span class="stat-row__num">${entry.value}</span>
+                            </a>
+                        </li>
+                    @endfor
+                </ul>
+            @endif
+        </section>
+
+        <section class="admin__section">
+            <h2 class="admin__section-title">Most active authors</h2>
+            @if(stats.personaActivity.isEmpty())
+                <p class="admin__empty" data-admin-empty="persona-activity">No posted comments yet.</p>
+            @else
+                <ul class="stat-list">
+                    @for(row in stats.personaActivity)
+                        <li class="stat-row" data-persona-activity="${row.authorId}" data-value="${row.posted}">
+                            <a class="stat-row__link" href="/admin/comments?author=${row.authorId}">
+                                <span class="stat-row__label">${if (row.name != null) row.name else row.authorId}</span>
+                                <span class="stat-row__num">${row.posted}</span>
+                            </a>
+                        </li>
+                    @endfor
+                </ul>
+            @endif
+        </section>
+
+        <section class="admin__section">
+            <h2 class="admin__section-title">Attachments</h2>
+            <ul class="stat-grid">
+                <li class="stat" data-stat="attachments" data-value="${stats.attachments}">
+                    <a class="stat__link" href="/admin/attachments">
+                        <span class="stat__num">${stats.attachments}</span><span class="stat__label">Images</span>
+                    </a>
+                </li>
+                <li class="stat" data-stat="attachments-bytes" data-value="${stats.attachmentBytes}">
+                    <a class="stat__link" href="/admin/attachments">
+                        <span class="stat__num">${stats.attachmentBytes}</span><span class="stat__label">Total bytes</span>
+                    </a>
+                </li>
+            </ul>
+            @if(!stats.captionsByState.isEmpty())
+                <h3 class="admin__subhead">Captions by state</h3>
+                <ul class="stat-list">
+                    @for(entry in stats.captionsByState.entries)
+                        <li class="stat-row" data-stat="caption-${entry.key.lowercase()}" data-value="${entry.value}">
+                            <a class="stat-row__link" href="/admin/attachments?caption=${entry.key}">
+                                <span class="stat-row__label">${entry.key}</span>
+                                <span class="stat-row__num">${entry.value}</span>
+                            </a>
+                        </li>
+                    @endfor
+                </ul>
+            @endif
+        </section>
+
+        <section class="admin__section">
+            <h2 class="admin__section-title">Reasoning leaks</h2>
+            <ul class="stat-grid">
+                <li class="stat" data-stat="leak-actual" data-value="${stats.leakCount("ACTUAL")}">
+                    <a class="stat__link" href="/admin/comments?leak=ACTUAL">
+                        <span class="stat__num">${stats.leakCount("ACTUAL")}</span><span class="stat__label">Actual</span>
+                    </a>
+                </li>
+                <li class="stat" data-stat="leak-possible" data-value="${stats.leakCount("POSSIBLE")}">
+                    <a class="stat__link" href="/admin/comments?leak=POSSIBLE">
+                        <span class="stat__num">${stats.leakCount("POSSIBLE")}</span><span class="stat__label">Possible</span>
+                    </a>
+                </li>
+            </ul>
+        </section>
+    </div>
+`)
