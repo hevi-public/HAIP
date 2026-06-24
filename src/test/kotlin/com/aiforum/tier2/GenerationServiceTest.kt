@@ -155,6 +155,58 @@ class GenerationServiceTest {
         assertEquals(listOf("Sol", "Paul"), replies.map { it.authorId }, "Anyone keeps everyone the dispatcher named")
     }
 
+    /** An in-memory repo with a live tree, so threadComments/childrenOf/ancestorPath reflect inserts —
+     *  enough to exercise the round-aware, settle-time context re-read. */
+    private class InMemoryComments : CommentRepository(JdbcTemplate(), Clock.systemUTC()) {
+        val saved = mutableListOf<Comment>()
+        override fun insert(c: Comment) { saved += c }
+        override fun findById(id: String): Comment? = saved.lastOrNull { it.id == id }
+        override fun threadComments(threadId: String): List<Comment> =
+            saved.filter { it.threadId == threadId }.sortedBy { it.depth }
+        override fun childrenOf(parentId: String?): List<Comment> = saved.filter { it.parentId == parentId }
+        override fun ancestorPath(nodeId: String): List<Comment> {
+            val path = mutableListOf<Comment>()
+            var cur = findById(nodeId)
+            while (cur != null) { path += cur; cur = cur.parentId?.let { findById(it) } }
+            return path.reversed()
+        }
+    }
+
+    @Test
+    fun `a later persona in the round sees an earlier persona's posted reply`() {
+        // Sequential fan-out: Sol settles, then Paul. Because context is re-read at settle time, Paul's
+        // request must carry Sol's just-posted reply — the room reads as a conversation, not N blind takes.
+        val llm = ScriptedLlm(listOf("Sol, Paul", "Sol's take", "Paul's take"))
+        val service = GenerationService(llm, InMemoryComments(), roster("Sol", "Paul"))
+
+        service.generate("t1", null, listOf("auto"), "make these faster?", postAsOwner = true)
+
+        // requests[0] = dispatcher, [1] = Sol, [2] = Paul
+        val solCtx = llm.requests[1].context
+        assertFalse(solCtx.comments.any { it.authorId == "Paul" }, "the first persona can't see a reply not yet written")
+        val paulCtx = llm.requests[2].context
+        assertTrue(
+            paulCtx.comments.any { it.authorId == "Sol" && it.body == "Sol's take" },
+            "the second persona in the round sees the first's reply",
+        )
+    }
+
+    @Test
+    fun `branch-only scope still injects the round's posted siblings`() {
+        // Branch-only is the ancestor path only, so a sibling reply isn't on it. Round-awareness folds the
+        // round's posted siblings in anyway, so even a narrowed view reads as an exchange.
+        val llm = ScriptedLlm(listOf("Sol, Paul", "Sol's take", "Paul's take"))
+        val service = GenerationService(llm, InMemoryComments(), roster("Sol", "Paul"))
+
+        service.generate("t1", null, listOf("auto"), "make these faster?", ScopeMode.BRANCH_ONLY, postAsOwner = true)
+
+        val paulCtx = llm.requests[2].context
+        assertTrue(
+            paulCtx.comments.any { it.authorId == "Sol" && it.body == "Sol's take" },
+            "branch-only still shows the round's earlier sibling reply",
+        )
+    }
+
     @Test
     fun `an at-mention on the Anyone path summons that persona and skips the dispatcher`() {
         // Only one scripted body: if the dispatcher were consulted the deque would underflow.
