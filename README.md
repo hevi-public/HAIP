@@ -109,6 +109,23 @@ vision model and leave `vision.model` blank to use the loaded one). Until one is
 clear failure. A caption that transcribes a code screenshot renders as a syntax-highlighted code block
 inside a quote. Full design: [`plan_docs/image-attachments.md`](plan_docs/image-attachments.md).
 
+### GitHub integration (read-only)
+
+The project can pull live GitHub data, **read-only**, for two different consumers — each off by default
+and needing `gh` installed + authenticated (`gh auth login`) on the host. Read-only is enforced
+structurally (allowlisted commands, no shell, a re-checked guard), not by trust. Full design:
+[`plan_docs/github-integration.md`](plan_docs/github-integration.md).
+
+- **Humans — the `/github` page.** A server-rendered snapshot (repo summary + open PRs + open issues),
+  fetched through the `GitHubClient` seam (the backend shells out to `gh` directly; it does **not** use
+  the MCP server). Enable with `aiforum.github.enabled: true` and `aiforum.github.repo: OWNER/REPO`.
+- **Personas — gh tools mid-generation.** `claude -p` is handed the read-only `gh-readonly` MCP server
+  (`mcp/gh-readonly/`, registered via [`.mcp.json`](.mcp.json)) so a persona can pull a live PR/issue into
+  its reply. Enable with `aiforum.llm.github-tools-enabled: true` and `aiforum.llm.github-mcp-config:` set
+  to an absolute path to `.mcp.json` (cli provider only). ⚠ GitHub content is untrusted input (prompt
+  injection, like web-fetch) and the Docker jail isn't built yet — the server is read-only, but reads
+  whatever the host `gh` is authed to see.
+
 **Discovery mode** — let a sea of red run without failing the build (useful while scaffolding):
 
 ```bash
@@ -149,6 +166,7 @@ fully green, with nothing left tagged `@wip`:
 - Personas & admin (view a persona profile, admin adds a persona)
 - Empty-state & unread badges (fresh-forum empty state, thread unread count)
 - Image attachments — caption-only to the model (the caption, never the bytes, reaches the room — spy-asserted), a transcribed code caption renders as a code block inside a quote, delete is FK-clean
+- Read-only GitHub `/github` page — repo summary + open PRs/issues, with a clear off-state when disabled / `gh` missing (scriptable seam); the header section nav (threads / members / github)
 
 ## Project layout
 
@@ -162,10 +180,12 @@ src/main/kotlin/com/aiforum/
   service/    GenerationService (orchestration)
   web/        controllers (generation, owner controls, attachments, diagnostics)
   images/     ImageStore (content-addressed disk blobs under ~/.haip) + ImageDescriber vision seam
+  github/     GitHubClient read-only seam (GhCliGitHubClient = `gh` CLI; GitHubJson Tier-0 parsing) — /github page
   config/     ClockConfig, ProfileGuard, DataDirectoryInitializer (auto-creates the SQLite data dir
               at startup), PersonaSeeder + PersonaSeedProperties (seeds the default persona team)
 src/main/jte/ layout.kte (page shell + htmx) · fragments/ (composer, replyNode, replyList) — stable data-* hooks
 src/main/resources/static/ app.css + app.js — hand-written styling layer (sage HUP aesthetic, light/dark theme tokens, htmx-aware auto-grow, theme switcher)
+mcp/gh-readonly/ zero-dep stdio MCP server wrapping `gh` read-only (registered via .mcp.json); `npm run test:mcp`
 src/test/kotlin/com/aiforum/
   acceptance/ Cucumber↔Spring wiring, scriptable LlmClient fake, steps, hooks, support
   tier0/      pure-function tests

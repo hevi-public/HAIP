@@ -1,5 +1,7 @@
 package com.aiforum.llm
 
+import com.aiforum.observability.event
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Profile
@@ -46,16 +48,48 @@ open class ProcessLlmClient(
     // mitigation today and web content is untrusted input (prompt injection). See requirements §12.
     @Value("\${aiforum.llm.web-fetch-enabled:false}") private val webFetchEnabled: Boolean = false,
     @Value("\${aiforum.llm.web-fetch-allowed-domains:}") private val webFetchAllowedDomains: String = "",
+    // GitHub read-only tools for personas (Option B): when enabled, the spawned `claude -p` is handed the
+    // gh-readonly MCP server via --mcp-config and its tools are pre-authorised — headless mode can't prompt
+    // for tool permission, exactly like WebFetch above, so an un-authorised tool is silently denied.
+    // cli-provider only (the OpenAI path has no tool loop). Needs `gh` installed + authenticated on the host.
+    // ⚠ SECURITY: GitHub content (issue/PR/comment bodies) is UNTRUSTED input — prompt injection, the same
+    // risk class as WebFetch — and the Docker jail (requirements §12) that should isolate the spawned CLI
+    // from the host isn't built yet. The MCP server is read-only, so a persona can never mutate the repo;
+    // but it can read whatever the host's `gh` auth can see, so scope that auth deliberately. Off by default.
+    @Value("\${aiforum.llm.github-tools-enabled:false}") private val githubToolsEnabled: Boolean = false,
+    // Passed straight to `claude --mcp-config` (a file path or inline JSON). Typically an absolute path to
+    // the repo's .mcp.json. Blank => the feature is inert even if the flag above is on (we never guess a path).
+    @Value("\${aiforum.llm.github-mcp-config:}") private val githubMcpConfig: String = "",
+    // Must match the server key inside that config; authorises `mcp__<name>` (all of the server's read tools).
+    @Value("\${aiforum.llm.github-mcp-server-name:gh-readonly}") private val githubMcpServerName: String = "gh-readonly",
 ) : LlmClient {
+
+    // Explicit class (not javaClass) so the logger name is stable across the test subclasses that override
+    // spawn() — the log output is a tested contract (see the bdd-tiered-testing skill, "Logging is IO").
+    private val log = LoggerFactory.getLogger(ProcessLlmClient::class.java)
 
     private companion object {
         /** Grace after destroyForcibly() to reap the process, so we never return with a SIGKILL in flight. */
         const val KILL_GRACE_MILLIS = 500L
         /** Once the process has exited, its pipes are at EOF; this bounds the reader join so no path can hang. */
         const val STREAM_GRACE_MILLIS = 2_000L
+
+        // Structured log event ids for the generation seam (the `llm.*` namespace — see LogEvents / the
+        // bdd-tiered-testing skill). The id is the contract; reword the message freely.
+        const val EV_SPAWN = "llm.spawn"
+        const val EV_TIMEOUT = "llm.timeout"
+        const val EV_CANCELLED = "llm.cancelled"
     }
 
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
+        // The model actually selected (persona pin > configured default > the CLI's own default), surfaced
+        // for the operator — generation cost/behaviour hinges on it.
+        val model = request.persona.model.ifBlank { defaultModel }.ifBlank { "(cli default)" }
+        log.atDebug().setMessage("spawning {} for persona {} (model {})")
+            .addArgument(command).addArgument(request.persona.name).addArgument(model)
+            .event(EV_SPAWN).addKeyValue("persona", request.persona.name).addKeyValue("model", model)
+            .log()
+
         val process = spawn(buildArgs(request.context.personaSystemPrompt, request.persona.model))
 
         // Feed the prompt on stdin (the CLI reads it there in -p mode) then close. A broken pipe means
@@ -85,11 +119,19 @@ open class ProcessLlmClient(
             while (true) {
                 if (cancellation.isCancelled) {
                     kill(process)
+                    log.atInfo().setMessage("generation for {} cancelled by owner").addArgument(request.persona.name)
+                        .event(EV_CANCELLED).addKeyValue("persona", request.persona.name)
+                        .log()
                     throw LlmException.Cancelled()
                 }
                 if (process.waitFor(pollMs, TimeUnit.MILLISECONDS)) break
                 if (System.nanoTime() - start >= timeoutNanos) {
                     kill(process)
+                    val timeoutMs = request.timeout.toMillis()
+                    log.atWarn().setMessage("generation for {} timed out after {}ms")
+                        .addArgument(request.persona.name).addArgument(timeoutMs)
+                        .event(EV_TIMEOUT).addKeyValue("persona", request.persona.name).addKeyValue("timeoutMs", timeoutMs)
+                        .log()
                     throw LlmException.Timeout()
                 }
             }
@@ -118,6 +160,12 @@ open class ProcessLlmClient(
         if (model.isNotBlank()) {
             add("--model"); add(model)
         }
+        // Read-only GitHub tools (Option B): mount the gh-readonly MCP server for this invocation.
+        // --strict-mcp-config keeps it hermetic — only this config is loaded, never an ambient ~/.claude one.
+        if (githubToolsActive()) {
+            add("--mcp-config"); add(githubMcpConfig)
+            add("--strict-mcp-config")
+        }
         // Pre-authorise tools that headless mode would otherwise deny. `--allowedTools` takes a
         // comma-separated list of permission rules; an empty list means we send no flag at all.
         val allowed = allowedTools()
@@ -125,6 +173,10 @@ open class ProcessLlmClient(
             add("--allowedTools"); add(allowed.joinToString(","))
         }
     }
+
+    /** The GitHub tool seam is only mounted when explicitly enabled AND given a config (we never guess a
+     *  path); a bare flag with no config stays inert. */
+    private fun githubToolsActive(): Boolean = githubToolsEnabled && githubMcpConfig.isNotBlank()
 
     /**
      * Permission rules to pass through `--allowedTools`. WebFetch is gated by [webFetchEnabled]: a blank
@@ -136,6 +188,8 @@ open class ProcessLlmClient(
             val domains = webFetchAllowedDomains.split(",").map(String::trim).filter(String::isNotEmpty)
             if (domains.isEmpty()) add("WebFetch") else domains.forEach { add("WebFetch(domain:$it)") }
         }
+        // `mcp__<server>` authorises every tool the gh-readonly server exposes — all read-only by design.
+        if (githubToolsActive()) add("mcp__$githubMcpServerName")
     }
 
     /**

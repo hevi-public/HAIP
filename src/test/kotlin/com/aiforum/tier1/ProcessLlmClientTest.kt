@@ -7,8 +7,11 @@ import com.aiforum.llm.LlmRequest
 import com.aiforum.llm.PersonaRef
 import com.aiforum.llm.ProcessLlmClient
 import com.aiforum.llm.PromptContext
+import com.aiforum.testsupport.LogCapture
+import ch.qos.logback.classic.Level
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -39,6 +42,9 @@ class ProcessLlmClientTest {
         defaultModel: String,
         webFetchEnabled: Boolean = false,
         webFetchAllowedDomains: String = "",
+        githubToolsEnabled: Boolean = false,
+        githubMcpConfig: String = "",
+        githubMcpServerName: String = "gh-readonly",
     ) :
         ProcessLlmClient(
             command = "claude",
@@ -48,6 +54,9 @@ class ProcessLlmClientTest {
             pollMillis = 5,
             webFetchEnabled = webFetchEnabled,
             webFetchAllowedDomains = webFetchAllowedDomains,
+            githubToolsEnabled = githubToolsEnabled,
+            githubMcpConfig = githubMcpConfig,
+            githubMcpServerName = githubMcpServerName,
         ) {
         var argv: List<String> = emptyList()
         override fun spawn(argv: List<String>): Process {
@@ -72,6 +81,10 @@ class ProcessLlmClientTest {
     /** The flag value that follows `--allowedTools` in argv, or null when the flag is absent. */
     private fun allowedToolsArg(argv: List<String>): String? =
         argv.indexOf("--allowedTools").takeIf { it >= 0 }?.let { argv.getOrNull(it + 1) }
+
+    /** The flag value that follows `--mcp-config` in argv, or null when the flag is absent. */
+    private fun mcpConfigArg(argv: List<String>): String? =
+        argv.indexOf("--mcp-config").takeIf { it >= 0 }?.let { argv.getOrNull(it + 1) }
 
     @Test
     fun `a persona's pinned model is passed as --model and wins over the configured default`() {
@@ -120,6 +133,55 @@ class ProcessLlmClientTest {
     }
 
     @Test
+    fun `with github tools disabled no --mcp-config flag is sent and no mcp rule is authorised`() {
+        val client = CapturingClient(defaultModel = "", githubToolsEnabled = false, githubMcpConfig = "/x/.mcp.json")
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals(null, mcpConfigArg(client.argv))
+        assertEquals(null, allowedToolsArg(client.argv))
+    }
+
+    @Test
+    fun `github tools enabled but with a blank config stays inert - no path is ever guessed`() {
+        val client = CapturingClient(defaultModel = "", githubToolsEnabled = true, githubMcpConfig = "")
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals(null, mcpConfigArg(client.argv))
+        assertEquals(null, allowedToolsArg(client.argv))
+    }
+
+    @Test
+    fun `github tools enabled with a config mounts the mcp server strictly and authorises its read tools`() {
+        val client = CapturingClient(defaultModel = "", githubToolsEnabled = true, githubMcpConfig = "/repo/.mcp.json")
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals("/repo/.mcp.json", mcpConfigArg(client.argv))
+        assertTrue(client.argv.contains("--strict-mcp-config"), "config must be loaded strictly (no ambient MCP)")
+        assertEquals("mcp__gh-readonly", allowedToolsArg(client.argv))
+    }
+
+    @Test
+    fun `the authorised mcp rule follows the configured server name`() {
+        val client = CapturingClient(
+            defaultModel = "",
+            githubToolsEnabled = true,
+            githubMcpConfig = "/repo/.mcp.json",
+            githubMcpServerName = "gh-ro",
+        )
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals("mcp__gh-ro", allowedToolsArg(client.argv))
+    }
+
+    @Test
+    fun `web-fetch and github tools compose - both rules are authorised together`() {
+        val client = CapturingClient(
+            defaultModel = "",
+            webFetchEnabled = true,
+            githubToolsEnabled = true,
+            githubMcpConfig = "/repo/.mcp.json",
+        )
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals("WebFetch,mcp__gh-readonly", allowedToolsArg(client.argv))
+    }
+
+    @Test
     fun `the rendered prompt is delivered on stdin and the parsed result comes back`() {
         // The script proves stdin arrived: it echoes a different result when stdin is non-empty.
         val script = """
@@ -155,6 +217,54 @@ class ProcessLlmClientTest {
         Thread { Thread.sleep(50); token.cancel() }.apply { isDaemon = true }.start()
         assertThrows(LlmException.Cancelled::class.java) {
             ShellClient("sleep 5").generate(request(Duration.ofSeconds(30)), token)
+        }
+    }
+
+    // --- logging is IO: pin the generation seam's events (see the bdd-tiered-testing skill) ---
+
+    @Test
+    fun `a spawn logs the llm-spawn event at debug with the resolved model`() {
+        LogCapture.on(ProcessLlmClient::class.java).use { logs ->
+            CapturingClient(defaultModel = "sonnet").generate(request(Duration.ofSeconds(10), personaModel = "opus"), CancellationToken())
+            val e = logs.withEvent("llm.spawn").single()
+            assertEquals(Level.DEBUG, e.level)
+            assertEquals("Sol", logs.keyValue(e, "persona"))
+            assertEquals("opus", logs.keyValue(e, "model"))
+        }
+    }
+
+    @Test
+    fun `with no model pinned the spawn event records the cli default`() {
+        LogCapture.on(ProcessLlmClient::class.java).use { logs ->
+            CapturingClient(defaultModel = "").generate(request(Duration.ofSeconds(10)), CancellationToken())
+            assertEquals("(cli default)", logs.keyValue(logs.withEvent("llm.spawn").single(), "model"))
+        }
+    }
+
+    @Test
+    fun `a timeout logs the llm-timeout event at warn carrying the budget`() {
+        LogCapture.on(ProcessLlmClient::class.java).use { logs ->
+            assertThrows(LlmException.Timeout::class.java) {
+                ShellClient("sleep 5").generate(request(Duration.ofMillis(150)), CancellationToken())
+            }
+            val e = logs.withEvent("llm.timeout").single()
+            assertEquals(Level.WARN, e.level)
+            assertEquals("Sol", logs.keyValue(e, "persona"))
+            assertEquals("150", logs.keyValue(e, "timeoutMs"))
+        }
+    }
+
+    @Test
+    fun `a cancellation logs the llm-cancelled event at info`() {
+        LogCapture.on(ProcessLlmClient::class.java).use { logs ->
+            val token = CancellationToken()
+            Thread { Thread.sleep(50); token.cancel() }.apply { isDaemon = true }.start()
+            assertThrows(LlmException.Cancelled::class.java) {
+                ShellClient("sleep 5").generate(request(Duration.ofSeconds(30)), token)
+            }
+            val e = logs.withEvent("llm.cancelled").single()
+            assertEquals(Level.INFO, e.level)
+            assertEquals("Sol", logs.keyValue(e, "persona"))
         }
     }
 }
