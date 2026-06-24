@@ -61,6 +61,17 @@ class LogCapture private constructor(
     fun debugs(): List<String> = messages(Level.DEBUG)
     fun errors(): List<String> = messages(Level.ERROR)
 
+    // --- structured (key-value) logging: the machine-readable contract tooling keys off ---
+
+    /** The value of structured key [key] on event [e], or null. Keys come from SLF4J `addKeyValue`. */
+    fun keyValue(e: ILoggingEvent, key: String): String? =
+        e.keyValuePairs?.firstOrNull { it.key == key }?.value?.toString()
+
+    /** Every captured event tagged with our structured `event` id == [eventId], in order. This is how a
+     *  test (and, later, a log-analysis tool) selects a line by its stable identity rather than its prose. */
+    fun withEvent(eventId: String): List<ILoggingEvent> =
+        events.filter { keyValue(it, "event") == eventId }
+
     override fun close() {
         logger.detachAppender(appender)
         appender.stop()

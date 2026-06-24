@@ -1,5 +1,6 @@
 package com.aiforum.tier1
 
+import ch.qos.logback.classic.Level
 import com.aiforum.github.GhCliGitHubClient
 import com.aiforum.github.GitHubResult
 import com.aiforum.testsupport.LogCapture
@@ -133,45 +134,62 @@ class GhCliGitHubClientTest {
         assertTrue(client.argvs.isEmpty(), "a disabled integration must not probe gh at startup")
     }
 
-    // --- logging is IO: pin the WARN/INFO/DEBUG lines as a contract (see the bdd-tiered-testing skill) ---
+    // --- logging is IO: pin the WARN/INFO/DEBUG lines — prose AND structured event id + fields — as a
+    //     contract (see the bdd-tiered-testing skill, "Logging is IO — assert it") ---
 
     @Test
-    fun `a non-zero repo view exit logs a single WARN carrying the off-state reason`() {
+    fun `a non-zero repo view exit logs a single WARN carrying the off-state reason and structured fields`() {
         LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
             FakeGh(enabled = true, repo = "x/y", repoExit = 1).overview()
+            // Human prose:
             assertEquals(
                 listOf("/github is unavailable: gh repo view failed: gh: Not Found (HTTP 404)"),
                 logs.warns(),
             )
+            // Machine-readable contract:
+            val e = logs.withEvent("gh.unavailable").single()
+            assertEquals(Level.WARN, e.level)
+            assertEquals("gh repo view failed: gh: Not Found (HTTP 404)", logs.keyValue(e, "reason"))
         }
     }
 
     @Test
-    fun `a best-effort pr list failure logs at DEBUG and never WARNs (the page still renders)`() {
+    fun `a best-effort pr list failure logs the gh-list-failed event at DEBUG and never WARNs`() {
         LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
             FakeGh(enabled = true, repo = "x/y", failPrSpawn = true).overview()
             assertEquals(listOf("gh pr list failed: boom"), logs.debugs())
             assertTrue(logs.warns().isEmpty(), "best-effort failures must not WARN; got: ${logs.warns()}")
+            val e = logs.withEvent("gh.list.failed").single()
+            assertEquals(Level.DEBUG, e.level)
+            assertEquals("pr", logs.keyValue(e, "list"))
+            assertEquals("boom", logs.keyValue(e, "detail"))
         }
     }
 
     @Test
-    fun `the startup probe logs a WARN naming the problem when gh is unavailable`() {
+    fun `the startup probe logs the gh-startup-unavailable event with the reason when gh is unavailable`() {
         LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
             FakeGh(enabled = true, versionSpawnFails = true).logStartupAvailability()
             assertEquals(
                 listOf("GitHub integration is enabled but the `gh` CLI couldn't be launched (gh) — /github will show an error until this is fixed."),
                 logs.warns(),
             )
+            val e = logs.withEvent("gh.startup.unavailable").single()
+            assertEquals(Level.WARN, e.level)
+            assertEquals("gh", logs.keyValue(e, "command"))
+            assertTrue(logs.keyValue(e, "reason")!!.contains("couldn't be launched"))
         }
     }
 
     @Test
-    fun `the startup probe logs an INFO when gh is available`() {
+    fun `the startup probe logs the gh-startup-ok event at INFO when gh is available`() {
         LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
             FakeGh(enabled = true).logStartupAvailability()
             assertEquals(listOf("GitHub integration enabled; `gh` is available."), logs.infos())
             assertTrue(logs.warns().isEmpty())
+            val e = logs.withEvent("gh.startup.ok").single()
+            assertEquals(Level.INFO, e.level)
+            assertEquals("gh", logs.keyValue(e, "command"))
         }
     }
 

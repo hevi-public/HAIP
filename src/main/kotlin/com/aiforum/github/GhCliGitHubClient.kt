@@ -1,6 +1,7 @@
 package com.aiforum.github
 
 import org.slf4j.LoggerFactory
+import org.slf4j.spi.LoggingEventBuilder
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
@@ -60,9 +61,15 @@ open class GhCliGitHubClient(
         if (!enabled) return
         val problem = availabilityError()
         if (problem != null) {
-            log.warn("GitHub integration is enabled but {} — /github will show an error until this is fixed.", problem)
+            log.atWarn().setMessage("GitHub integration is enabled but {} — /github will show an error until this is fixed.")
+                .addArgument(problem)
+                .event(EV_STARTUP_UNAVAILABLE).addKeyValue("command", command).addKeyValue("reason", problem)
+                .log()
         } else {
-            log.info("GitHub integration enabled; `{}` is available.", command)
+            log.atInfo().setMessage("GitHub integration enabled; `{}` is available.")
+                .addArgument(command)
+                .event(EV_STARTUP_OK).addKeyValue("command", command)
+                .log()
         }
     }
 
@@ -97,13 +104,13 @@ open class GhCliGitHubClient(
         // empty section rather than failing the whole page (logged at debug — the page already renders).
         val pulls = when (val r = run(listOf("pr", "list") + repoFlag + listOf("--state", "open", "--limit", limit, "--json", GitHubJson.PR_FIELDS))) {
             is ExecResult.Completed -> if (r.exitCode == 0) parseOr(emptyList()) { GitHubJson.parsePulls(r.stdout) }
-                else { log.debug("gh pr list exited {}: {}", r.exitCode, r.stderr.trim()); emptyList() }
-            is ExecResult.Failed -> { log.debug("gh pr list failed: {}", r.message); emptyList() }
+                else { logListFailed("pr", "exited ${r.exitCode}: ${r.stderr.trim()}"); emptyList() }
+            is ExecResult.Failed -> { logListFailed("pr", r.message); emptyList() }
         }
         val issues = when (val r = run(listOf("issue", "list") + repoFlag + listOf("--state", "open", "--limit", limit, "--json", GitHubJson.ISSUE_FIELDS))) {
             is ExecResult.Completed -> if (r.exitCode == 0) parseOr(emptyList()) { GitHubJson.parseIssues(r.stdout) }
-                else { log.debug("gh issue list exited {}: {}", r.exitCode, r.stderr.trim()); emptyList() }
-            is ExecResult.Failed -> { log.debug("gh issue list failed: {}", r.message); emptyList() }
+                else { logListFailed("issue", "exited ${r.exitCode}: ${r.stderr.trim()}"); emptyList() }
+            is ExecResult.Failed -> { logListFailed("issue", r.message); emptyList() }
         }
 
         return GitHubResult.Ok(GitHubOverview(repoSummary, pulls, issues))
@@ -142,9 +149,21 @@ open class GhCliGitHubClient(
     /** Log the failure (the missing log half of "UI and log") and return the user-facing off-state. The
      *  disabled case doesn't route through here — that's expected, not a fault, so it isn't logged. */
     private fun unavailable(reason: String): GitHubResult {
-        log.warn("/github is unavailable: {}", reason)
+        log.atWarn().setMessage("/github is unavailable: {}").addArgument(reason)
+            .event(EV_UNAVAILABLE).addKeyValue("reason", reason)
+            .log()
         return GitHubResult.Unavailable(reason)
     }
+
+    /** A best-effort PR/issue list failure: the page still renders, so it's DEBUG, never WARN. */
+    private fun logListFailed(list: String, detail: String) {
+        log.atDebug().setMessage("gh {} list failed: {}").addArgument(list).addArgument(detail)
+            .event(EV_LIST_FAILED).addKeyValue("list", list).addKeyValue("detail", detail)
+            .log()
+    }
+
+    /** Tag a structured event id onto a fluent log builder — the stable identity tooling selects on. */
+    private fun LoggingEventBuilder.event(id: String): LoggingEventBuilder = addKeyValue("event", id)
 
     private fun <T> parseOr(fallback: T, parse: () -> T): T =
         try {
@@ -163,6 +182,14 @@ open class GhCliGitHubClient(
     private companion object {
         // The only top-level commands this client may ever invoke, each with its single read subcommand.
         val ALLOWED: Map<String, String> = mapOf("repo" to "view", "pr" to "list", "issue" to "list")
+
+        // Structured log event ids — the stable, greppable contract tooling keys off (see the
+        // bdd-tiered-testing skill, "Logging is IO"). Namespaced `gh.*`; change a message freely, but
+        // treat an id change as a breaking change to anything consuming the logs.
+        const val EV_UNAVAILABLE = "gh.unavailable"
+        const val EV_STARTUP_OK = "gh.startup.ok"
+        const val EV_STARTUP_UNAVAILABLE = "gh.startup.unavailable"
+        const val EV_LIST_FAILED = "gh.list.failed"
     }
 
     /** Defence-in-depth: every argv handed to `gh` must be one of the read commands above. */

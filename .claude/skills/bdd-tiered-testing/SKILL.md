@@ -143,6 +143,40 @@ Rules that keep log output assertable (and parseable):
 - **Silence is behaviour too.** Assert the *absence* of logs where it matters (a disabled feature that
   must stay quiet at startup, a best-effort path that must not WARN).
 
+### Structured event ids — the format we standardise on
+
+Prose is for humans; tooling needs a **stable identity** that survives wording changes. So every
+operational log line carries a structured `event` id (a namespaced, dotted constant — `gh.unavailable`,
+`gh.startup.ok`, `llm.timeout`) plus typed fields, via the SLF4J fluent key-value API. The message stays
+readable; the `event` + fields are the machine-readable contract a log-analysis tool keys off.
+
+```kotlin
+log.atWarn().setMessage("/github is unavailable: {}").addArgument(reason)
+   .addKeyValue("event", "gh.unavailable").addKeyValue("reason", reason)
+   .log()
+```
+
+Tests assert the structured layer, not just the prose, via `LogCapture.withEvent(...)` / `keyValue(...)`:
+
+```kotlin
+val e = logs.withEvent("gh.unavailable").single()
+assertEquals(Level.WARN, e.level)
+assertEquals("gh repo view failed: …", logs.keyValue(e, "reason"))
+```
+
+Conventions that make the event ids a durable contract:
+- **Ids are constants, namespaced per emitter** (`gh.*`, `llm.*`), defined in one place on the class —
+  that companion is the event catalogue tooling and humans read.
+- **The id is the breaking surface, not the message.** Reword the human message freely; treat an id (or a
+  field key) change as a breaking change to log consumers, and update its test deliberately.
+- **Pin the id, the level, and the fields** in the test. Together they are the contract: a fault demoted
+  from WARN to DEBUG, an id typo, or a dropped field each fails a test rather than silently breaking a
+  downstream dashboard.
+
+The point of all this: once the log contract is *tested*, it is safe to *standardise*, and a standardised
+log surface is what lets us build tooling (alerting, analysis) on it. An untested log line is not a
+contract — it is a string that drifts.
+
 ## Build-breaks-on-red, with an opt-in discovery mode
 
 Default stance: a failing test fails the build. That's what makes the suite a control layer rather
