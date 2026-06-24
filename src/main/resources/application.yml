@@ -143,6 +143,16 @@ aiforum:
     web-fetch-enabled: false
     web-fetch-allowed-domains: ""   # blank => any host; else comma-separated allowlist, e.g.
                                     # "news.ycombinator.com,github.com" → personas can only fetch those
+    # Read-only GitHub TOOLS for personas (Option B, cli-provider only). When on, the spawned `claude -p`
+    # is given the gh-readonly MCP server (--mcp-config + --strict-mcp-config) and its tools are
+    # pre-authorised (mcp__gh-readonly), so a persona can pull a live PR/issue into its reply. Distinct from
+    # the human /github page above — this is the AI path, and it goes THROUGH the MCP server.
+    # ⚠ SECURITY: same prompt-injection risk class as web-fetch (GitHub bodies are untrusted) and the Docker
+    # jail (§12) isn't built; the server is read-only but reads whatever the host `gh` is authed to. Off by default.
+    github-tools-enabled: false
+    github-mcp-config: ""                 # passed to `claude --mcp-config` (file path or inline JSON);
+                                          # e.g. an ABSOLUTE path to this repo's .mcp.json. Blank => inert.
+    github-mcp-server-name: gh-readonly   # must match the server key in that config; authorises mcp__<name>
     # OpenAiLlmClient (provider: openai only). Talks the OpenAI Chat Completions API over HTTP. The model
     # name reuses `default-model` above (and per-persona PersonaRef.model) — no separate model key here.
     openai:

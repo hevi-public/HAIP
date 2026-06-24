@@ -9,6 +9,7 @@ import com.aiforum.llm.ProcessLlmClient
 import com.aiforum.llm.PromptContext
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -39,6 +40,9 @@ class ProcessLlmClientTest {
         defaultModel: String,
         webFetchEnabled: Boolean = false,
         webFetchAllowedDomains: String = "",
+        githubToolsEnabled: Boolean = false,
+        githubMcpConfig: String = "",
+        githubMcpServerName: String = "gh-readonly",
     ) :
         ProcessLlmClient(
             command = "claude",
@@ -48,6 +52,9 @@ class ProcessLlmClientTest {
             pollMillis = 5,
             webFetchEnabled = webFetchEnabled,
             webFetchAllowedDomains = webFetchAllowedDomains,
+            githubToolsEnabled = githubToolsEnabled,
+            githubMcpConfig = githubMcpConfig,
+            githubMcpServerName = githubMcpServerName,
         ) {
         var argv: List<String> = emptyList()
         override fun spawn(argv: List<String>): Process {
@@ -72,6 +79,10 @@ class ProcessLlmClientTest {
     /** The flag value that follows `--allowedTools` in argv, or null when the flag is absent. */
     private fun allowedToolsArg(argv: List<String>): String? =
         argv.indexOf("--allowedTools").takeIf { it >= 0 }?.let { argv.getOrNull(it + 1) }
+
+    /** The flag value that follows `--mcp-config` in argv, or null when the flag is absent. */
+    private fun mcpConfigArg(argv: List<String>): String? =
+        argv.indexOf("--mcp-config").takeIf { it >= 0 }?.let { argv.getOrNull(it + 1) }
 
     @Test
     fun `a persona's pinned model is passed as --model and wins over the configured default`() {
@@ -117,6 +128,55 @@ class ProcessLlmClientTest {
         )
         client.generate(request(Duration.ofSeconds(10)), CancellationToken())
         assertEquals("WebFetch(domain:news.ycombinator.com),WebFetch(domain:github.com)", allowedToolsArg(client.argv))
+    }
+
+    @Test
+    fun `with github tools disabled no --mcp-config flag is sent and no mcp rule is authorised`() {
+        val client = CapturingClient(defaultModel = "", githubToolsEnabled = false, githubMcpConfig = "/x/.mcp.json")
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals(null, mcpConfigArg(client.argv))
+        assertEquals(null, allowedToolsArg(client.argv))
+    }
+
+    @Test
+    fun `github tools enabled but with a blank config stays inert - no path is ever guessed`() {
+        val client = CapturingClient(defaultModel = "", githubToolsEnabled = true, githubMcpConfig = "")
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals(null, mcpConfigArg(client.argv))
+        assertEquals(null, allowedToolsArg(client.argv))
+    }
+
+    @Test
+    fun `github tools enabled with a config mounts the mcp server strictly and authorises its read tools`() {
+        val client = CapturingClient(defaultModel = "", githubToolsEnabled = true, githubMcpConfig = "/repo/.mcp.json")
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals("/repo/.mcp.json", mcpConfigArg(client.argv))
+        assertTrue(client.argv.contains("--strict-mcp-config"), "config must be loaded strictly (no ambient MCP)")
+        assertEquals("mcp__gh-readonly", allowedToolsArg(client.argv))
+    }
+
+    @Test
+    fun `the authorised mcp rule follows the configured server name`() {
+        val client = CapturingClient(
+            defaultModel = "",
+            githubToolsEnabled = true,
+            githubMcpConfig = "/repo/.mcp.json",
+            githubMcpServerName = "gh-ro",
+        )
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals("mcp__gh-ro", allowedToolsArg(client.argv))
+    }
+
+    @Test
+    fun `web-fetch and github tools compose - both rules are authorised together`() {
+        val client = CapturingClient(
+            defaultModel = "",
+            webFetchEnabled = true,
+            githubToolsEnabled = true,
+            githubMcpConfig = "/repo/.mcp.json",
+        )
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals("WebFetch,mcp__gh-readonly", allowedToolsArg(client.argv))
     }
 
     @Test
