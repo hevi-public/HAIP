@@ -680,9 +680,10 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
   margin-bottom: 10px;
 }
 .thread__title { font-size: 19px; font-weight: 700; line-height: 1.2; margin: 0; max-width: var(--prose); }
-/* The OP body: the post's own content, sitting under the title (the comment tree is the room's reply). */
+/* The OP body: the post's own content, sitting under the title (the comment tree is the room's reply).
+   Rendered markdown fills the full card width — no --prose cap — so wide content (code, tables) uses the room. */
 .thread__body {
-  margin: 8px 0 0; max-width: var(--prose);
+  margin: 8px 0 0;
   font-size: 13.5px; line-height: 1.5; color: var(--ink);
 }
 
@@ -719,7 +720,7 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 .reply__inreplyto-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
 .reply__inreplyto-quote { font-style: italic; }
 
-.reply .body { font-size: 13.5px; line-height: 1.5; color: var(--ink); max-width: var(--prose); }
+.reply .body { font-size: 13.5px; line-height: 1.5; color: var(--ink); }
 .reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 5px; }
 
 /* Markdown-rendered body content (reply bodies + the OP). Now structured HTML, not pre-wrapped text:
@@ -738,7 +739,7 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 /* Fenced code blocks. hljs-theme.css sets the token colours, background, inner padding and the
    horizontal scroll on `pre code.hljs`; this is just the block chrome around it. */
 .reply .body pre, .thread__body pre {
-  margin: 0 0 10px; max-width: var(--prose);
+  margin: 0 0 10px; max-width: 100%;
   border: 1px solid var(--line-node); border-radius: var(--r);
   overflow: hidden; /* clip the inner scroll area to the rounded corners */
 }
