@@ -51,6 +51,18 @@ aiforum:
         Describe this image factually and concisely for a reader who cannot see it. If it shows code, a
         terminal, or a config/log file, transcribe it verbatim inside a fenced markdown code block with
         the correct language tag. Note any other text, diagrams, charts, or UI shown.
+  # Read-only GitHub integration for the /github page (Option A): the backend shells out to the `gh` CLI
+  # via GhCliGitHubClient (repo view + open PRs + open issues) and renders them server-side. OFF by
+  # default — it needs the `gh` binary installed and authenticated (`gh auth login`) on the host. With it
+  # off, /github shows a clear "not configured" state and nothing is ever spawned. This is the HUMAN-facing
+  # path and does NOT use the gh-readonly MCP server (that one is for LLM tool-callers).
+  github:
+    enabled: false             # true => fetch live data from `gh`; false => /github shows the off state
+    repo: ""                   # "OWNER/REPO" to pin (recommended — the app's working dir isn't a clone);
+                               # blank => let `gh` infer from the working directory
+    command: gh                # the gh binary on PATH
+    list-limit: 10             # max open PRs / issues to list (clamped 1..100)
+    timeout-seconds: 20        # per-`gh`-invocation deadline
   # Predefined personas seeded into the DB on first startup if they don't already exist (see
   # PersonaSeeder; skipped under the test profile). A small product team for a Kotlin + Spring Boot +
   # PostgreSQL backend with an Angular frontend and Playwright UI tests. Skills overlap on purpose so
