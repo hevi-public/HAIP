@@ -14,6 +14,8 @@ import com.aiforum.llm.CancellationToken
 import com.aiforum.llm.LlmClient
 import com.aiforum.llm.LlmRequest
 import com.aiforum.llm.LlmResponse
+import com.aiforum.shortcut.ShortcutClient
+import com.aiforum.shortcut.StoryCard
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
@@ -101,6 +103,57 @@ class ScriptableImageDescriber : ImageDescriber {
         received.clear()
         nextCaption = "an attached image"
         failNext = false
+    }
+}
+
+/**
+ * The scriptable [ShortcutClient] under test — the read-only Shortcut seam's IO double, sibling of
+ * [ScriptableLlmClient]. It does no network IO: steps program the stories a search returns and the
+ * workflow-state names, and it spies on every query it was handed.
+ *
+ * [active] is false by default, so every Shortcut surface stays dark in the scenarios that don't opt in;
+ * a step flips it on. Reset between scenarios by DatabaseResetHooks (which also evicts the service's
+ * workflow-state cache so names can't leak across scenarios).
+ */
+@Component
+@Primary
+@Profile("test")
+class ScriptableShortcutClient : ShortcutClient {
+
+    @Volatile
+    var active: Boolean = false
+
+    @Volatile
+    var failNext: Boolean = false
+
+    @Volatile
+    var states: Map<Long, String> = emptyMap()
+
+    private val stories = CopyOnWriteArrayList<StoryCard>()
+
+    /** The queries searched, in order — so a scenario can assert which feed ran. */
+    val received = CopyOnWriteArrayList<String>()
+
+    fun add(card: StoryCard) {
+        stories += card
+    }
+
+    override fun isActive(): Boolean = active
+
+    override fun searchStories(query: String, pageSize: Int): List<StoryCard> {
+        received += query
+        if (failNext) throw RuntimeException("scripted shortcut failure")
+        return stories.take(pageSize)
+    }
+
+    override fun workflowStates(): Map<Long, String> = states
+
+    fun reset() {
+        active = false
+        failNext = false
+        states = emptyMap()
+        stories.clear()
+        received.clear()
     }
 }
 

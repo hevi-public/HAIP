@@ -4,7 +4,9 @@ import com.aiforum.acceptance.config.FailingRepositoryToggle
 import com.aiforum.acceptance.config.ScriptableGitHubClient
 import com.aiforum.acceptance.config.ScriptableImageDescriber
 import com.aiforum.acceptance.config.ScriptableLlmClient
+import com.aiforum.acceptance.config.ScriptableShortcutClient
 import com.aiforum.service.InFlightGenerations
+import com.aiforum.shortcut.ShortcutService
 import io.cucumber.java.Before
 import org.springframework.jdbc.core.JdbcTemplate
 
@@ -24,6 +26,8 @@ class DatabaseResetHooks(
     private val failingRepo: FailingRepositoryToggle,
     private val github: ScriptableGitHubClient,
     private val inFlight: InFlightGenerations,
+    private val shortcut: ScriptableShortcutClient,
+    private val shortcutService: ShortcutService,
 ) {
     @Before(order = -10)
     fun cancelInFlight() {
@@ -45,5 +49,7 @@ class DatabaseResetHooks(
         describer.reset()
         github.reset()
         failingRepo.clear()
+        shortcut.reset()
+        shortcutService.evictCaches()
     }
 }

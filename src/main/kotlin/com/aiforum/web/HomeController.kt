@@ -3,6 +3,7 @@ package com.aiforum.web
 import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.ThreadReadRepository
 import com.aiforum.repo.ThreadRepository
+import com.aiforum.shortcut.ShortcutService
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping
@@ -30,6 +31,7 @@ class HomeController(
     private val threadReads: ThreadReadRepository,
     private val personas: PersonaRepository,
     private val railFeeds: RailFeeds,
+    private val shortcut: ShortcutService,
 ) {
     @GetMapping("/")
     fun home(model: Model): String {
@@ -48,6 +50,8 @@ class HomeController(
         model.addAttribute("activeThreads", railFeeds.activeThreads())
         model.addAttribute("recentComments", railFeeds.recentComments())
         model.addAttribute("starredComments", railFeeds.starredComments())
+        // Right-rail Shortcut box — the configured default query; hides itself when the integration is off.
+        model.addAttribute("shortcut", shortcut.boxStories())
         return "index"
     }
 }

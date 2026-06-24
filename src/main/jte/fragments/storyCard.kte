@@ -1,0 +1,20 @@
+@import com.aiforum.shortcut.StoryCard
+@param story: StoryCard
+
+<%-- One Shortcut story, shared by the right-rail box and the /shortcut page. The whole card links out
+     to the story in Shortcut (new tab). data-story-id / data-story-link are the stable hooks; the ref
+     (sc-N), title, type glyph and resolved workflow state are the visible fields. State is omitted when
+     the workflow map couldn't be resolved, so the row never shows an empty chip. --%>
+<li class="story-card" data-story-id="${story.publicId}">
+    <a class="story-card__link" href="${story.url}" target="_blank" rel="noopener noreferrer"
+       data-story-link="${story.publicId}">
+        <span class="story-card__ref">${story.ref}</span>
+        <span class="story-card__name">${story.name}</span>
+    </a>
+    <span class="story-card__meta">
+        <span class="story-card__type" data-story-type="${story.type}">${story.typeIcon} ${story.type}</span>
+        @if(!story.state.isBlank())
+            <span class="story-card__state" data-story-state="${story.state}">${story.state}</span>
+        @endif
+    </span>
+</li>
