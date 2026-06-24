@@ -1,6 +1,7 @@
 package com.aiforum.acceptance.hooks
 
 import com.aiforum.acceptance.config.FailingRepositoryToggle
+import com.aiforum.acceptance.config.ScriptableGitHubClient
 import com.aiforum.acceptance.config.ScriptableImageDescriber
 import com.aiforum.acceptance.config.ScriptableLlmClient
 import com.aiforum.service.InFlightGenerations
@@ -21,6 +22,7 @@ class DatabaseResetHooks(
     private val llm: ScriptableLlmClient,
     private val describer: ScriptableImageDescriber,
     private val failingRepo: FailingRepositoryToggle,
+    private val github: ScriptableGitHubClient,
     private val inFlight: InFlightGenerations,
 ) {
     @Before(order = -10)
@@ -41,6 +43,7 @@ class DatabaseResetHooks(
     fun resetFakes() {
         llm.reset()
         describer.reset()
+        github.reset()
         failingRepo.clear()
     }
 }
