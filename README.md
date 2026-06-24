@@ -109,6 +109,28 @@ vision model and leave `vision.model` blank to use the loaded one). Until one is
 clear failure. A caption that transcribes a code screenshot renders as a syntax-highlighted code block
 inside a quote. Full design: [`plan_docs/image-attachments.md`](plan_docs/image-attachments.md).
 
+### Shortcut integration (read-only)
+
+The forum can surface **read-only** [Shortcut](https://shortcut.com) tickets. **Off by default** — set
+`aiforum.shortcut.enabled: true` and supply an API token (`api-token: ${SHORTCUT_API_TOKEN:}`, created at
+*app.shortcut.com → Settings → API Tokens*) to light up three surfaces:
+
+- a right-rail **Shortcut box** (the `default-query` feed) on the home and thread pages;
+- a browsable **`/shortcut` page** with a source switcher — *Search* (free-text/`default-query`),
+  *Recently updated* (`recent-query`), and *Owner's stories* (`owner:<owner-mention-name>`);
+- inline **`sc-N` linkification** — a bare story ref in a comment body becomes a link to the story
+  (rewritten on the commonmark AST, so escaping stays correct and refs inside code are left alone).
+
+Only `GET` endpoints are called (`Shortcut-Token` header), so it can never mutate tickets. Every surface
+degrades gracefully — dark when disabled, a quiet note (never a 500) when a call fails. The seam is
+`ShortcutClient` (`HttpShortcutClient` is the real RestClient impl, `@Profile("!test")`); a scriptable
+fake stands in under `test`, so the acceptance suite drives all three surfaces with no real IO. Config
+lives under `aiforum.shortcut` in [`application.yml`](src/main/resources/application.yml).
+
+> This is the in-app display path. The standalone **MCP server** under [`mcp/shortcut/`](mcp/shortcut/)
+> is a separate component that exposes the same Shortcut reads to AI clients (Claude Code/Desktop) over
+> stdio — it is not a dependency of the Spring app.
+
 **Discovery mode** — let a sea of red run without failing the build (useful while scaffolding):
 
 ```bash
@@ -162,6 +184,9 @@ src/main/kotlin/com/aiforum/
   service/    GenerationService (orchestration)
   web/        controllers (generation, owner controls, attachments, diagnostics)
   images/     ImageStore (content-addressed disk blobs under ~/.haip) + ImageDescriber vision seam
+  shortcut/   read-only Shortcut seam (ShortcutClient; HttpShortcutClient = REST v3 over RestClient),
+              ShortcutService facade (graceful DISABLED/ERROR/OK), StoryCard + ShortcutMapper, inline
+              sc-N linkification (markdown/StoryRefLinker)
   config/     ClockConfig, ProfileGuard, DataDirectoryInitializer (auto-creates the SQLite data dir
               at startup), PersonaSeeder + PersonaSeedProperties (seeds the default persona team)
 src/main/jte/ layout.kte (page shell + htmx) · fragments/ (composer, replyNode, replyList) — stable data-* hooks

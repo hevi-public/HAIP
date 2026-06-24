@@ -24,6 +24,23 @@ gg:
 aiforum:
   backups:
     enabled: true
+  # Shortcut ticketing integration (https://shortcut.com) — READ-ONLY. Off by default; the forum behaves
+  # exactly as before until you enable it. When on, three surfaces light up: a right-rail "Shortcut" box
+  # (the default-query feed) on the home + thread pages, a browsable /shortcut page with a source switcher
+  # (Search / Recently updated / Owner's stories), and inline linkification of bare `sc-N` story refs in
+  # comment bodies. Only GET endpoints are ever called (Shortcut-Token header), so it can't mutate tickets.
+  # ⚠ SECURITY: the token grants read access to your whole Shortcut workspace — supply it via env, e.g.
+  # api-token: ${SHORTCUT_API_TOKEN:}, never commit a real token.
+  shortcut:
+    enabled: false                                   # master switch; the HttpShortcutClient bean exists only when true
+    api-token: ""                                    # Shortcut-Token header; create at app.shortcut.com/settings/account/api-tokens
+    base-url: https://api.app.shortcut.com/api/v3    # REST API v3 base (override only for tests/mirrors)
+    workspace-slug: ""                               # url slug for building inline sc-N links without an API call
+    default-query: "is:started"                      # the rail box + page "Search" default (Shortcut search syntax)
+    recent-query: "updated:-2w..*"                   # the page's "Recently updated" source
+    owner-mention-name: ""                           # mention name (no @) for the page's "Owner's stories" source
+    box-limit: 5                                     # stories shown in the right-rail box
+    page-limit: 25                                   # stories shown on /shortcut (Shortcut caps a search page at 25)
   # Image attachments. Bytes live on disk under `dir` (content-addressed); only metadata is in SQLite.
   # The prod path is the base default (~/.haip/data/images, sibling of the DB); dev/test override it to a
   # project-local / build dir (see application-{dev,test}.yml). ${user.home} is Spring-resolved, so a

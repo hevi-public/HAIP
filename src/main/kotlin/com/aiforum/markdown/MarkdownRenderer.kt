@@ -38,9 +38,26 @@ object MarkdownRenderer {
         .build()
     private val cache = ConcurrentHashMap<String, String>()
 
+    /**
+     * When non-null, bare Shortcut refs (`sc-123`) in a body are linked to `storyLinkBaseUrl` + id (a
+     * `…/story/` prefix) — see [StoryRefLinker]. Left null by default, so without the Shortcut
+     * integration bodies render exactly as before. Set once at startup by
+     * [com.aiforum.shortcut.ShortcutConfig]; `@Volatile` for safe publication to request threads.
+     */
+    @Volatile
+    var storyLinkBaseUrl: String? = null
+
     fun render(markdown: String): String {
         if (markdown.isBlank()) return ""
-        return cache.getOrPut(markdown) { renderer.render(parser.parse(markdown)) }
+        val base = storyLinkBaseUrl
+        // Key by the base too: the same body renders differently with linkification on vs off, so a stale
+        // entry would otherwise leak across a startup-time toggle.
+        val key = if (base == null) markdown else "$base $markdown"
+        return cache.getOrPut(key) {
+            val document = parser.parse(markdown)
+            if (base != null) StoryRefLinker.apply(document, base)
+            renderer.render(document)
+        }
     }
 }
 

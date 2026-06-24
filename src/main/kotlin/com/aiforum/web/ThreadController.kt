@@ -49,6 +49,7 @@ class ThreadController(
     private val attachments: AttachmentService,
     private val attachmentRepo: AttachmentRepository,
     private val branchIndex: BranchIndexBuilder,
+    private val shortcut: com.aiforum.shortcut.ShortcutService,
 ) {
 
     // Two bindings, one creation path: the browser's new-thread form posts form-urlencoded and wants a
@@ -209,6 +210,8 @@ class ThreadController(
         model.addAttribute("activeThreads", railFeeds.activeThreads())
         model.addAttribute("recentComments", railFeeds.recentComments())
         model.addAttribute("starredComments", railFeeds.starredComments())
+        // Right-rail Shortcut box — the configured default query; hides itself when the integration is off.
+        model.addAttribute("shortcut", shortcut.boxStories())
         return "thread"
     }
 

@@ -1,0 +1,26 @@
+@import com.aiforum.shortcut.ShortcutResult
+@import com.aiforum.shortcut.ShortcutStatus
+
+@param shortcut: ShortcutResult
+
+<%-- Right-rail "Shortcut" box — the configured default query, shown on the home page and every thread
+     page. When the integration is off (DISABLED) the box renders nothing at all, so a forum without
+     Shortcut is unchanged. On an error it shows a quiet note rather than failing the page; otherwise it
+     lists stories and links through to the full /shortcut page. data-rail-box="shortcut" is the hook. --%>
+@if(shortcut.status != ShortcutStatus.DISABLED)
+    <section class="rail-box" data-rail-box="shortcut">
+        <h2 class="rail-box__title">Shortcut</h2>
+        @if(shortcut.status == ShortcutStatus.ERROR)
+            <p class="rail-box__empty" data-shortcut-error="true">${shortcut.message}</p>
+        @elseif(shortcut.stories.isEmpty())
+            <p class="rail-box__empty" data-shortcut-empty="true">No matching stories.</p>
+        @else
+            <ul class="shortcut-stories">
+                @for(story in shortcut.stories)
+                    @template.fragments.storyCard(story = story)
+                @endfor
+            </ul>
+            <a class="rail-box__more" href="/shortcut" data-shortcut-more="true">View all ▸</a>
+        @endif
+    </section>
+@endif

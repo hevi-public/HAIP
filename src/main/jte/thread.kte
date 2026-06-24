@@ -18,6 +18,7 @@
 @param recentComments: List<RecentCommentRow>
 @param activeThreads: List<ActiveThreadRow>
 @param starredComments: List<StarredCommentRow>
+@param shortcut: com.aiforum.shortcut.ShortcutResult = com.aiforum.shortcut.ShortcutResult.DISABLED
 @param opAttachments: List<AttachmentView> = java.util.Collections.emptyList()
 
 @template.layout(title = title, activeNav = "threads", content = @`
@@ -63,6 +64,7 @@
       <%-- Right rail: forum-wide feeds — the same boxes, on the same side, as the home page's right rail,
            so "what's happening elsewhere" lives in one consistent place across pages. --%>
       <aside class="thread__rail-right" data-thread-rail-right>
+          @template.fragments.shortcutBox(shortcut = shortcut)
           @template.fragments.starredCommentsBox(starred = starredComments)
           @template.fragments.recentCommentsBox(comments = recentComments)
           @template.fragments.activeThreadsBox(threads = activeThreads)
