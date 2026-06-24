@@ -54,11 +54,15 @@ class ShortcutService(
     /** Run one search, resolve state names, and wrap the outcome — catching any failure into ERROR. */
     fun stories(query: String, limit: Int): ShortcutResult {
         val client = clientProvider.ifAvailable
-        if (!props.enabled || client == null || !client.isActive()) return ShortcutResult.DISABLED
+        if (!props.enabled || client == null || !client.isActive()) {
+            log.debug("Shortcut read skipped — integration disabled")
+            return ShortcutResult.DISABLED
+        }
         val effective = query.ifBlank { props.defaultQuery }
         return try {
-            val cards = client.searchStories(effective, limit)
-            ShortcutResult.ok(ShortcutMapper.resolveStates(cards, states(client)), effective)
+            val cards = ShortcutMapper.resolveStates(client.searchStories(effective, limit), states(client))
+            log.debug("Shortcut read ok — query='{}' limit={} stories={}", effective, limit, cards.size)
+            ShortcutResult.ok(cards, effective)
         } catch (e: Exception) {
             log.warn("Shortcut read failed for query '{}': {}", effective, e.toString())
             ShortcutResult.error("Couldn't reach Shortcut — check the API token and network.", effective)

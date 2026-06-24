@@ -127,6 +127,11 @@ degrades gracefully — dark when disabled, a quiet note (never a 500) when a ca
 fake stands in under `test`, so the acceptance suite drives all three surfaces with no real IO. Config
 lives under `aiforum.shortcut` in [`application.yml`](src/main/resources/application.yml).
 
+On boot `ShortcutConfig` logs a one-line `INFO` banner stating whether the integration came up (and the
+base URL / default query when it did); a failed read logs a `WARN` naming the query and degrades the
+surface rather than throwing. These logs are asserted like any other behaviour — Tier-2
+`ShortcutServiceTest` / `ShortcutConfigTest` capture them via the reusable `LogCapture` helper.
+
 > This is the in-app display path. The standalone **MCP server** under [`mcp/shortcut/`](mcp/shortcut/)
 > is a separate component that exposes the same Shortcut reads to AI clients (Claude Code/Desktop) over
 > stdio — it is not a dependency of the Spring app.
