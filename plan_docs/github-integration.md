@@ -77,6 +77,11 @@ A missing/broken `gh` is reported two ways, deliberately split:
   startup probe** (`gh --version`) that WARNs at boot — but only when the integration is **enabled**, so a
   disabled feature stays silent. No per-call `gh --version` probe (wasteful) and no startup-only verdict
   feeding the UI (would go stale if `gh` is installed, or its auth changes, after boot).
+
+These logs follow the project's tested structured-event convention (`gh.unavailable`, `gh.startup.ok`,
+`gh.startup.unavailable`, `gh.list.failed`) — the gh seam is one of its first two adopters. Convention,
+status, and deferred follow-ups (JSON sink, id registry, remaining seams):
+[`plan_docs/tested-structured-logging.md`](tested-structured-logging.md).
 - `web/GitHubController.kt` + `jte/github.kte` — the page; untrusted `gh` text (PR titles, author logins)
   is HTML-escaped via JTE `${}`, so it's display-only and not an injection vector.
 
