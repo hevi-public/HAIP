@@ -20,6 +20,7 @@
           @template.fragments.membersBox(personas = personas)
       </aside>
       <div class="home__main">
+        @template.fragments.wideToggle()
         <h1 class="home__title">Threads</h1>
         @if(threads.isEmpty())
             <div data-empty-state="no-threads">No threads yet — start one!</div>

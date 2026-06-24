@@ -188,6 +188,37 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
   color: var(--ink); font-weight: 700; border-bottom-color: var(--sage);
 }
 
+/* Layout controls (plan: collapsible-sidebars): collapse either side rail or go full-width. Icon-only
+ * buttons that share the theme switcher's header treatment — the pressed (collapsed/wide) state lights
+ * with the same sage underline. layout.js drives aria-pressed; sits left of the theme toggle, the two
+ * grouped at the right edge of the header. */
+.layout-toggle {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 14px;
+}
+.layout-toggle + .theme-toggle { margin-left: 18px; }   /* layout-toggle owns the auto; keep them adjacent */
+.layout-toggle__opt {
+  border: 0; background: none; cursor: pointer; font: inherit; line-height: 1;
+  display: inline-flex; align-items: center;
+  color: var(--link); padding: 2px 1px; border-bottom: 2px solid transparent;
+}
+.layout-toggle__opt:hover { color: var(--ink); }
+.layout-toggle__opt[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--sage); }
+
+/* In-content full-screen button: a small card affordance pinned to the top-right of the main column on
+ * the home + thread pages. Flips the same wide state as the header group; pressed = currently full-width. */
+.wide-toggle {
+  position: absolute; top: 0; right: 0; z-index: 5;
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); color: var(--muted);
+  font-size: 14px; line-height: 1; cursor: pointer;
+}
+.wide-toggle:hover { color: var(--ink); border-color: var(--sage-2); }
+.wide-toggle[aria-pressed="true"] { background: var(--sage); color: var(--sage-ink); border-color: transparent; }
+
 /* Pin the header on desktop so the nav + theme toggle stay reachable while reading long threads, and so
    clicking the bare chrome (header.js) scrolls back to a still-visible bar. z-index clears the sticky
    side rails, which pin BELOW the header (their top offsets budget for it). Mobile keeps a static header
@@ -294,6 +325,49 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
     max-height: calc(100vh - 84px); overflow-y: auto;
   }
 }
+
+/* -------------------------------------------------- collapsible side rails / full-width mode
+   (plan: collapsible-sidebars). The rails always render server-side; layout.js flips
+   data-rail-left / data-rail-right on <html> and these rules hide a rail and reflow the grid so the
+   main column reclaims the freed space. Initial state is set pre-paint in layout.kte (no flash). */
+
+/* Hiding works at every width, so collapsing also tidies the stacked single-column mobile layout. */
+html[data-rail-left="collapsed"]  [data-home-rail],
+html[data-rail-left="collapsed"]  [data-thread-rail],
+html[data-rail-right="collapsed"] [data-home-rail-right],
+html[data-rail-right="collapsed"] [data-thread-rail-right] { display: none; }
+
+/* The in-content button anchors to the main column's top-right corner. */
+.home__main, .thread__main { position: relative; }
+
+@media (min-width: 1024px) {
+  /* Left rail collapsed → main + right rail (same shape for both pages). */
+  html[data-rail-left="collapsed"]:not([data-rail-right="collapsed"]) .home,
+  html[data-rail-left="collapsed"]:not([data-rail-right="collapsed"]) .thread {
+    grid-template-columns: minmax(0, 1fr) 248px;
+    grid-template-areas: "main right";
+  }
+  /* Right rail collapsed → left rail + main (the left track differs per page). */
+  html[data-rail-right="collapsed"]:not([data-rail-left="collapsed"]) .home {
+    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-areas: "left main";
+  }
+  html[data-rail-right="collapsed"]:not([data-rail-left="collapsed"]) .thread {
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    grid-template-areas: "left main";
+  }
+  /* Both collapsed = "full screen": one full-width column on both pages. */
+  html[data-rail-left="collapsed"][data-rail-right="collapsed"] .home,
+  html[data-rail-left="collapsed"][data-rail-right="collapsed"] .thread {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "main";
+  }
+}
+
+/* Full-width mode lifts the home page's --maxw cap so the main content runs to the browser edge (the
+   thread view is already full-bleed, see .container:has(.thread)). Prose stays capped at --prose, so
+   the extra room goes to layout, not unreadable line lengths. */
+html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-width: none; }
 
 /* Forum-nav box — the "~/forum" terminal listing in the left rail. Shares .rail-box card chrome. */
 /* Compound selector beats the base .rail-box__title (defined later in the file) at the same specificity. */
