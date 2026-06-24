@@ -5,6 +5,7 @@
     <div class="admin" data-admin-page>
         <h1 class="admin__title">Admin · statistics</h1>
         <p class="admin__lede">A read-only snapshot of the forum. Each figure links to the items behind it.</p>
+        <p class="admin__links"><a href="/admin/stats" data-admin-link="routing-stats">Routing health →</a></p>
 
         <section class="admin__section">
             <h2 class="admin__section-title">Overview</h2>
