@@ -5,6 +5,7 @@
   "description": "Front-end JS for the AI Forum (HAIP). Pure ESM, no runtime deps; node:test for unit tests.",
   "type": "module",
   "scripts": {
-    "test": "node --test \"src/test/js/**/*.test.mjs\""
+    "test": "node --test \"src/test/js/**/*.test.mjs\"",
+    "test:mcp": "node --test \"mcp/gh-readonly/test/**/*.test.mjs\""
   }
 }

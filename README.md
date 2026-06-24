@@ -129,12 +129,30 @@ lives under `aiforum.shortcut` in [`application.yml`](src/main/resources/applica
 
 On boot `ShortcutConfig` logs a one-line `INFO` banner stating whether the integration came up (and the
 base URL / default query when it did); a failed read logs a `WARN` naming the query and degrades the
-surface rather than throwing. These logs are asserted like any other behaviour — Tier-2
-`ShortcutServiceTest` / `ShortcutConfigTest` capture them via the reusable `LogCapture` helper.
+surface rather than throwing. Each line carries a structured `event` id (`shortcut.startup.*`,
+`shortcut.read.*`, `shortcut.workflow.failed`) per the "Logging is IO" convention, and Tier-2
+`ShortcutServiceTest` / `ShortcutConfigTest` pin those ids + fields via the shared `LogCapture` helper.
 
 > This is the in-app display path. The standalone **MCP server** under [`mcp/shortcut/`](mcp/shortcut/)
 > is a separate component that exposes the same Shortcut reads to AI clients (Claude Code/Desktop) over
 > stdio — it is not a dependency of the Spring app.
+
+### GitHub integration (read-only)
+
+The project can pull live GitHub data, **read-only**, for two different consumers — each off by default
+and needing `gh` installed + authenticated (`gh auth login`) on the host. Read-only is enforced
+structurally (allowlisted commands, no shell, a re-checked guard), not by trust. Full design:
+[`plan_docs/github-integration.md`](plan_docs/github-integration.md).
+
+- **Humans — the `/github` page.** A server-rendered snapshot (repo summary + open PRs + open issues),
+  fetched through the `GitHubClient` seam (the backend shells out to `gh` directly; it does **not** use
+  the MCP server). Enable with `aiforum.github.enabled: true` and `aiforum.github.repo: OWNER/REPO`.
+- **Personas — gh tools mid-generation.** `claude -p` is handed the read-only `gh-readonly` MCP server
+  (`mcp/gh-readonly/`, registered via [`.mcp.json`](.mcp.json)) so a persona can pull a live PR/issue into
+  its reply. Enable with `aiforum.llm.github-tools-enabled: true` and `aiforum.llm.github-mcp-config:` set
+  to an absolute path to `.mcp.json` (cli provider only). ⚠ GitHub content is untrusted input (prompt
+  injection, like web-fetch) and the Docker jail isn't built yet — the server is read-only, but reads
+  whatever the host `gh` is authed to see.
 
 **Discovery mode** — let a sea of red run without failing the build (useful while scaffolding):
 
@@ -176,6 +194,7 @@ fully green, with nothing left tagged `@wip`:
 - Personas & admin (view a persona profile, admin adds a persona)
 - Empty-state & unread badges (fresh-forum empty state, thread unread count)
 - Image attachments — caption-only to the model (the caption, never the bytes, reaches the room — spy-asserted), a transcribed code caption renders as a code block inside a quote, delete is FK-clean
+- Read-only GitHub `/github` page — repo summary + open PRs/issues, with a clear off-state when disabled / `gh` missing (scriptable seam); the header section nav (threads / members / github)
 
 ## Project layout
 
@@ -192,10 +211,12 @@ src/main/kotlin/com/aiforum/
   shortcut/   read-only Shortcut seam (ShortcutClient; HttpShortcutClient = REST v3 over RestClient),
               ShortcutService facade (graceful DISABLED/ERROR/OK), StoryCard + ShortcutMapper, inline
               sc-N linkification (markdown/StoryRefLinker)
+  github/     GitHubClient read-only seam (GhCliGitHubClient = `gh` CLI; GitHubJson Tier-0 parsing) — /github page
   config/     ClockConfig, ProfileGuard, DataDirectoryInitializer (auto-creates the SQLite data dir
               at startup), PersonaSeeder + PersonaSeedProperties (seeds the default persona team)
 src/main/jte/ layout.kte (page shell + htmx) · fragments/ (composer, replyNode, replyList) — stable data-* hooks
 src/main/resources/static/ app.css + app.js — hand-written styling layer (sage HUP aesthetic, light/dark theme tokens, htmx-aware auto-grow, theme switcher)
+mcp/gh-readonly/ zero-dep stdio MCP server wrapping `gh` read-only (registered via .mcp.json); `npm run test:mcp`
 src/test/kotlin/com/aiforum/
   acceptance/ Cucumber↔Spring wiring, scriptable LlmClient fake, steps, hooks, support
   tier0/      pure-function tests

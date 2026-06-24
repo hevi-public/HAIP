@@ -1,5 +1,6 @@
 package com.aiforum.shortcut
 
+import com.aiforum.observability.event
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.stereotype.Service
@@ -21,7 +22,7 @@ class ShortcutService(
     private val props: ShortcutProperties,
     private val clientProvider: ObjectProvider<ShortcutClient>,
 ) {
-    private val log = LoggerFactory.getLogger(javaClass)
+    private val log = LoggerFactory.getLogger(ShortcutService::class.java)
     private val statesCache = AtomicReference<Map<Long, String>?>(null)
 
     /** Drop the cached workflow-state map (the acceptance suite calls this between scenarios). */
@@ -55,16 +56,24 @@ class ShortcutService(
     fun stories(query: String, limit: Int): ShortcutResult {
         val client = clientProvider.ifAvailable
         if (!props.enabled || client == null || !client.isActive()) {
-            log.debug("Shortcut read skipped — integration disabled")
+            log.atDebug().setMessage("Shortcut read skipped — integration disabled")
+                .event(EV_READ_SKIPPED).log()
             return ShortcutResult.DISABLED
         }
         val effective = query.ifBlank { props.defaultQuery }
         return try {
             val cards = ShortcutMapper.resolveStates(client.searchStories(effective, limit), states(client))
-            log.debug("Shortcut read ok — query='{}' limit={} stories={}", effective, limit, cards.size)
+            log.atDebug().setMessage("Shortcut read ok — query='{}' limit={} stories={}")
+                .addArgument(effective).addArgument(limit).addArgument(cards.size)
+                .event(EV_READ_OK)
+                .addKeyValue("query", effective).addKeyValue("limit", limit).addKeyValue("stories", cards.size)
+                .log()
             ShortcutResult.ok(cards, effective)
         } catch (e: Exception) {
-            log.warn("Shortcut read failed for query '{}': {}", effective, e.toString())
+            log.atWarn().setMessage("Shortcut read failed for query '{}': {}")
+                .addArgument(effective).addArgument(e.toString())
+                .event(EV_READ_FAILED).addKeyValue("query", effective).addKeyValue("error", e.toString())
+                .log()
             ShortcutResult.error("Couldn't reach Shortcut — check the API token and network.", effective)
         }
     }
@@ -88,9 +97,21 @@ class ShortcutService(
     private fun states(client: ShortcutClient): Map<Long, String> {
         statesCache.get()?.let { return it }
         val fetched = runCatching { client.workflowStates() }
-            .onFailure { log.warn("Shortcut workflow fetch failed: {}", it.toString()) }
+            .onFailure {
+                log.atWarn().setMessage("Shortcut workflow fetch failed: {}").addArgument(it.toString())
+                    .event(EV_WORKFLOW_FAILED).addKeyValue("error", it.toString()).log()
+            }
             .getOrDefault(emptyMap())
         if (fetched.isNotEmpty()) statesCache.set(fetched)
         return fetched
+    }
+
+    private companion object {
+        // Structured event-ids — the stable, machine-readable identity log tooling keys off (see the
+        // bdd-tiered-testing skill, "Logging is IO"). The prose message is free to change; these are not.
+        const val EV_READ_OK = "shortcut.read.ok"
+        const val EV_READ_SKIPPED = "shortcut.read.skipped"
+        const val EV_READ_FAILED = "shortcut.read.failed"
+        const val EV_WORKFLOW_FAILED = "shortcut.workflow.failed"
     }
 }

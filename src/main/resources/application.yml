@@ -68,6 +68,18 @@ aiforum:
         Describe this image factually and concisely for a reader who cannot see it. If it shows code, a
         terminal, or a config/log file, transcribe it verbatim inside a fenced markdown code block with
         the correct language tag. Note any other text, diagrams, charts, or UI shown.
+  # Read-only GitHub integration for the /github page (Option A): the backend shells out to the `gh` CLI
+  # via GhCliGitHubClient (repo view + open PRs + open issues) and renders them server-side. OFF by
+  # default — it needs the `gh` binary installed and authenticated (`gh auth login`) on the host. With it
+  # off, /github shows a clear "not configured" state and nothing is ever spawned. This is the HUMAN-facing
+  # path and does NOT use the gh-readonly MCP server (that one is for LLM tool-callers).
+  github:
+    enabled: false             # true => fetch live data from `gh`; false => /github shows the off state
+    repo: ""                   # "OWNER/REPO" to pin (recommended — the app's working dir isn't a clone);
+                               # blank => let `gh` infer from the working directory
+    command: gh                # the gh binary on PATH
+    list-limit: 10             # max open PRs / issues to list (clamped 1..100)
+    timeout-seconds: 20        # per-`gh`-invocation deadline
   # Predefined personas seeded into the DB on first startup if they don't already exist (see
   # PersonaSeeder; skipped under the test profile). A small product team for a Kotlin + Spring Boot +
   # PostgreSQL backend with an Angular frontend and Playwright UI tests. Skills overlap on purpose so
@@ -148,6 +160,16 @@ aiforum:
     web-fetch-enabled: false
     web-fetch-allowed-domains: ""   # blank => any host; else comma-separated allowlist, e.g.
                                     # "news.ycombinator.com,github.com" → personas can only fetch those
+    # Read-only GitHub TOOLS for personas (Option B, cli-provider only). When on, the spawned `claude -p`
+    # is given the gh-readonly MCP server (--mcp-config + --strict-mcp-config) and its tools are
+    # pre-authorised (mcp__gh-readonly), so a persona can pull a live PR/issue into its reply. Distinct from
+    # the human /github page above — this is the AI path, and it goes THROUGH the MCP server.
+    # ⚠ SECURITY: same prompt-injection risk class as web-fetch (GitHub bodies are untrusted) and the Docker
+    # jail (§12) isn't built; the server is read-only but reads whatever the host `gh` is authed to. Off by default.
+    github-tools-enabled: false
+    github-mcp-config: ""                 # passed to `claude --mcp-config` (file path or inline JSON);
+                                          # e.g. an ABSOLUTE path to this repo's .mcp.json. Blank => inert.
+    github-mcp-server-name: gh-readonly   # must match the server key in that config; authorises mcp__<name>
     # OpenAiLlmClient (provider: openai only). Talks the OpenAI Chat Completions API over HTTP. The model
     # name reuses `default-model` above (and per-persona PersonaRef.model) — no separate model key here.
     openai:

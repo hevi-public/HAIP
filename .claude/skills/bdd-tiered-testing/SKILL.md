@@ -105,6 +105,78 @@ inject a fake that throws or returns the failure, then assert the **state transi
 Validation is asserted at the controller tier (no LLM call should happen — assert the fake's spy
 received nothing). Cancel exercises the subprocess-kill path via a `CancellationToken`.
 
+## Logging is IO — assert it
+
+Log output is an **output surface**, the same as an HTTP body or a rendered `data-*` hook — an operator
+reads it, and increasingly so does tooling (alerting, dashboards, log-analysis). So we test it like any
+other IO: with everything below the seam stubbed, a log line is **deterministic**, and an asserted log
+line becomes a **contract**. That contract is what lets us standardise the format and then build tools
+that parse it; an untested log line is a string that drifts until the parser silently breaks.
+
+"Logs are brittle to test" is a half-truth worth unlearning: brittleness comes only from asserting the
+**ambient layout** — timestamp, thread, level rendering, MDC — which is config, not behaviour. Capture
+at the SLF4J/Logback level instead and you get just `level + message` (placeholders already
+substituted), which is stable. Assert that; never scrape stdout or a formatted line.
+
+Use a `ListAppender` via the `LogCapture` helper (`testsupport/LogCapture.kt`), scoped to the
+production logger:
+
+```kotlin
+LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
+    FakeGh(enabled = true, repoExit = 1).overview()
+    assertEquals(listOf("/github is unavailable: gh repo view failed: …"), logs.warns())
+    assertTrue(logs.debugs().isEmpty())   // best-effort failures stay DEBUG, never WARN — also a contract
+}
+```
+
+Rules that keep log output assertable (and parseable):
+
+- **Pin the logger name.** Log through `LoggerFactory.getLogger(Foo::class.java)`, never `javaClass` —
+  with `javaClass` a test subclass logs under a *different* name and the capture sees nothing (and your
+  dashboards key off an unstable source).
+- **Assert level + message, not layout.** The level is part of the contract: WARN for an operator-
+  actionable fault, DEBUG for best-effort noise the user never sees. Pin both — a fault silently demoted
+  to DEBUG is a regression the level assertion catches.
+- **Message text is the contract.** Use placeholders (`"{} unavailable: {}"`), keep a stable, greppable
+  prefix, and treat a wording change as a contract change — update the test deliberately, the same as any
+  other interface.
+- **Silence is behaviour too.** Assert the *absence* of logs where it matters (a disabled feature that
+  must stay quiet at startup, a best-effort path that must not WARN).
+
+### Structured event ids — the format we standardise on
+
+Prose is for humans; tooling needs a **stable identity** that survives wording changes. So every
+operational log line carries a structured `event` id (a namespaced, dotted constant — `gh.unavailable`,
+`gh.startup.ok`, `llm.timeout`) plus typed fields, via the SLF4J fluent key-value API. The message stays
+readable; the `event` + fields are the machine-readable contract a log-analysis tool keys off.
+
+```kotlin
+log.atWarn().setMessage("/github is unavailable: {}").addArgument(reason)
+   .addKeyValue("event", "gh.unavailable").addKeyValue("reason", reason)
+   .log()
+```
+
+Tests assert the structured layer, not just the prose, via `LogCapture.withEvent(...)` / `keyValue(...)`:
+
+```kotlin
+val e = logs.withEvent("gh.unavailable").single()
+assertEquals(Level.WARN, e.level)
+assertEquals("gh repo view failed: …", logs.keyValue(e, "reason"))
+```
+
+Conventions that make the event ids a durable contract:
+- **Ids are constants, namespaced per emitter** (`gh.*`, `llm.*`), defined in one place on the class —
+  that companion is the event catalogue tooling and humans read.
+- **The id is the breaking surface, not the message.** Reword the human message freely; treat an id (or a
+  field key) change as a breaking change to log consumers, and update its test deliberately.
+- **Pin the id, the level, and the fields** in the test. Together they are the contract: a fault demoted
+  from WARN to DEBUG, an id typo, or a dropped field each fails a test rather than silently breaking a
+  downstream dashboard.
+
+The point of all this: once the log contract is *tested*, it is safe to *standardise*, and a standardised
+log surface is what lets us build tooling (alerting, analysis) on it. An untested log line is not a
+contract — it is a string that drifts.
+
 ## Build-breaks-on-red, with an opt-in discovery mode
 
 Default stance: a failing test fails the build. That's what makes the suite a control layer rather

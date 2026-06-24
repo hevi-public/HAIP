@@ -1,13 +1,12 @@
 package com.aiforum.tier2
 
-import ch.qos.logback.classic.Level
 import com.aiforum.shortcut.ShortcutClient
 import com.aiforum.shortcut.ShortcutProperties
 import com.aiforum.shortcut.ShortcutService
 import com.aiforum.shortcut.ShortcutStatus
 import com.aiforum.shortcut.StoryCard
 import com.aiforum.shortcut.StorySource
-import com.aiforum.support.LogCapture
+import com.aiforum.testsupport.LogCapture
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -18,8 +17,9 @@ import org.springframework.beans.factory.ObjectProvider
 /**
  * Tier-2: the [ShortcutService] facade running real query-resolution / caching / degradation logic over
  * a faked [ShortcutClient] (the single IO seam). It pins both the user-visible outcome (DISABLED /
- * OK / ERROR + which query ran) AND the observability logs — logs are behaviour an operator depends on,
- * so they're asserted via [LogCapture] rather than left to rot.
+ * OK / ERROR + which query ran) AND the observability logs — logs are IO (see the bdd-tiered-testing
+ * skill, "Logging is IO"), so we assert the structured `event` id and its key-value fields via
+ * [LogCapture], not just the prose.
  */
 @Tag("tier2")
 class ShortcutServiceTest {
@@ -89,14 +89,14 @@ class ShortcutServiceTest {
     // --- DISABLED: the surface goes dark, the seam is never touched ----------------------------------
 
     @Test
-    fun `disabled when the integration is off — no client call, logs a skip`() {
+    fun `disabled when the integration is off — no client call, logs the skipped event`() {
         val client = FakeClient()
         val svc = service(props(enabled = false), client)
 
-        LogCapture.around(ShortcutService::class.java) { logs ->
+        LogCapture.on(ShortcutService::class.java).use { logs ->
             val result = svc.stories("is:started", 5)
             assertEquals(ShortcutStatus.DISABLED, result.status)
-            assertTrue(logs.has(Level.DEBUG, "integration disabled"), "expected a skip debug line")
+            assertTrue(logs.withEvent("shortcut.read.skipped").isNotEmpty(), "expected a skipped event")
         }
         assertEquals(0, client.searchCalls, "a disabled integration must never call Shortcut")
     }
@@ -115,25 +115,28 @@ class ShortcutServiceTest {
         assertEquals(0, client.searchCalls)
     }
 
-    // --- OK: stories come back, states resolve, a debug records the read ------------------------------
+    // --- OK: stories come back, states resolve, a debug event records the read ------------------------
 
     @Test
-    fun `ok read resolves workflow-state names and logs a debug with the count`() {
+    fun `ok read resolves workflow-state names and logs the read-ok event with the count`() {
         val client = FakeClient(
             cards = listOf(card(101, stateId = 500), card(102, stateId = 999)),
             states = mapOf(500L to "In Progress"),
         )
         val svc = service(props(), client)
 
-        LogCapture.around(ShortcutService::class.java) { logs ->
+        LogCapture.on(ShortcutService::class.java).use { logs ->
             val result = svc.stories("is:started", 5)
 
             assertEquals(ShortcutStatus.OK, result.status)
             assertEquals("In Progress", result.stories[0].state, "known state id resolves to its name")
             assertEquals("", result.stories[1].state, "an unknown state id stays blank, not an error")
-            assertTrue(logs.has(Level.DEBUG, "Shortcut read ok"), "a successful read should log a debug")
-            assertTrue(logs.messages(Level.DEBUG).any { it.contains("stories=2") }, "debug carries the count")
-            assertEquals(0, logs.count(Level.WARN), "a clean read logs no warnings")
+
+            val event = logs.withEvent("shortcut.read.ok").single()
+            assertTrue(event.formattedMessage.contains("Shortcut read ok"), "the prose names the read")
+            assertEquals("is:started", logs.keyValue(event, "query"), "the structured query field is the contract")
+            assertEquals("2", logs.keyValue(event, "stories"), "the structured count field is the contract")
+            assertTrue(logs.warns().isEmpty(), "a clean read logs no warnings")
         }
     }
 
@@ -147,32 +150,34 @@ class ShortcutServiceTest {
     // --- ERROR: a failed call degrades quietly and warns with the query ------------------------------
 
     @Test
-    fun `a read failure degrades to ERROR and warns with the offending query`() {
+    fun `a read failure degrades to ERROR and warns the read-failed event naming the query`() {
         val client = FakeClient(failSearch = true)
         val svc = service(props(), client)
 
-        LogCapture.around(ShortcutService::class.java) { logs ->
+        LogCapture.on(ShortcutService::class.java).use { logs ->
             val result = svc.stories("type:bug", 5)
 
             assertEquals(ShortcutStatus.ERROR, result.status)
             assertEquals("type:bug", result.query, "ERROR still reports which query was attempted")
             assertFalse(result.message.isNullOrBlank(), "ERROR carries a user-facing note")
-            assertTrue(logs.has(Level.WARN, "Shortcut read failed"), "a read failure must warn")
-            assertTrue(logs.messages(Level.WARN).any { it.contains("type:bug") }, "the warn names the query")
+
+            val event = logs.withEvent("shortcut.read.failed").single()
+            assertEquals("type:bug", logs.keyValue(event, "query"), "the warn's structured field names the query")
+            assertTrue(logs.warns().any { it.contains("Shortcut read failed") }, "and warns in prose")
         }
     }
 
     @Test
-    fun `a workflow-map failure is swallowed — stories still OK, with a warn`() {
+    fun `a workflow-map failure is swallowed — stories still OK, with a workflow-failed warn`() {
         val client = FakeClient(cards = listOf(card(1, stateId = 500)), failWorkflows = true)
         val svc = service(props(), client)
 
-        LogCapture.around(ShortcutService::class.java) { logs ->
+        LogCapture.on(ShortcutService::class.java).use { logs ->
             val result = svc.stories("is:started", 5)
 
             assertEquals(ShortcutStatus.OK, result.status, "a missing state map degrades, it doesn't fail the read")
             assertEquals("", result.stories[0].state, "states stay blank when the map can't be loaded")
-            assertTrue(logs.has(Level.WARN, "workflow fetch failed"))
+            assertTrue(logs.withEvent("shortcut.workflow.failed").isNotEmpty())
         }
     }
 

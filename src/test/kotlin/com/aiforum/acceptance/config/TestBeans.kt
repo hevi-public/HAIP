@@ -1,6 +1,12 @@
 package com.aiforum.acceptance.config
 
 import com.aiforum.dto.ReasoningLeak
+import com.aiforum.github.GitHubClient
+import com.aiforum.github.GitHubOverview
+import com.aiforum.github.GitHubResult
+import com.aiforum.github.Issue
+import com.aiforum.github.PullRequest
+import com.aiforum.github.RepoSummary
 import com.aiforum.images.DescribeRequest
 import com.aiforum.images.ImageDescriber
 import com.aiforum.images.VisionUnavailableException
@@ -148,6 +154,41 @@ class ScriptableShortcutClient : ShortcutClient {
         states = emptyMap()
         stories.clear()
         received.clear()
+    }
+}
+
+/**
+ * The scriptable GitHub seam ([GitHubClient]) under test — the sibling of [ScriptableLlmClient]. The real
+ * GhCliGitHubClient is present but inert under test (disabled), so this @Primary fake stands in and steps
+ * program the snapshot the /github page renders: an [overview] (repo + open PRs + open issues) or an
+ * unavailable off-state. Reset between scenarios by DatabaseResetHooks.
+ */
+@Component
+@Primary
+@Profile("test")
+class ScriptableGitHubClient : GitHubClient {
+
+    @Volatile
+    var unavailableReason: String = "GitHub integration is off."
+
+    @Volatile
+    var repo: RepoSummary? = null
+
+    val pulls = CopyOnWriteArrayList<PullRequest>()
+    val issues = CopyOnWriteArrayList<Issue>()
+
+    /** A repo present => an Ok snapshot; otherwise the unavailable off-state with the programmed reason. */
+    override fun overview(): GitHubResult {
+        val r = repo
+        return if (r != null) GitHubResult.Ok(GitHubOverview(r, pulls.toList(), issues.toList()))
+        else GitHubResult.Unavailable(unavailableReason)
+    }
+
+    fun reset() {
+        unavailableReason = "GitHub integration is off."
+        repo = null
+        pulls.clear()
+        issues.clear()
     }
 }
 

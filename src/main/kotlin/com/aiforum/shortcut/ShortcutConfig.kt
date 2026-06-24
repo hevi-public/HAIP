@@ -1,6 +1,7 @@
 package com.aiforum.shortcut
 
 import com.aiforum.markdown.MarkdownRenderer
+import com.aiforum.observability.event
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -17,7 +18,7 @@ import org.springframework.context.annotation.Configuration
 @EnableConfigurationProperties(ShortcutProperties::class)
 class ShortcutConfig(private val props: ShortcutProperties) {
 
-    private val log = LoggerFactory.getLogger(javaClass)
+    private val log = LoggerFactory.getLogger(ShortcutConfig::class.java)
 
     @PostConstruct
     fun wireInlineStoryLinks() {
@@ -31,13 +32,22 @@ class ShortcutConfig(private val props: ShortcutProperties) {
             null
         }
         if (props.enabled) {
-            log.info(
-                "Shortcut integration enabled — base={} default-query='{}' inline sc-N links {}",
-                props.baseUrl, props.defaultQuery,
-                if (MarkdownRenderer.storyLinkBaseUrl != null) "on" else "off",
-            )
+            val inlineLinks = if (MarkdownRenderer.storyLinkBaseUrl != null) "on" else "off"
+            log.atInfo().setMessage("Shortcut integration enabled — base={} default-query='{}' inline sc-N links {}")
+                .addArgument(props.baseUrl).addArgument(props.defaultQuery).addArgument(inlineLinks)
+                .event(EV_STARTUP_ENABLED)
+                .addKeyValue("baseUrl", props.baseUrl).addKeyValue("defaultQuery", props.defaultQuery)
+                .addKeyValue("inlineLinks", inlineLinks)
+                .log()
         } else {
-            log.info("Shortcut integration disabled — surfaces hidden (set aiforum.shortcut.enabled=true to enable)")
+            log.atInfo()
+                .setMessage("Shortcut integration disabled — surfaces hidden (set aiforum.shortcut.enabled=true to enable)")
+                .event(EV_STARTUP_DISABLED).log()
         }
+    }
+
+    private companion object {
+        const val EV_STARTUP_ENABLED = "shortcut.startup.enabled"
+        const val EV_STARTUP_DISABLED = "shortcut.startup.disabled"
     }
 }

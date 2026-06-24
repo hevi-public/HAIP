@@ -1260,6 +1260,38 @@ mark.nav-hit {
 }
 .notice--warn { border-color: var(--sage-2); color: var(--sage-ink-2); }
 
+/* ----------------------------------------------------------------- /github */
+/* Read-only GitHub snapshot page (GhCliGitHubClient → GitHubController). Reuses the shared tokens so it
+   sits inside the sage HUP system rather than introducing new chrome. */
+.github { max-width: 760px; margin: 0 auto; }
+.github__title { font-family: var(--mono); font-size: 18px; margin: 4px 0 16px; }
+.github__unavailable {
+  background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+  padding: 14px 16px; color: var(--muted); font-size: 14px;
+}
+.github__repo {
+  background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+  padding: 14px 16px; margin-bottom: 18px;
+}
+.github__repo-name { font-family: var(--mono); font-size: 15px; margin: 0 0 6px; }
+.github__repo-desc { color: var(--ink); font-size: 14px; margin: 0 0 10px; }
+.github__repo-meta {
+  list-style: none; display: flex; flex-wrap: wrap; gap: 14px; margin: 0; padding: 0;
+  font-family: var(--mono); font-size: 12px; color: var(--muted);
+}
+.github__section { margin-bottom: 22px; }
+.github__section-title { font-family: var(--mono); font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+.github__empty { color: var(--faint); font-size: 13px; }
+.github__list { list-style: none; margin: 0; padding: 0; }
+.github__item {
+  padding: 8px 0; border-bottom: 1px dotted var(--line-dotted);
+}
+.github__item-title { font-size: 14px; text-decoration: none; }
+.github__item-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+.github__badge {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px;
+  background: var(--strip); color: var(--muted); font-family: var(--mono); font-size: 10px;
+}
 /* ── Admin statistics dashboard (/admin) ────────────────────────────────────
    Read-only stat cards in a single column. Shares the card chrome + sage accents
    used across the rails; numbers carry data-stat/data-value hooks the suite asserts on. */
