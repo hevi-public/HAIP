@@ -36,7 +36,7 @@ class DatabaseResetHooks(
     @Before(order = 0)
     fun resetDatabase() {
         // children before parents (foreign_keys=on) — attachment + comment_revision reference comment, so first.
-        listOf("attachment", "vote", "comment_revision", "event_log", "comment", "thread_read", "thread", "persona").forEach {
+        listOf("routing_event", "attachment", "vote", "comment_revision", "event_log", "comment", "thread_read", "thread", "persona").forEach {
             jdbc.update("DELETE FROM $it")
         }
     }
