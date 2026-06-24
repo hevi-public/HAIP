@@ -1,6 +1,11 @@
 # Persona traits as routing signal — abilities & dials in the "Anyone" dispatcher
 
-> **Status:** proposed (design note, not yet built) · **Owner:** Hevi · **Created:** 2026-06-21
+> **Status:** ✅ built (2026-06-24) · **Owner:** Hevi · **Created:** 2026-06-21
+> Built as prompt-enrichment over the dispatcher's existing LLM call (NOT a deterministic keyword overlap —
+> topic→ability matching is a semantic judgement the model does better): `PersonaRouter.rosterLine` now folds
+> each persona's abilities + off-centre dials into the roster the model sees, and `PersonaRouter.diversify`
+> re-ranks a capped fan-out to span the agreeableness axis (pure Tier-0). The single `LlmClient` seam is
+> unchanged. Observability (the prereq below) shipped alongside, so the parse-miss rate is now measurable.
 > Companion to the `PersonaRouter` KDoc, `src/test/resources/features/persona_routing.feature`, and the
 > persona-traits feature (abilities + dials + LLM-composed prompt, V10 — see `com.aiforum.persona`).
 > Related: `plan_docs/persona-routing-observability.md` (instrument the fallback first).

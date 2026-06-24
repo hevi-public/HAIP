@@ -680,9 +680,10 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
   margin-bottom: 10px;
 }
 .thread__title { font-size: 19px; font-weight: 700; line-height: 1.2; margin: 0; max-width: var(--prose); }
-/* The OP body: the post's own content, sitting under the title (the comment tree is the room's reply). */
+/* The OP body: the post's own content, sitting under the title (the comment tree is the room's reply).
+   Rendered markdown fills the full card width — no --prose cap — so wide content (code, tables) uses the room. */
 .thread__body {
-  margin: 8px 0 0; max-width: var(--prose);
+  margin: 8px 0 0;
   font-size: 13.5px; line-height: 1.5; color: var(--ink);
 }
 
@@ -719,7 +720,7 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 .reply__inreplyto-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
 .reply__inreplyto-quote { font-style: italic; }
 
-.reply .body { font-size: 13.5px; line-height: 1.5; color: var(--ink); max-width: var(--prose); }
+.reply .body { font-size: 13.5px; line-height: 1.5; color: var(--ink); }
 .reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 5px; }
 
 /* Markdown-rendered body content (reply bodies + the OP). Now structured HTML, not pre-wrapped text:
@@ -738,7 +739,7 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 /* Fenced code blocks. hljs-theme.css sets the token colours, background, inner padding and the
    horizontal scroll on `pre code.hljs`; this is just the block chrome around it. */
 .reply .body pre, .thread__body pre {
-  margin: 0 0 10px; max-width: var(--prose);
+  margin: 0 0 10px; max-width: 100%;
   border: 1px solid var(--line-node); border-radius: var(--r);
   overflow: hidden; /* clip the inner scroll area to the rounded corners */
 }
@@ -1240,3 +1241,42 @@ mark.nav-hit {
   display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px;
   background: var(--strip); color: var(--muted); font-family: var(--mono); font-size: 10px;
 }
+/* Admin → Statistics (/admin/stats): routing-health numbers for the "Anyone" dispatcher. */
+.stats__title { margin: 0 0 4px; }
+.stats__lede { color: var(--muted); max-width: var(--prose); margin: 0 0 20px; }
+.stats__headline {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.stats__headline-value { font-size: 34px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.stats__headline-label { color: var(--muted); }
+.stats__headline-note { color: var(--faint); font-family: var(--mono); font-size: 11px; }
+.stats__table {
+  width: 100%;
+  max-width: 560px;
+  border-collapse: collapse;
+  margin-bottom: 28px;
+}
+.stats__table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  background: var(--strip);
+  padding: 6px 12px;
+}
+.stats__table td { padding: 8px 12px; border-bottom: 1px solid var(--line-dotted); }
+.stats__row-count, .stats__row-7d { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+.stats__subtitle { font-size: 14px; margin: 0 0 8px; }
+.stats__misses-empty { color: var(--faint); font-family: var(--mono); font-size: 12px; }
+.stats__misses-list { list-style: none; padding: 0; margin: 0; }
+.stats__miss { padding: 8px 0; border-bottom: 1px dotted var(--line-dotted); }
+.stats__miss-reply { color: var(--ink); }
+.stats__miss-meta { display: block; color: var(--faint); font-family: var(--mono); font-size: 11px; margin-top: 2px; }

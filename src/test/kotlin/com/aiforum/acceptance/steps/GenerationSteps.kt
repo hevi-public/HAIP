@@ -109,6 +109,15 @@ class GenerationSteps(
     fun dispatcherIgnored(label: String) =
         assertTrue(routingCall().context.comments.none { it.body == label }, "the dispatcher should NOT have seen node \"$label\"")
 
+    // The dispatcher's roster lives in its system prompt (not the discussion comments) — this is where the
+    // structured persona traits (abilities/dials) are folded in, so the model's pick is trait-aware.
+    @Then("the dispatcher's roster lists {string}")
+    fun dispatcherRosterLists(text: String) =
+        assertTrue(
+            routingCall().context.personaSystemPrompt.contains(text),
+            "expected the dispatcher's roster to list \"$text\" — its prompt was:\n${routingCall().context.personaSystemPrompt}",
+        )
+
     /** The dispatcher's own call is the one carrying its PersonaRef (name "Moderator"), not a persona's. */
     private fun routingCall(): LlmRequest {
         awaitDispatcher()

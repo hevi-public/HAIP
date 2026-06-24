@@ -1,6 +1,9 @@
 # Persona routing — observability & the Admin → Statistics page
 
-> **Status:** proposed (design note, not yet built) · **Owner:** Hevi · **Created:** 2026-06-21
+> **Status:** ✅ built (2026-06-24) · **Owner:** Hevi · **Created:** 2026-06-21
+> Shipped: `RoutingMetrics` write port + `RoutingOutcome` (four buckets) recorded once per
+> `PersonaRouter.pick()`; V15 `routing_event` table via `RoutingEventRepository`; GET /admin/stats
+> (parse-miss rate headline + per-outcome breakdown + recent-miss eyeball list) with a new "stats" nav item.
 > Companion to the `PersonaRouter` KDoc and `src/test/resources/features/persona_routing.feature`.
 > Concerns the "Anyone" dispatcher added in PR #22.
 
