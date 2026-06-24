@@ -2,6 +2,7 @@ package com.aiforum.tier1
 
 import com.aiforum.github.GhCliGitHubClient
 import com.aiforum.github.GitHubResult
+import com.aiforum.testsupport.LogCapture
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -130,6 +131,56 @@ class GhCliGitHubClientTest {
         val client = FakeGh(enabled = false)
         client.logStartupAvailability()
         assertTrue(client.argvs.isEmpty(), "a disabled integration must not probe gh at startup")
+    }
+
+    // --- logging is IO: pin the WARN/INFO/DEBUG lines as a contract (see the bdd-tiered-testing skill) ---
+
+    @Test
+    fun `a non-zero repo view exit logs a single WARN carrying the off-state reason`() {
+        LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
+            FakeGh(enabled = true, repo = "x/y", repoExit = 1).overview()
+            assertEquals(
+                listOf("/github is unavailable: gh repo view failed: gh: Not Found (HTTP 404)"),
+                logs.warns(),
+            )
+        }
+    }
+
+    @Test
+    fun `a best-effort pr list failure logs at DEBUG and never WARNs (the page still renders)`() {
+        LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
+            FakeGh(enabled = true, repo = "x/y", failPrSpawn = true).overview()
+            assertEquals(listOf("gh pr list failed: boom"), logs.debugs())
+            assertTrue(logs.warns().isEmpty(), "best-effort failures must not WARN; got: ${logs.warns()}")
+        }
+    }
+
+    @Test
+    fun `the startup probe logs a WARN naming the problem when gh is unavailable`() {
+        LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
+            FakeGh(enabled = true, versionSpawnFails = true).logStartupAvailability()
+            assertEquals(
+                listOf("GitHub integration is enabled but the `gh` CLI couldn't be launched (gh) — /github will show an error until this is fixed."),
+                logs.warns(),
+            )
+        }
+    }
+
+    @Test
+    fun `the startup probe logs an INFO when gh is available`() {
+        LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
+            FakeGh(enabled = true).logStartupAvailability()
+            assertEquals(listOf("GitHub integration enabled; `gh` is available."), logs.infos())
+            assertTrue(logs.warns().isEmpty())
+        }
+    }
+
+    @Test
+    fun `a disabled integration logs nothing at startup`() {
+        LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
+            FakeGh(enabled = false).logStartupAvailability()
+            assertTrue(logs.events.isEmpty(), "a disabled integration must stay silent; got: ${logs.events}")
+        }
     }
 
     @Test

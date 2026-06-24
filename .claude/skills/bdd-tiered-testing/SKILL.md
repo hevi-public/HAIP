@@ -105,6 +105,44 @@ inject a fake that throws or returns the failure, then assert the **state transi
 Validation is asserted at the controller tier (no LLM call should happen — assert the fake's spy
 received nothing). Cancel exercises the subprocess-kill path via a `CancellationToken`.
 
+## Logging is IO — assert it
+
+Log output is an **output surface**, the same as an HTTP body or a rendered `data-*` hook — an operator
+reads it, and increasingly so does tooling (alerting, dashboards, log-analysis). So we test it like any
+other IO: with everything below the seam stubbed, a log line is **deterministic**, and an asserted log
+line becomes a **contract**. That contract is what lets us standardise the format and then build tools
+that parse it; an untested log line is a string that drifts until the parser silently breaks.
+
+"Logs are brittle to test" is a half-truth worth unlearning: brittleness comes only from asserting the
+**ambient layout** — timestamp, thread, level rendering, MDC — which is config, not behaviour. Capture
+at the SLF4J/Logback level instead and you get just `level + message` (placeholders already
+substituted), which is stable. Assert that; never scrape stdout or a formatted line.
+
+Use a `ListAppender` via the `LogCapture` helper (`testsupport/LogCapture.kt`), scoped to the
+production logger:
+
+```kotlin
+LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
+    FakeGh(enabled = true, repoExit = 1).overview()
+    assertEquals(listOf("/github is unavailable: gh repo view failed: …"), logs.warns())
+    assertTrue(logs.debugs().isEmpty())   // best-effort failures stay DEBUG, never WARN — also a contract
+}
+```
+
+Rules that keep log output assertable (and parseable):
+
+- **Pin the logger name.** Log through `LoggerFactory.getLogger(Foo::class.java)`, never `javaClass` —
+  with `javaClass` a test subclass logs under a *different* name and the capture sees nothing (and your
+  dashboards key off an unstable source).
+- **Assert level + message, not layout.** The level is part of the contract: WARN for an operator-
+  actionable fault, DEBUG for best-effort noise the user never sees. Pin both — a fault silently demoted
+  to DEBUG is a regression the level assertion catches.
+- **Message text is the contract.** Use placeholders (`"{} unavailable: {}"`), keep a stable, greppable
+  prefix, and treat a wording change as a contract change — update the test deliberately, the same as any
+  other interface.
+- **Silence is behaviour too.** Assert the *absence* of logs where it matters (a disabled feature that
+  must stay quiet at startup, a best-effort path that must not WARN).
+
 ## Build-breaks-on-red, with an opt-in discovery mode
 
 Default stance: a failing test fails the build. That's what makes the suite a control layer rather

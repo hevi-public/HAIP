@@ -35,7 +35,10 @@ open class GhCliGitHubClient(
     @Value("\${aiforum.github.timeout-seconds:20}") private val timeoutSeconds: Long = 20,
 ) : GitHubClient {
 
-    private val log = LoggerFactory.getLogger(javaClass)
+    // Explicit class (not javaClass) so the logger NAME is stable at "com.aiforum.github.GhCliGitHubClient"
+    // even for test subclasses that override exec — the log output is a tested contract, so its source must
+    // be deterministic (see the bdd-tiered-testing skill, "Logging is IO").
+    private val log = LoggerFactory.getLogger(GhCliGitHubClient::class.java)
 
     /** The outcome of one `gh` invocation: it either ran (with an exit code + captured streams) or never
      *  started / timed out (the binary is missing, or it overran the deadline). */
