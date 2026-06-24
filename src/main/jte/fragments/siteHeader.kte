@@ -13,6 +13,15 @@
         <a href="/" aria-current="${if (activeNav == "threads") "page" else null}">threads</a>
         <a href="/personas" aria-current="${if (activeNav == "members") "page" else null}">members</a>
     </nav>
+    <%-- Layout controls: collapse either side rail for more reading width, or one-click full-screen
+         (both). aria-pressed reflects collapsed state; layout.js keeps these in sync with the
+         in-content full-screen button. Sticky header keeps them reachable, which is also the reopen
+         path after a rail is hidden. --%>
+    <div class="layout-toggle" role="group" aria-label="Layout">
+        <button type="button" class="layout-toggle__opt" data-toggle-rail="left" aria-pressed="false" title="Hide/show the left sidebar" aria-label="Toggle left sidebar"><span aria-hidden="true">&#x25E7;</span></button>
+        <button type="button" class="layout-toggle__opt" data-toggle-rail="right" aria-pressed="false" title="Hide/show the right sidebar" aria-label="Toggle right sidebar"><span aria-hidden="true">&#x25E8;</span></button>
+        <button type="button" class="layout-toggle__opt" data-toggle-wide aria-pressed="false" title="Full-width (hide both sidebars)" aria-label="Toggle full width"><span aria-hidden="true">&#x2922;</span></button>
+    </div>
     <div class="theme-toggle" role="group" aria-label="Theme">
         <button type="button" class="theme-toggle__opt" data-set-theme="dark"><span aria-hidden="true">&#x263E;</span> dark</button>
         <span class="theme-toggle__sep" aria-hidden="true">/</span>

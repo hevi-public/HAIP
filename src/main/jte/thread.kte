@@ -23,6 +23,7 @@
 @template.layout(title = title, activeNav = "threads", content = @`
     <div class="thread" data-thread-id="${threadId}" data-thread-title="${title}">
       <div class="thread__main">
+        @template.fragments.wideToggle()
         <%-- The OP is a nav item and editable (§7); the block lives in its own fragment so an edit can
              re-render just it. --%>
         @template.fragments.threadOp(threadId = threadId, title = title, body = body, bodyHtml = bodyHtml, edited = edited, attachments = opAttachments)
