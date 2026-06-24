@@ -13,7 +13,7 @@
         <a href="/" aria-current="${if (activeNav == "threads") "page" else null}">threads</a>
         <a href="/personas" aria-current="${if (activeNav == "members") "page" else null}">members</a>
         <a href="/github" aria-current="${if (activeNav == "github") "page" else null}">github</a>
-        <a href="/admin/stats" aria-current="${if (activeNav == "admin") "page" else null}">stats</a>
+        <a href="/admin" aria-current="${if (activeNav == "admin") "page" else null}">admin</a>
     </nav>
     <%-- Layout controls: collapse either side rail for more reading width, or one-click full-screen
          (both). aria-pressed reflects collapsed state; layout.js keeps these in sync with the

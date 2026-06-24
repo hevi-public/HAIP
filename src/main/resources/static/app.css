@@ -1241,6 +1241,91 @@ mark.nav-hit {
   display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px;
   background: var(--strip); color: var(--muted); font-family: var(--mono); font-size: 10px;
 }
+/* ── Admin statistics dashboard (/admin) ────────────────────────────────────
+   Read-only stat cards in a single column. Shares the card chrome + sage accents
+   used across the rails; numbers carry data-stat/data-value hooks the suite asserts on. */
+.admin { max-width: 920px; margin: 0 auto; }
+.admin__title { font-size: 22px; margin: 0 0 4px; color: var(--ink); }
+.admin__lede { margin: 0 0 24px; font-size: 13px; color: var(--muted); }
+.admin__section { margin: 0 0 28px; }
+.admin__section-title {
+  font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--sage-ink); margin: 0 0 12px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--line);
+}
+.admin__subhead { font-size: 12.5px; color: var(--muted); margin: 18px 0 8px; }
+.admin__empty { font-size: 13px; color: var(--muted); }
+
+.stat-grid {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;
+}
+.stat {
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 14px 16px;
+}
+.stat__num { font-size: 26px; font-weight: 700; line-height: 1; color: var(--ink); }
+.stat__label { font-size: 11.5px; color: var(--muted); }
+
+.stat-list { list-style: none; margin: 0; padding: 0; }
+.stat-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 7px 2px; border-bottom: 1px solid var(--line);
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-row__label { font-size: 13px; color: var(--ink); }
+.stat-row__num { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--sage-ink); }
+
+/* Stat cards/rows are links into the /admin drill-downs. The data-stat hooks stay on the <li>; the
+   anchor fills the card so the whole figure is clickable. */
+.stat__link { display: flex; flex-direction: column; gap: 4px; text-decoration: none; color: inherit; }
+.stat:hover { border-color: var(--sage-2); }
+.stat:hover .stat__num { color: var(--sage-ink); }
+.stat-row__link {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  width: 100%; text-decoration: none; color: inherit;
+}
+.stat-row:hover .stat-row__label { color: var(--sage-ink); }
+
+/* ── Admin drill-down list pages (/admin/comments, /admin/attachments) ──────── */
+.admin-list { max-width: 920px; margin: 0 auto; }
+.admin-list__back { margin: 0 0 8px; font-family: var(--mono); font-size: 12px; }
+.admin-list__back a { color: var(--muted); text-decoration: none; }
+.admin-list__back a:hover { color: var(--ink); }
+.admin-list__title { font-size: 20px; margin: 0 0 6px; color: var(--ink); }
+.admin-list__note { margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+.admin-list__empty { font-size: 13px; color: var(--muted); }
+.admin-list__items { list-style: none; margin: 0; padding: 0; }
+.admin-list__item { border-bottom: 1px solid var(--line); }
+.admin-list__item:last-child { border-bottom: none; }
+.admin-list__link {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 11px 4px; text-decoration: none; color: inherit;
+}
+.admin-list__item:hover { background: var(--row-hover); }
+.admin-list__snippet { font-size: 13.5px; color: var(--ink); line-height: 1.4; }
+.admin-list__meta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.admin-list__sep { opacity: 0.5; margin: 0 2px; }
+.admin-list__state { font-weight: 700; }
+.admin-list__badge {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  color: var(--sage-ink); background: var(--sage-2); border-radius: 4px; padding: 1px 6px;
+}
+
+/* Attachments drill-down: a thumbnail grid with metadata beside each image. */
+.admin-list__items--media { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.admin-attach { display: flex; gap: 12px; border: 1px solid var(--line); border-radius: var(--r); padding: 10px; }
+.admin-attach:hover { background: var(--row-hover); }
+.admin-attach__thumb { flex: none; }
+.admin-attach__thumb img {
+  width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); display: block;
+}
+.admin-attach__meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.admin-attach__file { font-size: 12.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-attach__owner { font-size: 12px; color: var(--muted); text-decoration: none; }
+.admin-attach__owner:hover { color: var(--ink); }
+
 /* Admin → Statistics (/admin/stats): routing-health numbers for the "Anyone" dispatcher. */
 .stats__title { margin: 0 0 4px; }
 .stats__lede { color: var(--muted); max-width: var(--prose); margin: 0 0 20px; }
