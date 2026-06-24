@@ -33,11 +33,16 @@ class GhCliGitHubClientTest {
         repo: String = "",
         private val repoExit: Int = 0,
         private val failPrSpawn: Boolean = false,
+        private val versionExit: Int = 0,
+        private val versionSpawnFails: Boolean = false,
     ) : GhCliGitHubClient(enabled = enabled, repo = repo) {
         val argvs = mutableListOf<List<String>>()
         override fun exec(argv: List<String>): ExecResult {
             argvs += argv
             return when {
+                argv.getOrNull(0) == "--version" ->
+                    if (versionSpawnFails) ExecResult.Failed("the `gh` CLI couldn't be launched (gh)")
+                    else ExecResult.Completed(versionExit, "gh version 2.40.0", if (versionExit == 0) "" else "boom")
                 argv.getOrNull(0) == "repo" -> ExecResult.Completed(repoExit, if (repoExit == 0) repoJson else "", if (repoExit == 0) "" else "gh: Not Found (HTTP 404)")
                 argv.getOrNull(0) == "pr" -> if (failPrSpawn) ExecResult.Failed("boom") else ExecResult.Completed(0, prJson, "")
                 argv.getOrNull(0) == "issue" -> ExecResult.Completed(0, issueJson, "")
@@ -94,6 +99,37 @@ class GhCliGitHubClientTest {
         val ok = assertInstanceOf(GitHubResult.Ok::class.java, result)
         assertTrue(ok.overview.pulls.isEmpty())
         assertEquals(1, ok.overview.issues.size) // issues still fetched
+    }
+
+    @Test
+    fun `availabilityError is null when gh --version succeeds`() {
+        assertEquals(null, FakeGh(enabled = true).availabilityError())
+    }
+
+    @Test
+    fun `availabilityError reports the problem when gh cannot be launched`() {
+        val problem = FakeGh(enabled = true, versionSpawnFails = true).availabilityError()
+        assertTrue(problem != null && problem.contains("couldn't be launched"), "got: $problem")
+    }
+
+    @Test
+    fun `availabilityError reports a non-zero gh --version exit`() {
+        val problem = FakeGh(enabled = true, versionExit = 1).availabilityError()
+        assertTrue(problem != null && problem.contains("exited 1"), "got: $problem")
+    }
+
+    @Test
+    fun `the startup availability check probes gh --version when enabled`() {
+        val client = FakeGh(enabled = true)
+        client.logStartupAvailability()
+        assertTrue(client.argvs.contains(listOf("--version")), "expected a gh --version probe at startup")
+    }
+
+    @Test
+    fun `the startup availability check is skipped entirely when disabled`() {
+        val client = FakeGh(enabled = false)
+        client.logStartupAvailability()
+        assertTrue(client.argvs.isEmpty(), "a disabled integration must not probe gh at startup")
     }
 
     @Test

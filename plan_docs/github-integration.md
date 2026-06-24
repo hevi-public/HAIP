@@ -65,6 +65,18 @@ part stays tiny — exactly like `LlmClient` / `ProcessLlmClient` / `LlmResponse
 - `github/GhCliGitHubClient.kt` — **Tier 1**, the `gh` adapter: spawning, stream capture, the deadline,
   error→`Unavailable` mapping, behind an overridable `exec` seam. Inert (no spawn) unless
   `aiforum.github.enabled=true`, so the bean is safe in every context and the test profile never shells out.
+
+### `gh` availability — UI vs log
+
+A missing/broken `gh` is reported two ways, deliberately split:
+
+- **UI** is driven by the *live per-call* result: the real fetch already spawns `gh`, so a missing binary
+  (ENOENT) or an auth failure (non-zero `gh repo view`) becomes `Unavailable` on the next page load — never
+  stale, and free (no extra probe). This is the source of truth.
+- **Log** adds the operator's view: a WARN on every per-call failure (the live signal), plus a **one-time
+  startup probe** (`gh --version`) that WARNs at boot — but only when the integration is **enabled**, so a
+  disabled feature stays silent. No per-call `gh --version` probe (wasteful) and no startup-only verdict
+  feeding the UI (would go stale if `gh` is installed, or its auth changes, after boot).
 - `web/GitHubController.kt` + `jte/github.kte` — the page; untrusted `gh` text (PR titles, author logins)
   is HTML-escaped via JTE `${}`, so it's display-only and not an injection vector.
 

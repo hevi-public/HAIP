@@ -1,6 +1,9 @@
 package com.aiforum.github
 
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.context.event.ApplicationReadyEvent
+import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -32,11 +35,40 @@ open class GhCliGitHubClient(
     @Value("\${aiforum.github.timeout-seconds:20}") private val timeoutSeconds: Long = 20,
 ) : GitHubClient {
 
+    private val log = LoggerFactory.getLogger(javaClass)
+
     /** The outcome of one `gh` invocation: it either ran (with an exit code + captured streams) or never
      *  started / timed out (the binary is missing, or it overran the deadline). */
     protected sealed interface ExecResult {
         data class Completed(val exitCode: Int, val stdout: String, val stderr: String) : ExecResult
         data class Failed(val message: String) : ExecResult
+    }
+
+    /**
+     * One-time startup heads-up (logged, never fatal): when the integration is ENABLED, probe `gh --version`
+     * and WARN if the binary isn't available, so an operator sees the misconfiguration at boot instead of
+     * only when someone opens /github. Gated on [enabled] so a disabled feature stays silent, and cheap
+     * (one probe at startup, not per request). It is NOT the source of truth for the UI — that stays the
+     * live per-call result, which can't go stale if `gh` is installed or its auth changes after boot. Auth
+     * is validated naturally on the first real fetch (a non-zero `gh repo view` surfaces the auth error).
+     */
+    @EventListener(ApplicationReadyEvent::class)
+    fun logStartupAvailability() {
+        if (!enabled) return
+        val problem = availabilityError()
+        if (problem != null) {
+            log.warn("GitHub integration is enabled but {} — /github will show an error until this is fixed.", problem)
+        } else {
+            log.info("GitHub integration enabled; `{}` is available.", command)
+        }
+    }
+
+    /** Probe `gh --version`; returns a human-readable problem string, or null when `gh` is available. */
+    fun availabilityError(): String? = when (val r = exec(listOf("--version"))) {
+        is ExecResult.Failed -> r.message
+        is ExecResult.Completed ->
+            if (r.exitCode == 0) null
+            else "`${command} --version` exited ${r.exitCode}: ${r.stderr.trim().ifBlank { "(no detail)" }}"
     }
 
     override fun overview(): GitHubResult {
@@ -52,21 +84,23 @@ open class GhCliGitHubClient(
 
         // The repo summary is the anchor of the page; if it can't be fetched there's nothing to show.
         val repoSummary = when (val r = run(listOf("repo", "view") + repoArg + listOf("--json", GitHubJson.REPO_FIELDS))) {
-            is ExecResult.Failed -> return GitHubResult.Unavailable(r.message)
+            is ExecResult.Failed -> return unavailable(r.message)
             is ExecResult.Completed ->
-                if (r.exitCode != 0) return GitHubResult.Unavailable(ghError("gh repo view", r.stderr))
-                else parseOr(null) { GitHubJson.parseRepo(r.stdout) } ?: return GitHubResult.Unavailable("Couldn't parse `gh repo view` output.")
+                if (r.exitCode != 0) return unavailable(ghError("gh repo view", r.stderr))
+                else parseOr(null) { GitHubJson.parseRepo(r.stdout) } ?: return unavailable("Couldn't parse `gh repo view` output.")
         }
 
         // PRs and issues are best-effort: if either list fails we still render the repo summary with an
-        // empty section rather than failing the whole page.
+        // empty section rather than failing the whole page (logged at debug — the page already renders).
         val pulls = when (val r = run(listOf("pr", "list") + repoFlag + listOf("--state", "open", "--limit", limit, "--json", GitHubJson.PR_FIELDS))) {
-            is ExecResult.Completed -> if (r.exitCode == 0) parseOr(emptyList()) { GitHubJson.parsePulls(r.stdout) } else emptyList()
-            is ExecResult.Failed -> emptyList()
+            is ExecResult.Completed -> if (r.exitCode == 0) parseOr(emptyList()) { GitHubJson.parsePulls(r.stdout) }
+                else { log.debug("gh pr list exited {}: {}", r.exitCode, r.stderr.trim()); emptyList() }
+            is ExecResult.Failed -> { log.debug("gh pr list failed: {}", r.message); emptyList() }
         }
         val issues = when (val r = run(listOf("issue", "list") + repoFlag + listOf("--state", "open", "--limit", limit, "--json", GitHubJson.ISSUE_FIELDS))) {
-            is ExecResult.Completed -> if (r.exitCode == 0) parseOr(emptyList()) { GitHubJson.parseIssues(r.stdout) } else emptyList()
-            is ExecResult.Failed -> emptyList()
+            is ExecResult.Completed -> if (r.exitCode == 0) parseOr(emptyList()) { GitHubJson.parseIssues(r.stdout) }
+                else { log.debug("gh issue list exited {}: {}", r.exitCode, r.stderr.trim()); emptyList() }
+            is ExecResult.Failed -> { log.debug("gh issue list failed: {}", r.message); emptyList() }
         }
 
         return GitHubResult.Ok(GitHubOverview(repoSummary, pulls, issues))
@@ -100,6 +134,13 @@ open class GhCliGitHubClient(
         } else {
             ExecResult.Completed(process.exitValue(), stdout, stderr)
         }
+    }
+
+    /** Log the failure (the missing log half of "UI and log") and return the user-facing off-state. The
+     *  disabled case doesn't route through here — that's expected, not a fault, so it isn't logged. */
+    private fun unavailable(reason: String): GitHubResult {
+        log.warn("/github is unavailable: {}", reason)
+        return GitHubResult.Unavailable(reason)
     }
 
     private fun <T> parseOr(fallback: T, parse: () -> T): T =
