@@ -1,0 +1,51 @@
+@import com.aiforum.web.RoutingStatsView
+@param stats: RoutingStatsView
+
+@template.layout(title = "Statistics", activeNav = "admin", content = @`
+    <div class="stats" data-page="admin-stats">
+        <h1 class="stats__title">Routing statistics</h1>
+        <p class="stats__lede">
+            How the <strong>Anyone</strong> dispatcher is doing. The headline is the <em>parse-miss rate</em>:
+            how often the model replied but named no roster member, so we silently widened to the whole room.
+        </p>
+
+        <section class="stats__headline" data-stat="parse-miss-rate">
+            <span class="stats__headline-value" data-parse-miss-rate="${stats.parseMissRate}">${stats.parseMissRate}</span>
+            <span class="stats__headline-label">parse-miss rate</span>
+            @if(!stats.hasParseMissRate)
+                <span class="stats__headline-note" data-parse-miss-rate-empty="true">no routing decisions recorded yet</span>
+            @endif
+        </section>
+
+        <table class="stats__table">
+            <thead>
+                <tr><th>Outcome</th><th>All time</th><th>Last 7 days</th></tr>
+            </thead>
+            <tbody>
+                @for(row in stats.outcomes)
+                    <tr class="stats__row" data-outcome="${row.outcome}">
+                        <td class="stats__row-label">${row.label}</td>
+                        <td class="stats__row-count" data-count="${row.outcome}=${row.allTime}">${row.allTime}</td>
+                        <td class="stats__row-7d" data-count-7d="${row.outcome}=${row.last7Days}">${row.last7Days}</td>
+                    </tr>
+                @endfor
+            </tbody>
+        </table>
+
+        <section class="stats__misses" data-stat="recent-misses">
+            <h2 class="stats__subtitle">Recent parse misses</h2>
+            @if(stats.recentMisses.isEmpty())
+                <p class="stats__misses-empty" data-misses-empty="true">No parse misses recorded — name-matching is landing.</p>
+            @else
+                <ul class="stats__misses-list">
+                    @for(miss in stats.recentMisses)
+                        <li class="stats__miss" data-miss-scope="${miss.scope}">
+                            <span class="stats__miss-reply">"${miss.reply}"</span>
+                            <span class="stats__miss-meta">${miss.scope} · ${miss.ago}</span>
+                        </li>
+                    @endfor
+                </ul>
+            @endif
+        </section>
+    </div>
+`)

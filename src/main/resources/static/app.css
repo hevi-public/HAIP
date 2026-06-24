@@ -1207,3 +1207,43 @@ mark.nav-hit {
   font-size: 10px;
   color: var(--faint);
 }
+
+/* Admin → Statistics (/admin/stats): routing-health numbers for the "Anyone" dispatcher. */
+.stats__title { margin: 0 0 4px; }
+.stats__lede { color: var(--muted); max-width: var(--prose); margin: 0 0 20px; }
+.stats__headline {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.stats__headline-value { font-size: 34px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.stats__headline-label { color: var(--muted); }
+.stats__headline-note { color: var(--faint); font-family: var(--mono); font-size: 11px; }
+.stats__table {
+  width: 100%;
+  max-width: 560px;
+  border-collapse: collapse;
+  margin-bottom: 28px;
+}
+.stats__table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  background: var(--strip);
+  padding: 6px 12px;
+}
+.stats__table td { padding: 8px 12px; border-bottom: 1px solid var(--line-dotted); }
+.stats__row-count, .stats__row-7d { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+.stats__subtitle { font-size: 14px; margin: 0 0 8px; }
+.stats__misses-empty { color: var(--faint); font-family: var(--mono); font-size: 12px; }
+.stats__misses-list { list-style: none; padding: 0; margin: 0; }
+.stats__miss { padding: 8px 0; border-bottom: 1px dotted var(--line-dotted); }
+.stats__miss-reply { color: var(--ink); }
+.stats__miss-meta { display: block; color: var(--faint); font-family: var(--mono); font-size: 11px; margin-top: 2px; }

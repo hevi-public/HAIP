@@ -365,7 +365,7 @@ class GenerationService(
         } else {
             comments.threadComments(threadId)
         }
-        return router.pick(roster, withOpeningPost(threadId, context)).map { it.id }
+        return router.pick(roster, withOpeningPost(threadId, context), routingScope).map { it.id }
     }
 
     /** Resolve personas and assemble the (shared) context once, minting a cancellable id per persona. */

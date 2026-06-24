@@ -2,6 +2,7 @@ package com.aiforum.service
 
 import com.aiforum.domain.Comment
 import com.aiforum.domain.context.ContextAssembler
+import com.aiforum.dto.ScopeMode
 import com.aiforum.llm.CancellationToken
 import com.aiforum.llm.LlmClient
 import com.aiforum.llm.LlmRequest
@@ -56,19 +57,50 @@ import java.time.Duration
  *     reasoning about the topic.
  */
 @Component
-class PersonaRouter(private val llm: LlmClient) {
+class PersonaRouter(
+    private val llm: LlmClient,
+    // Where each routing outcome is recorded (plan_docs/persona-routing-observability.md). Defaulted to
+    // the no-op so the Tier-2 `PersonaRouter(llm)` constructions stay metrics-free; Spring injects the
+    // real persisting adapter (RoutingEventRepository). A pure addition — it never changes the pick.
+    private val metrics: RoutingMetrics = NoOpRoutingMetrics,
+) {
 
-    /** Pick the persona(s) that should reply to [context] from [roster]; never returns empty for a non-empty roster. */
-    fun pick(roster: List<Persona>, context: List<Comment>): List<Persona> {
+    /**
+     * Pick the persona(s) that should reply to [context] from [roster]; never returns empty for a
+     * non-empty roster. [routingScope] is recorded alongside the outcome (whole-topic vs this-branch) for
+     * later drill-down; it does not affect the pick (the caller already scoped [context]).
+     */
+    fun pick(
+        roster: List<Persona>,
+        context: List<Comment>,
+        routingScope: ScopeMode = ScopeMode.WHOLE_THREAD,
+    ): List<Persona> {
         // A lone persona is the only possible answer — don't spend an LLM call to "choose" it.
-        if (roster.size <= 1) return roster
+        if (roster.size <= 1) {
+            metrics.record(RoutingOutcome.SINGLE_PERSONA, roster.size, roster.size, routingScope, null)
+            return roster
+        }
         val reply = runCatching {
             llm.generate(
                 LlmRequest(ContextAssembler.assemble(systemPrompt(roster), context), ROUTER, TIMEOUT),
                 CancellationToken(),
             ).text
-        }.getOrNull() ?: return roster
-        return parseChosen(reply, roster).ifEmpty { roster }
+        }.getOrNull()
+        if (reply == null) {
+            // The seam errored/timed out — fall back to the whole room, but record it as seam health, not
+            // a parse miss, so a flaky model doesn't inflate the parse-miss rate.
+            metrics.record(RoutingOutcome.FAILED_GENERATION, roster.size, roster.size, routingScope, null)
+            return roster
+        }
+        val chosen = parseChosen(reply, roster)
+        if (chosen.isEmpty()) {
+            // The model answered but named no one we recognise: the failure mode firing. Keep the raw reply
+            // so the stats page can show *why* matching missed.
+            metrics.record(RoutingOutcome.WIDENED_NO_MATCH, roster.size, roster.size, routingScope, reply)
+            return roster
+        }
+        metrics.record(RoutingOutcome.MATCHED, roster.size, chosen.size, routingScope, null)
+        return chosen
     }
 
     companion object {
