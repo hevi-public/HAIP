@@ -77,7 +77,11 @@ class GenerationService(
         val persona: PersonaRepository.Persona,
         val depth: Int,
         val budget: Int,
-        val context: PromptContext,
+        // Context is assembled LAZILY at settle time, not when the plan is minted. Sequential fan-out
+        // persists each persona's reply before the next settles, so re-reading the thread here lets a
+        // later persona in the round see the earlier ones' replies (see [roundContext]) — the room reads
+        // as a conversation rather than N blind takes of the same opening snapshot.
+        val contextOf: () -> PromptContext,
     )
 
     /**
@@ -241,7 +245,9 @@ class GenerationService(
                     persona = persona,
                     depth = leaf.depth + 1,
                     budget = DepthBudget.childBudget(leaf.depthBudget),
-                    context = assembleContext(threadId, persona.systemPrompt, withOpeningPost(threadId, context), targetId = leaf.id),
+                    // autoGrow keeps its own per-round snapshot ([context]); each leaf gets a distinct
+                    // persona/target, so it doesn't share the summon round's settle-time re-read.
+                    contextOf = { assembleContext(threadId, persona.systemPrompt, withOpeningPost(threadId, context), targetId = leaf.id) },
                 )
                 created += settleOne(plan, CancellationToken())
             }
@@ -368,7 +374,7 @@ class GenerationService(
         return router.pick(roster, withOpeningPost(threadId, context), routingScope).map { it.id }
     }
 
-    /** Resolve personas and assemble the (shared) context once, minting a cancellable id per persona. */
+    /** Resolve personas into cancellable plans; each carries a settle-time context supplier (§5). */
     private fun planGeneration(
         threadId: String,
         parentId: String?,
@@ -380,31 +386,58 @@ class GenerationService(
         val baseDepth = parent?.let { it.depth + 1 } ?: 0
         // A reply continues its parent branch's depth budget (§4); a top-level reply starts unfuelled.
         val baseBudget = DepthBudget.childBudget(parent?.depthBudget ?: 0)
-        // The context differentiator (§5): branch-only = root→parent ancestor path (recursive CTE);
-        // whole-thread = the full tree. Branch-only excludes siblings unless the owner opts them in,
-        // in which case the reply target's siblings (the other children of its parent) are added.
-        val contextComments = if (scope == ScopeMode.BRANCH_ONLY && parentId != null) {
-            val path = comments.ancestorPath(parentId)
-            if (includeSiblings) {
-                (path + comments.childrenOf(parent?.parentId)).distinctBy { it.id }
-            } else {
-                path
-            }
-        } else {
-            comments.threadComments(threadId)
-        }
-        return personaIds.map { personaId ->
+        // Mint every reply's id up front so each persona's context can fold in the OTHERS in this round
+        // (the ones already settled by the time it generates) — but only this round's replies, never the
+        // target's pre-existing children.
+        val roundIds = personaIds.map { UUID.randomUUID().toString() }
+        return personaIds.mapIndexed { i, personaId ->
             val persona = personas.find(personaId) ?: error("unknown persona $personaId")
             GenPlan(
-                id = UUID.randomUUID().toString(),
+                id = roundIds[i],
                 threadId = threadId,
                 parentId = parentId,
                 persona = persona,
                 depth = baseDepth,
                 budget = baseBudget,
-                context = assembleContext(threadId, persona.systemPrompt, withOpeningPost(threadId, contextComments), targetId = parentId),
+                // Re-read at settle time so a later persona in the round sees the earlier ones' replies.
+                contextOf = {
+                    val live = roundContext(threadId, parentId, parent, scope, includeSiblings, roundIds)
+                    assembleContext(threadId, persona.systemPrompt, withOpeningPost(threadId, live), targetId = parentId)
+                },
             )
         }
+    }
+
+    /**
+     * The live context for one persona at settle time (§5). Re-read per persona so sequential fan-out
+     * becomes a conversation: a later persona in the round sees the earlier ones' replies, which are
+     * POSTED rows by the time it settles. The scope differentiator stays — branch-only = root→parent
+     * ancestor path (recursive CTE), whole-thread = the full tree, with the reply target's siblings folded
+     * in for branch-only only when the owner opts in. On TOP of that, this round's OWN already-posted
+     * replies ([roundIds]) are injected in EVERY scope — branch-only's ancestor path would otherwise
+     * exclude these same-round siblings. We fold in only the round's minted ids (not every child of the
+     * target), so a pre-existing child of the reply target stays out of a branch-only view. Non-POSTED
+     * nodes (failed/cancelled drafts, including a sibling that just failed earlier in this round) are
+     * dropped so an empty marker never enters the transcript.
+     */
+    private fun roundContext(
+        threadId: String,
+        parentId: String?,
+        parent: Comment?,
+        scope: ScopeMode,
+        includeSiblings: Boolean,
+        roundIds: List<String>,
+    ): List<Comment> {
+        val base = if (scope == ScopeMode.BRANCH_ONLY && parentId != null) {
+            val path = comments.ancestorPath(parentId)
+            val withTargetSiblings = if (includeSiblings) path + comments.childrenOf(parent?.parentId) else path
+            // The round's earlier replies aren't on the ancestor path; fold them in so even a narrowed
+            // view reads as a live exchange. Whole-thread's full tree already contains them.
+            withTargetSiblings + roundIds.mapNotNull { comments.findById(it) }
+        } else {
+            comments.threadComments(threadId)
+        }
+        return base.filter { it.state == GenerationState.POSTED }.distinctBy { it.id }
     }
 
     /**
@@ -462,7 +495,7 @@ class GenerationService(
     /** Run one persona's reply against the seam with [token], classify any failure, and persist it. */
     private fun settleOne(plan: GenPlan, token: CancellationToken): ReplyView {
         val comment = try {
-            val resp = llm.generate(LlmRequest(plan.context, PersonaRef(plan.persona.id, plan.persona.name, plan.persona.model), timeout), token)
+            val resp = llm.generate(LlmRequest(plan.contextOf(), PersonaRef(plan.persona.id, plan.persona.name, plan.persona.model), timeout), token)
             resp.reasoningLeak?.let { log.warn("reasoning leak ({}) in reply {} by persona {}", it, plan.id, plan.persona.id) }
             Comment(plan.id, plan.threadId, plan.parentId, plan.persona.id, resp.text, GenerationState.POSTED, null, plan.depth, depthBudget = plan.budget, reasoningLeak = resp.reasoningLeak)
         } catch (e: Throwable) {
