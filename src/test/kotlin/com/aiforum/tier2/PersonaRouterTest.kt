@@ -63,6 +63,25 @@ class PersonaRouterTest {
     }
 
     @Test
+    fun `a roomful fan-out spans the agreeableness axis instead of three alike`() {
+        // Four named — the cap is three. Without diversity we'd take the first three (Lead, Echo, Bui);
+        // with it the redundant neutral (Echo) yields to the contrarian (Vex) so the room has friction.
+        fun dialed(name: String, agreeableness: Int) =
+            Persona(name, name, "$name's specialty", "You are $name.", dials = mapOf("agreeableness" to agreeableness))
+        val diverseRoster = listOf(
+            dialed("Lead", 5),
+            dialed("Echo", 5),
+            dialed("Bui", 9),
+            dialed("Vex", 1),
+        )
+        val router = PersonaRouter(CannedLlm("Lead, Echo, Bui, Vex"))
+
+        val chosen = router.pick(diverseRoster, emptyList()).map { it.name }
+
+        assertEquals(listOf("Lead", "Bui", "Vex"), chosen)
+    }
+
+    @Test
     fun `falls back to the whole room when nothing parses`() {
         val router = PersonaRouter(CannedLlm("Hmm, hard to say."))
 
