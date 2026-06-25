@@ -50,6 +50,11 @@
          deferred; toggles data-rail-left/right on <html>, event-delegated so it serves the header
          group and the in-content button alike. Initial state is set by the inline script above. --%>
     <script type="module" src="/layout.js"></script>
+    <%-- Honest htmx failure handling (T1.4): a global htmx:responseError / htmx:sendError listener that
+         re-enables the stuck hx-disabled-elt control and surfaces a non-blocking toast, so a failed
+         poll / Regenerate / +1 never leaves a spinner spinning. Pairs with HtmxErrorAdvice (the server
+         error fragment). ES module, deferred; the decision layer (htmx-error-core) is unit-tested. --%>
+    <script type="module" src="/htmx-error.js"></script>
 </head>
 <body>
     @template.fragments.siteHeader(activeNav = activeNav)

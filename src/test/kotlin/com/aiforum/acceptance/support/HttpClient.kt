@@ -46,6 +46,20 @@ class HttpClient(private val env: Environment) {
             .exchange { _, res -> capture(res) }
     }
 
+    /**
+     * Like [postForm] but stamps the `HX-Request: true` header htmx sets on every request — so a step can
+     * exercise the htmx-only error path (HtmxErrorAdvice returns a fragment for these, the Whitelabel page
+     * for the rest). Mirrors the single header the advice branches on; nothing else about the call changes.
+     */
+    fun postFormHtmx(path: String, form: Map<String, Any?>): ResponseEntity<String> {
+        val map = LinkedMultiValueMap<String, String>()
+        form.forEach { (k, v) -> if (v != null) map.add(k, v.toString()) }
+        return client.post().uri(url(path))
+            .header("HX-Request", "true")
+            .contentType(MediaType.APPLICATION_FORM_URLENCODED).body(map)
+            .exchange { _, res -> capture(res) }
+    }
+
     fun post(path: String): ResponseEntity<String> =
         client.post().uri(url(path)).exchange { _, res -> capture(res) }
 

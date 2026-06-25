@@ -1,0 +1,16 @@
+@param status: Int = 500
+@param message: String = "Something went wrong on the server."
+<%-- The honest-failure fragment (T1.4): an uncaught exception on an htmx request lands here instead of
+     the Whitelabel error PAGE, which htmx would otherwise swap whole into a fragment slot and corrupt
+     the view. HtmxErrorAdvice renders this (with the matching HTTP status) only for HX-Request calls;
+     a non-htmx request keeps Boot's default page. It's a bare fragment — no layout/<head> — so htmx
+     drops it cleanly into the swap target. The stable data-error-fragment hook is what the acceptance
+     suite asserts on (per the jte-spring-kotlin data-* convention), never the visible copy/CSS. The
+     client listener (htmx-error.js) ALSO surfaces a notice + re-enables the stuck control, so even a
+     plain non-2xx with no body never leaves a spinner spinning. --%>
+<div class="error-notice" role="alert" aria-live="assertive"
+     data-error-fragment="server"
+     data-error-status="${status}">
+    <span class="error-notice__icon" aria-hidden="true">⚠</span>
+    <span class="error-notice__text">${message}</span>
+</div>

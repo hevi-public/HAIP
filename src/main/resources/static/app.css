@@ -1054,6 +1054,33 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Honest failure UX (T1.4). The inline error fragment HtmxErrorAdvice swaps into a fragment slot when
+   an htmx request errors (replacing what a corrupting Whitelabel page would have been), plus the
+   self-dismissing toasts htmx-error.js raises so a stuck control + silence never happens. Styled off
+   --clay (the existing danger token); the data-* hooks the acceptance suite reads are untouched. */
+.error-notice {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 10px 12px; margin: 6px 0;
+  border: 1px solid var(--clay); border-left-width: 3px; border-radius: var(--r, 6px);
+  background: var(--card); color: var(--ink);
+  font-size: 13px; line-height: 1.4;
+}
+.error-notice__icon { flex: none; color: var(--clay); }
+
+.error-toasts {
+  position: fixed; right: 16px; bottom: 16px; z-index: 1000;
+  display: flex; flex-direction: column; gap: 8px;
+  max-width: min(360px, calc(100vw - 32px)); pointer-events: none;
+}
+.error-toast {
+  pointer-events: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--clay); border-left-width: 3px; border-radius: var(--r, 6px);
+  background: var(--card); color: var(--ink);
+  font-size: 13px; line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+}
+
 /* ------------------------------------------------------------------ mobile */
 @media (max-width: 600px) {
   .container { padding: 14px 12px 32px; }
