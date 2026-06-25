@@ -180,6 +180,32 @@ A fragment whose composer must keep working *after* a swap needs whatever its co
 those through `fragments/replyList` → `fragments/replyNode` as **nullable-default** params so a render
 path that lacks them (e.g. retry) still compiles and just omits the composer.
 
+**The error-fragment view for failed htmx requests (`fragments/errorNotice.kte`).** htmx swaps whatever
+a request returns into the fragment's target, so an *uncaught* exception that returns Boot's Whitelabel
+error **page** would drop a whole `<html>` document into a fragment slot and corrupt the view (and the
+disabled control + spinner would never re-enable). So a small bare fragment is rendered instead:
+
+```kotlin
+@param status: Int = 500
+@param message: String = "Something went wrong on the server."
+<div class="error-notice" role="alert" aria-live="assertive"
+     data-error-fragment="server"
+     data-error-status="${status}">
+  <span class="error-notice__icon" aria-hidden="true">⚠</span>
+  <span class="error-notice__text">${message}</span>
+</div>
+```
+
+It's a **bare fragment** — no `layout.kte`, no `<head>` — so htmx drops it cleanly into the swap target
+(the "only full pages wrap in the layout" rule above). `web/HtmxErrorAdvice` (a `@ControllerAdvice`)
+renders it: it returns the view name `"fragments/errorNotice"` (resolved by the JTE ViewResolver like
+any other) but **sets a real HTTP status on the response first** (502/503/504/500 per exception) rather
+than letting the view name render a bare 200 — the non-2xx is what fires the client's
+`htmx:responseError`, re-enables the stuck control, and lets the acceptance suite read the status. The
+stable **`data-error-fragment="server"` hook** — not the copy or the CSS — is what the steps assert on,
+per the data-* convention below; the advice only fires for `HX-Request` calls, so a non-htmx request
+keeps Boot's default page (see [[cucumber-spring-bdd]] for the failure-path acceptance wiring).
+
 ## Static assets & styling (`static/`, `app.css`)
 
 The visual layer is hand-written CSS + a little vanilla JS served as **static resources** — no build
@@ -219,6 +245,7 @@ styling. Standardize on:
 | `data-retry-after` | seconds, present only for rate-limit |
 | `data-vote-count` | the firewalled `+1` tally (visible to owner) |
 | `data-scope` | `BRANCH_ONLY` / `WHOLE_THREAD` on the composer (the `ScopeMode` enum name) |
+| `data-error-fragment` | `server` on the htmx error notice (`fragments/errorNotice.kte`); the hook the failure-path steps assert on |
 
 This keeps the same `.feature` files re-pointable at a Playwright layer later — the hooks survive a
 visual redesign.

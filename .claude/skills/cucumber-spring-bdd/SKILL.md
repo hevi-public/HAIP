@@ -278,6 +278,40 @@ Scenario: Under the test profile the app uses the test DB and disables backups
 Assert these via a read-only diagnostics endpoint exposed only under `test`, or by injecting the
 config beans into the step class.
 
+## The htmx failure-path scenario (assert the fragment, not a page)
+
+The honest-failure UX (T1.4 — see [[jte-spring-kotlin]]) needs an acceptance test that an **uncaught
+exception on an htmx request** yields the inline error *fragment*, not Boot's Whitelabel *page*. The
+wiring has four moving parts, all reusing the existing seams:
+
+- **Stamp the `HX-Request` header.** htmx sets `HX-Request: true` on every call, and `HtmxErrorAdvice`
+  branches on exactly that header. So `support/HttpClient` grows a `postFormHtmx(path, form)` —
+  identical to `postForm` but adding `.header("HX-Request", "true")` — and the same endpoint is hit with
+  plain `postForm` to exercise the non-htmx branch. One header is the whole difference between the two
+  paths; keep the helper that thin so a future Playwright swap touches one file.
+- **Program the failure at the single LLM seam — no second mock.** The surface is the persona
+  prompt-compose **preview** (`POST /personas/compose`), whose synchronous `llm.generate` is unguarded
+  by design, so an enqueued failure escapes uncaught to the `@ControllerAdvice`. Reuse the existing
+  `Given the LLM will fail with a {failureMode}` step (`ScriptableLlmClient`) — the htmx steps only
+  drive the request and assert the response; they enqueue nothing new.
+- **Assert on the stable hook, and on the *absence* of a page shell.** "the response is the inline error
+  fragment" checks `data-error-fragment="server"` via the `Html` probe (never the copy). "the response
+  is not a whole error page" asserts the body contains **no `<html>` / `<!DOCTYPE>`** — a bare fragment
+  has no document shell, so its absence proves htmx got a swap-safe fragment, not a page that would
+  corrupt the target. A separate scenario maps a rate-limit to its own status (503 vs 502) while still
+  asserting the fragment, and the non-htmx scenario asserts the fragment is **not** present (Boot's
+  default handling is unchanged).
+
+The gotcha worth pinning here (it dictates how the advice reads the header):
+
+> **`@RequestHeader` does NOT bind as an `@ExceptionHandler` argument.** Spring's argument resolution
+> for exception handlers is narrower than for normal controller methods — `@RequestHeader` isn't among
+> the supported parameters, so a handler that declares `@RequestHeader("HX-Request") hx: String?` won't
+> populate it. Read the header off the **`HttpServletRequest`** instead
+> (`request.getHeader("HX-Request")`), which *is* a supported `@ExceptionHandler` arg. (Same story for
+> setting the status: take `HttpServletResponse` as an arg and set `response.status` directly, since
+> returning a bare view name renders 200 and hides the failure from `htmx:responseError`.)
+
 ## Common failure points
 
 - **A glue class annotated `@Component`** → cucumber-spring refuses to start ("marking it as a candidate
