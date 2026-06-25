@@ -113,6 +113,29 @@ class PersonaRepositoryTest {
     }
 
     @Test
+    fun `two personas with the same name get distinct slugs and each resolves by slug`() {
+        // V16 makes persona.slug UNIQUE; insert suffixes collisions (ada, ada-2, ada-3) so two
+        // same-named personas never collide on their profile link and findBySlug resolves each.
+        personas.insert("ada1", "Ada", "first")
+        personas.insert("ada2", "Ada", "second")
+        personas.insert("ada3", "Ada", "third")
+
+        assertEquals("ada", personas.find("ada1")?.slug, "the first Ada keeps the bare slug")
+        assertEquals("ada-2", personas.find("ada2")?.slug)
+        assertEquals("ada-3", personas.find("ada3")?.slug)
+
+        assertEquals("ada1", personas.findBySlug("ada")?.id)
+        assertEquals("ada2", personas.findBySlug("ada-2")?.id)
+        assertEquals("ada3", personas.findBySlug("ada-3")?.id)
+    }
+
+    @Test
+    fun `a sole persona keeps its bare slug with no suffix`() {
+        personas.insert("ada", "Ada", "only")
+        assertEquals("ada", personas.find("ada")?.slug, "a non-colliding insert is unsuffixed")
+    }
+
+    @Test
     fun `a persona seeded with the pre-V10 columns reads back empty abilities and dials`() {
         // The DEFAULT '[]' / '{}' the migration sets must deserialize to empty collections.
         jdbc.update(
