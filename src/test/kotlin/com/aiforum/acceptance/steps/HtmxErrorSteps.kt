@@ -12,19 +12,16 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.springframework.http.ResponseEntity
 
 /**
- * The honest-failure-UX acceptance steps (T1.4). The model failure itself is enqueued by the existing
- * `the LLM will fail with a {failureMode}` step (GenerationSteps) — the single LlmClient seam — so these
- * steps only drive the htmx-vs-not request and assert on the corrected contract: a SWAPPABLE error
- * fragment (stable data-error-fragment hook, per the jte-spring-kotlin convention) at HTTP 200, plus the
- * out-of-band failure signal htmx will actually deliver — the HX-Trigger response header (app:error).
- *
- * Why 200 + HX-Trigger: htmx 2.0.6's default responseHandling maps [45].. to swap:false, so a fragment
- * returned at a non-2xx is fetched then DISCARDED (never swapped). Returning it at 200 makes htmx swap
- * it; the real status rides the HX-Trigger header, which htmx processes regardless of status code.
+ * The honest-failure-UX acceptance steps (T1.4) — toast-only contract. The model failure itself is
+ * enqueued by the existing `the LLM will fail with a {failureMode}` step (GenerationSteps) — the single
+ * LlmClient seam — so these steps only drive the htmx-vs-not request and assert on the contract: a mapped
+ * NON-2xx status with an empty body (htmx swaps nothing on a non-2xx, so nothing lands in the compose
+ * field) plus the out-of-band failure signal — the HX-Trigger response header (app:error) the client
+ * toasts off. There is no fragment any more.
  *
  * The surface is the persona prompt-compose PREVIEW (POST /personas/compose): its synchronous LLM call
  * (PromptComposer → llm.generate) is unguarded by design, so an enqueued failure escapes uncaught to
- * HtmxErrorAdvice — exactly the Whitelabel-in-a-fragment-slot bug this task fixes.
+ * HtmxErrorAdvice — exactly the Whitelabel-in-the-textarea bug this task fixes.
  */
 class HtmxErrorSteps(
     private val world: ScenarioWorld,
@@ -49,31 +46,18 @@ class HtmxErrorSteps(
         world.lastHxTrigger = resp.headers.getFirst("HX-Trigger")
     }
 
-    @Then("the response is the inline error fragment")
-    fun responseIsErrorFragment() {
-        assertTrue(
-            Html.hasAttr(world.lastBody ?: "", "data-error-fragment", "server"),
-            "expected the inline error fragment (data-error-fragment=\"server\") in:\n${world.lastBody}",
-        )
-    }
-
-    @Then("the response is not the inline error fragment")
-    fun responseIsNotErrorFragment() {
-        assertFalse(
-            Html.hasAttr(world.lastBody ?: "", "data-error-fragment", "server"),
-            "expected NO inline error fragment in:\n${world.lastBody}",
-        )
-    }
-
-    @Then("the response is not a whole error page")
-    fun responseIsNotWholePage() {
+    @Then("the response has no error fragment body")
+    fun responseHasNoFragmentBody() {
         val body = world.lastBody ?: ""
-        // A bare fragment has no document shell; the Whitelabel page (or any full page via layout.kte)
-        // does. Asserting the absence of <html>/<!DOCTYPE> proves htmx gets a swap-safe fragment, not a
-        // page that would corrupt the target.
+        // The toast-only redesign removed the fragment entirely: no data-error-fragment hook, and the
+        // htmx response body is empty (the failure rides the HX-Trigger header, not a swapped body).
         assertFalse(
-            body.contains("<html", ignoreCase = true) || body.contains("<!DOCTYPE", ignoreCase = true),
-            "expected a bare fragment (no <html>/<!DOCTYPE>), but got a whole page:\n$body",
+            Html.hasAttr(body, "data-error-fragment", "server"),
+            "expected NO error fragment body (the toast-only redesign dropped it), but found one in:\n$body",
+        )
+        assertTrue(
+            body.isBlank(),
+            "expected an empty htmx error body (nothing to swap), but got:\n$body",
         )
     }
 

@@ -1,51 +1,130 @@
 /*
- * htmx-error.js — DOM glue for honest htmx failure handling (T1.4). The notice copy lives in
- * htmx-error-core.mjs and is unit-tested; this file is the (manually-verified) wiring. Loaded directly
- * as an ES module from layout.kte (<script type="module" src="/htmx-error.js">), like the other glue.
+ * htmx-error.js — DOM glue for honest htmx failure handling (T1.4). The wording (noticeFor) and the
+ * sticky toast store (add/dismiss/list + cap + de-dupe over an injectable storage) live in
+ * htmx-error-core.mjs and are unit-tested; this file is the thin, manually-verified wiring: real
+ * localStorage, the DOM, the ✕ dismiss button, and load-time rehydration. Loaded directly as an ES
+ * module from layout.kte (<script type="module" src="/htmx-error.js">), like the other glue.
  *
- * htmx 2.0.6 already re-enables hx-disabled-elt controls and clears hx-indicator spinners on every
- * terminal request path (verified against the vendored dist/htmx.js), so there is nothing to re-enable
- * here. What htmx gives NO default for is user-visible feedback that a request failed — so this raises a
- * non-blocking toast for the two surfaces that need it:
- *   - app:error      — the server's out-of-band failure signal (HX-Trigger from HtmxErrorAdvice). The
- *                      error fragment itself is swapped into the target at HTTP 200; this toast is the
- *                      always-visible companion (the fragment slot may be off-screen). detail = {status}
- *                      only — the human copy lives in the fragment body, since HX-Trigger header values
- *                      must be ASCII (no em dashes), so the toast is worded from the status alone.
- *   - htmx:sendError — the request never reached the server (network failure): no response, nothing
- *                      swaps, so the fragment can't speak for itself and the toast is the only feedback.
+ * Toast-only by design (verified against vendored htmx 2.0.6): on a non-2xx htmx swaps nothing, so the
+ * server returns the real error status + an app:error HX-Trigger and NOTHING lands in the compose field;
+ * htmx also re-enables hx-disabled-elt controls itself, so there is no stuck control to fix. The toast is
+ * the sole, honest feedback, and it's STICKY (no auto-dismiss) + persisted across refresh until the owner
+ * clicks ✕. Two surfaces raise one:
+ *   - app:error      — the server's failure signal. detail = {status} only (HX-Trigger header values must
+ *                      be ASCII, no em dashes), so the toast is worded from the status alone.
+ *   - htmx:sendError — the request never reached the server (network failure): no response, no swap.
  */
-import { noticeFor, SEND_ERROR, ERROR_EVENT } from "./htmx-error-core.mjs";
+import { noticeFor, addToast, dismissToast, listToasts, SEND_ERROR, ERROR_EVENT } from "./htmx-error-core.mjs";
 
 (function () {
-  // A self-dismissing toast in a shared live region — non-blocking, never steals focus. role="status"
-  // already implies aria-live="polite", so we don't set aria-live too (a contradictory explicit value
-  // would override the role's politeness). Created lazily on first error.
-  function toast(message) {
-    var region = document.querySelector("[data-error-toasts]");
-    if (!region) {
-      region = document.createElement("div");
-      region.setAttribute("data-error-toasts", "");
-      region.className = "error-toasts";
-      region.setAttribute("role", "status");
-      document.body.appendChild(region);
+  var STORAGE_KEY = "haip.errorToasts";
+
+  // The injectable storage the core writes through — backed by localStorage, degrading to in-memory if
+  // it's unavailable (private mode / quota) so a toast still shows for the session.
+  var memory = null;
+  var storage = {
+    read: function () {
+      try {
+        var raw = window.localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        return memory || [];
+      }
+    },
+    write: function (toasts) {
+      memory = toasts;
+      try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toasts)); } catch (e) { /* keep memory */ }
+    },
+  };
+
+  // Monotonic id for new toasts — unique within a page session; combined with content so a rehydrated
+  // toast keeps its stored id (the core preserves ids; only freshly-added toasts get a new one here).
+  var seq = 0;
+  function nextId() { return "t" + Date.now() + "-" + (seq++); }
+
+  function region() {
+    var el = document.querySelector("[data-error-toasts]");
+    if (!el) {
+      el = document.createElement("div");
+      el.setAttribute("data-error-toasts", "");
+      el.className = "error-toasts";
+      // role="status" implies aria-live="polite"; we don't set aria-live too (a contradictory explicit
+      // value would override the role's politeness).
+      el.setAttribute("role", "status");
+      document.body.appendChild(el);
     }
-    var note = document.createElement("div");
-    note.className = "error-toast";
-    note.setAttribute("data-error-toast", "");
-    note.textContent = message;
-    region.appendChild(note);
-    setTimeout(function () { note.remove(); }, 6000);
+    return el;
   }
 
-  // The server-error signal carries the mapped status in its detail; word the toast from it.
+  // Render one toast row (text + ✕). Idempotent per id, so a re-render (rehydrate) won't duplicate it.
+  function renderOne(rec) {
+    if (document.querySelector('[data-error-toast="' + cssEscape(rec.id) + '"]')) return;
+    var note = document.createElement("div");
+    note.className = "error-toast";
+    note.setAttribute("data-error-toast", rec.id);
+
+    var text = document.createElement("span");
+    text.className = "error-toast__text";
+    text.textContent = rec.message;
+    note.appendChild(text);
+
+    var close = document.createElement("button");
+    close.type = "button";
+    close.className = "error-toast__dismiss";
+    close.setAttribute("aria-label", "Dismiss");
+    close.setAttribute("data-error-toast-dismiss", rec.id);
+    close.textContent = "✕"; // ✕
+    close.addEventListener("click", function () { remove(rec.id); });
+    note.appendChild(close);
+
+    region().appendChild(note);
+  }
+
+  function remove(id) {
+    dismissToast(storage, id);
+    var node = document.querySelector('[data-error-toast="' + cssEscape(id) + '"]');
+    if (node) node.remove();
+  }
+
+  // Add a toast for an error, persist it (with cap + de-dupe in the core), and render whatever the store
+  // now holds — so a de-duped/collapsed toast updates in place rather than stacking.
+  function raise(kind, status) {
+    var rec = { id: nextId(), kind: kind, status: status, message: noticeFor(kind, status) };
+    addToast(storage, rec);
+    rerender();
+  }
+
+  // Reconcile the DOM to the stored list: render any missing, drop any DOM rows no longer stored.
+  function rerender() {
+    var toasts = listToasts(storage);
+    var ids = {};
+    toasts.forEach(function (t) { ids[t.id] = true; renderOne(t); });
+    var rows = document.querySelectorAll("[data-error-toast]");
+    for (var i = 0; i < rows.length; i++) {
+      var id = rows[i].getAttribute("data-error-toast");
+      if (!ids[id]) rows[i].remove();
+    }
+  }
+
+  function cssEscape(s) {
+    return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/["\\]/g, "\\$&");
+  }
+
+  // app:error: the server's failure signal carries the mapped status in its detail.
   document.body.addEventListener(ERROR_EVENT, function (e) {
     var status = e.detail && typeof e.detail.status === "number" ? e.detail.status : null;
-    toast(noticeFor(ERROR_EVENT, status));
+    raise(ERROR_EVENT, status);
   });
 
-  // A request that never left (no response, no swap): the toast is the only feedback htmx leaves room for.
+  // htmx:sendError: the request never left (no response, no swap) — the toast is the only feedback.
   document.body.addEventListener(SEND_ERROR, function () {
-    toast(noticeFor(SEND_ERROR, null));
+    raise(SEND_ERROR, null);
   });
+
+  // Rehydrate any toasts the owner hadn't dismissed before the last refresh.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", rerender);
+  } else {
+    rerender();
+  }
 })();
