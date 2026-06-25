@@ -1,10 +1,13 @@
 package com.aiforum.tier1
 
+import ch.qos.logback.classic.Level
 import com.aiforum.images.DescribeRequest
 import com.aiforum.images.OpenAiImageDescriber
 import com.aiforum.images.VisionUnavailableException
+import com.aiforum.testsupport.LogCapture
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpMethod
@@ -16,15 +19,17 @@ import org.springframework.test.web.client.match.MockRestRequestMatchers.request
 import org.springframework.test.web.client.response.MockRestResponseCreators.withServerError
 import org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess
 import org.springframework.web.client.RestClient
-import org.springframework.web.client.RestClientException
 import java.util.Base64
 
 /**
  * Tier-1: the genuinely un-fakeable plumbing of [OpenAiImageDescriber] — the OpenAI vision request shape
  * (a single user turn whose content is [text-instruction, base64 data-URI image block]), the inline
- * response parse (`choices.firstOrNull().message.content`), and the two failure paths that surface
- * [VisionUnavailableException]. HTTP is mocked at the one seam via a `MockRestServiceServer` bound to the
- * injected builder, exactly as OpenAiLlmClientTest does for the generation client.
+ * response parse (`choices.firstOrNull().message.content`), and the three failure paths that surface
+ * [VisionUnavailableException]: vision disabled, no caption (empty choices), and a non-2xx transport
+ * failure (mapped via the describer's `onStatus` handler so an endpoint outage degrades to a FAILED
+ * caption at the service seam rather than propagating a 500). HTTP is mocked at the one seam via a
+ * `MockRestServiceServer` bound to the injected builder, exactly as OpenAiLlmClientTest does for the
+ * generation client.
  */
 @Tag("tier1")
 class OpenAiImageDescriberTest {
@@ -93,16 +98,22 @@ class OpenAiImageDescriberTest {
     }
 
     @Test
-    fun `a non-2xx response surfaces a RestClientException`() {
-        // The describer issues a plain .retrieve().body() with no onStatus handler, so Spring's default
-        // status handling raises a RestClientResponseException (an HttpServerErrorException here) on 5xx.
-        // The describer does NOT translate this to VisionUnavailableException — only the disabled branch
-        // and the no-caption branch throw that. Pin the genuine behaviour rather than an aspirational one.
+    fun `a non-2xx response is mapped to VisionUnavailableException and logged as a structured event`() {
+        // A vision-endpoint outage is a foreseeable, degradable condition: the describer's onStatus handler
+        // maps any non-2xx into VisionUnavailableException — the SAME path the disabled and no-caption cases
+        // take — so AttachmentService.describe()'s catch(Throwable) degrades it to a FAILED caption instead
+        // of a 500 reaching the frontend. The outage must also be visible: assert the structured
+        // `vision.unavailable` event (id + status field), the operator-facing contract a log tool keys off.
         val (describer, server) = mockDescriber()
         server.expect(requestTo(url)).andRespond(withServerError().body("boom"))
 
-        assertThrows(RestClientException::class.java) {
-            describer.describe(request())
+        LogCapture.on(OpenAiImageDescriber::class.java).use { logs ->
+            assertThrows(VisionUnavailableException::class.java) {
+                describer.describe(request())
+            }
+            val e = logs.withEvent("vision.unavailable").single()
+            assertEquals(Level.WARN, e.level)
+            assertEquals("500", logs.keyValue(e, "status"))
         }
         server.verify()
     }

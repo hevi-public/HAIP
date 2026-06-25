@@ -1,9 +1,12 @@
 package com.aiforum.images
 
+import com.aiforum.observability.event
 import com.fasterxml.jackson.annotation.JsonProperty
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Profile
+import org.springframework.http.HttpStatusCode
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
@@ -46,6 +49,7 @@ open class OpenAiImageDescriber(
         @Value("\${aiforum.images.vision.max-tokens:512}") maxTokens: Int,
     ) : this(RestClient.builder(), baseUrl, apiKey, model, enabled, prompt, maxTokens)
 
+    private val log = LoggerFactory.getLogger(OpenAiImageDescriber::class.java)
     private val completionsUrl = baseUrl.trimEnd('/') + "/chat/completions"
     private val http: RestClient = restClientBuilder.build()
 
@@ -78,10 +82,28 @@ open class OpenAiImageDescriber(
             .contentType(MediaType.APPLICATION_JSON)
             .body(payload)
             .retrieve()
+            // A vision-endpoint outage (model down, 5xx, auth/4xx) is a foreseeable, degradable condition,
+            // not a 500 to propagate: map any non-2xx into the SAME VisionUnavailableException path the
+            // class doc promises degrades to a FAILED caption at the service seam. Log it as a structured
+            // event so a real outage is visible to operators rather than silently swallowed downstream.
+            .onStatus(HttpStatusCode::isError) { _, res ->
+                val status = res.statusCode
+                log.atWarn().setMessage("vision endpoint returned {}").addArgument(status)
+                    .event(EV_UNAVAILABLE).addKeyValue("status", status.value())
+                    .log()
+                throw VisionUnavailableException("vision endpoint returned $status")
+            }
             .body(ChatResponse::class.java)
         val caption = body?.choices?.firstOrNull()?.message?.content?.trim()
         return caption?.takeIf { it.isNotBlank() }
             ?: throw VisionUnavailableException("vision model returned no caption")
+    }
+
+    private companion object {
+        // Structured event id for a vision-endpoint transport failure (non-2xx). Namespaced per emitter and
+        // defined here as this class's event catalogue; the id + `status` field are the log-consumer
+        // contract, the human message is free to change. See observability/LogEvents.kt.
+        const val EV_UNAVAILABLE = "vision.unavailable"
     }
 
     // --- wire types (OpenAI Chat Completions, vision content blocks) ------------------------------
