@@ -22,8 +22,14 @@ gg:
     use-precompiled-templates: true
 
 aiforum:
+  # WAL-safe SQLite snapshots (VACUUM INTO) — see com.aiforum.backup.SqliteBackup. Gated on `enabled`
+  # (and the !test profile), so a test run never writes into the real ~/.haip store. `dir` defaults to
+  # ~/.haip/backup (a leading ~ is expanded via SqlitePath, never reaching disk literally); `keep` is the
+  # retention count — older snapshots beyond the newest N are pruned each run.
   backups:
     enabled: true
+    dir: ~/.haip/backup
+    keep: 7
   # Shortcut ticketing integration (https://shortcut.com) — READ-ONLY. Off by default; the forum behaves
   # exactly as before until you enable it. When on, three surfaces light up: a right-rail "Shortcut" box
   # (the default-query feed) on the home + thread pages, a browsable /shortcut page with a source switcher

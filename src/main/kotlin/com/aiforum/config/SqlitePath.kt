@@ -37,7 +37,13 @@ object SqlitePath {
         return Resolved(expanded, expandedUrl)
     }
 
-    private fun expandTilde(path: String, homeDir: String): String = when {
+    /**
+     * Resolve a leading shell `~` / `~/…` in a *plain filesystem path* against [homeDir]; everything else
+     * (incl. `~user`, a mid-path `~`, absolute/relative paths) passes through untouched. The same `~`
+     * guarantee as [expand], factored out for the second consumer (the backup writer) per the
+     * sqlite-spring-jdbc skill — don't hand-roll tilde handling again.
+     */
+    fun expandTilde(path: String, homeDir: String): String = when {
         path == "~" -> homeDir.trimEnd('/')
         path.startsWith("~/") -> homeDir.trimEnd('/') + path.substring(1)
         else -> path   // not a leading-tilde path (incl. `~user`, separators) — leave untouched
