@@ -48,8 +48,10 @@ class HttpClient(private val env: Environment) {
 
     /**
      * Like [postForm] but stamps the `HX-Request: true` header htmx sets on every request — so a step can
-     * exercise the htmx-only error path (HtmxErrorAdvice returns a fragment for these, the Whitelabel page
-     * for the rest). Mirrors the single header the advice branches on; nothing else about the call changes.
+     * exercise the htmx-only error path. For these, HtmxErrorAdvice replies with the mapped non-2xx status
+     * + an `HX-Trigger: app:error` header + an EMPTY body (toast-only, nothing to swap); a non-htmx request
+     * is rethrown to Boot's default handling (Whitelabel at the real status). Mirrors the single header the
+     * advice branches on; nothing else about the call changes.
      */
     fun postFormHtmx(path: String, form: Map<String, Any?>): ResponseEntity<String> {
         val map = LinkedMultiValueMap<String, String>()

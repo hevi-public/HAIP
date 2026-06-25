@@ -35,6 +35,12 @@ import org.springframework.web.bind.annotation.ExceptionHandler
  * app's own generation/vision paths already convert IO-seam failures into graceful FAILED states (see
  * GenerationService); this advice is the safety net for the genuinely-uncaught ones — e.g. the persona
  * prompt-compose preview (POST /personas/compose), whose synchronous LLM call is unguarded by design.
+ *
+ * The `@ExceptionHandler(Exception::class)` catch is intentionally a CATCH-ALL, not narrowed to
+ * `LlmException`: the whole point is that an htmx request ALWAYS gets feedback. A non-LLM uncaught
+ * exception (a framework 4xx/5xx, a bug) on an htmx request therefore surfaces as a generic 500 toast by
+ * design — narrowing the catch would re-introduce the silent stuck-spinner failure for those cases. Only
+ * the [statusFor] mapping distinguishes LLM failures (502/503/504); everything else maps to 500.
  */
 @ControllerAdvice
 class HtmxErrorAdvice {

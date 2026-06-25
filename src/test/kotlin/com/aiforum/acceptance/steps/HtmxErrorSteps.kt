@@ -1,11 +1,9 @@
 package com.aiforum.acceptance.steps
 
-import com.aiforum.acceptance.support.Html
 import com.aiforum.acceptance.support.HttpClient
 import com.aiforum.acceptance.support.ScenarioWorld
 import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -49,15 +47,22 @@ class HtmxErrorSteps(
     @Then("the response has no error fragment body")
     fun responseHasNoFragmentBody() {
         val body = world.lastBody ?: ""
-        // The toast-only redesign removed the fragment entirely: no data-error-fragment hook, and the
-        // htmx response body is empty (the failure rides the HX-Trigger header, not a swapped body).
-        assertFalse(
-            Html.hasAttr(body, "data-error-fragment", "server"),
-            "expected NO error fragment body (the toast-only redesign dropped it), but found one in:\n$body",
-        )
+        // The toast-only redesign returns an EMPTY htmx body (the failure rides the HX-Trigger header, not
+        // a swapped body), so nothing lands in the compose field. (No data-error-fragment check — the hook
+        // is gone, so asserting its absence would be vacuous; an empty body subsumes it.)
         assertTrue(
             body.isBlank(),
             "expected an empty htmx error body (nothing to swap), but got:\n$body",
+        )
+    }
+
+    @Then("the response has a non-empty error body")
+    fun responseHasNonEmptyBody() {
+        // Non-htmx: the advice rethrows, so Boot renders its default error response (a real, non-empty
+        // body) at the mapped status — NOT a swallowed 200/empty. Mirrors the htmx empty-body assertion.
+        assertTrue(
+            !(world.lastBody ?: "").isBlank(),
+            "expected a non-empty error body (Boot's default handling), but it was blank",
         )
     }
 

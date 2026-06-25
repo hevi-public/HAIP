@@ -1,9 +1,9 @@
 /*
- * htmx-error.js — DOM glue for honest htmx failure handling (T1.4). The wording (noticeFor) and the
- * sticky toast store (add/dismiss/list + cap + de-dupe over an injectable storage) live in
- * htmx-error-core.mjs and are unit-tested; this file is the thin, manually-verified wiring: real
- * localStorage, the DOM, the ✕ dismiss button, and load-time rehydration. Loaded directly as an ES
- * module from layout.kte (<script type="module" src="/htmx-error.js">), like the other glue.
+ * htmx-error.js — DOM glue for honest htmx failure handling (T1.4). The wording (noticeFor), the sticky
+ * toast store (add/dismiss/list + cap + de-dupe), and the localStorage backing (with the in-memory
+ * fallback latch) live in htmx-error-core.mjs and are unit-tested; this file is the thin,
+ * manually-verified wiring: the DOM region, the ✕ dismiss button, focus handling, and load-time
+ * rehydration. Loaded directly as an ES module from layout.kte, like the other glue.
  *
  * Toast-only by design (verified against vendored htmx 2.0.6): on a non-2xx htmx swaps nothing, so the
  * server returns the real error status + an app:error HX-Trigger and NOTHING lands in the compose field;
@@ -14,46 +14,35 @@
  *                      be ASCII, no em dashes), so the toast is worded from the status alone.
  *   - htmx:sendError — the request never reached the server (network failure): no response, no swap.
  */
-import { noticeFor, addToast, dismissToast, listToasts, SEND_ERROR, ERROR_EVENT } from "./htmx-error-core.mjs";
+import { noticeFor, addToast, dismissToast, listToasts, localStorageBacking, SEND_ERROR, ERROR_EVENT } from "./htmx-error-core.mjs";
 
 (function () {
-  var STORAGE_KEY = "haip.errorToasts";
+  // One authoritative backing: real localStorage, degrading to in-memory if it's unavailable (private
+  // mode / quota). The read/write-agree latch lives in the core (localStorageBacking), so a write fault
+  // can't leave read() returning stale localStorage that hides a just-raised toast.
+  var storage = localStorageBacking(window.localStorage);
 
-  // The injectable storage the core writes through — backed by localStorage, degrading to in-memory if
-  // it's unavailable (private mode / quota) so a toast still shows for the session.
-  var memory = null;
-  var storage = {
-    read: function () {
-      try {
-        var raw = window.localStorage.getItem(STORAGE_KEY);
-        return raw ? JSON.parse(raw) : [];
-      } catch (e) {
-        return memory || [];
-      }
-    },
-    write: function (toasts) {
-      memory = toasts;
-      try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toasts)); } catch (e) { /* keep memory */ }
-    },
-  };
-
-  // Monotonic id for new toasts — unique within a page session; combined with content so a rehydrated
-  // toast keeps its stored id (the core preserves ids; only freshly-added toasts get a new one here).
+  // Monotonic id for new toasts — unique within a page session (rehydrated toasts keep their stored id).
   var seq = 0;
   function nextId() { return "t" + Date.now() + "-" + (seq++); }
 
-  function region() {
-    var el = document.querySelector("[data-error-toasts]");
-    if (!el) {
-      el = document.createElement("div");
-      el.setAttribute("data-error-toasts", "");
-      el.className = "error-toasts";
-      // role="status" implies aria-live="polite"; we don't set aria-live too (a contradictory explicit
-      // value would override the role's politeness).
-      el.setAttribute("role", "status");
-      document.body.appendChild(el);
+  // Create the live region ONCE, up front (empty): content added to a PRE-EXISTING alert region is
+  // announced by screen readers, whereas a region created and filled in the same tick often isn't.
+  // role="alert" is assertive — appropriate for an error — and already implies aria-live, so we set
+  // neither aria-live nor a second role.
+  var regionEl = null;
+  function ensureRegion() {
+    if (!regionEl) {
+      regionEl = document.querySelector("[data-error-toasts]");
+      if (!regionEl) {
+        regionEl = document.createElement("div");
+        regionEl.setAttribute("data-error-toasts", "");
+        regionEl.className = "error-toasts";
+        regionEl.setAttribute("role", "alert");
+        document.body.appendChild(regionEl);
+      }
     }
-    return el;
+    return regionEl;
   }
 
   // Render one toast row (text + ✕). Idempotent per id, so a re-render (rehydrate) won't duplicate it.
@@ -71,18 +60,28 @@ import { noticeFor, addToast, dismissToast, listToasts, SEND_ERROR, ERROR_EVENT 
     var close = document.createElement("button");
     close.type = "button";
     close.className = "error-toast__dismiss";
-    close.setAttribute("aria-label", "Dismiss");
+    // A contextual name so multiple toasts don't all read as a bare "Dismiss" to a screen reader.
+    close.setAttribute("aria-label", "Dismiss: " + rec.message);
     close.setAttribute("data-error-toast-dismiss", rec.id);
     close.textContent = "✕"; // ✕
     close.addEventListener("click", function () { remove(rec.id); });
     note.appendChild(close);
 
-    region().appendChild(note);
+    ensureRegion().appendChild(note);
   }
 
   function remove(id) {
-    dismissToast(storage, id);
     var node = document.querySelector('[data-error-toast="' + cssEscape(id) + '"]');
+    // Move focus off the button we're about to remove so a keyboard dismiss doesn't dump focus to <body>:
+    // prefer the next remaining ✕, else the previous, else a sensible fallback.
+    if (node && node.contains(document.activeElement)) {
+      var buttons = Array.prototype.slice.call(document.querySelectorAll("[data-error-toast-dismiss]"));
+      var idx = buttons.indexOf(node.querySelector("[data-error-toast-dismiss]"));
+      var next = buttons[idx + 1] || buttons[idx - 1] || null;
+      if (next) next.focus();
+      else if (document.body) document.body.focus && document.body.focus();
+    }
+    dismissToast(storage, id);
     if (node) node.remove();
   }
 
@@ -121,10 +120,12 @@ import { noticeFor, addToast, dismissToast, listToasts, SEND_ERROR, ERROR_EVENT 
     raise(SEND_ERROR, null);
   });
 
-  // Rehydrate any toasts the owner hadn't dismissed before the last refresh.
+  // Create the region + rehydrate any toasts the owner hadn't dismissed before the last refresh, once the
+  // body exists.
+  function bootstrap() { ensureRegion(); rerender(); }
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", rerender);
+    document.addEventListener("DOMContentLoaded", bootstrap);
   } else {
-    rerender();
+    bootstrap();
   }
 })();

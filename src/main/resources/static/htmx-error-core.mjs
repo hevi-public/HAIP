@@ -88,3 +88,41 @@ export function dismissToast(storage, id) {
   storage.write(toasts);
   return toasts;
 }
+
+// The key under which toasts persist.
+export const STORAGE_KEY = "haip.errorToasts";
+
+/**
+ * Build a `{ read, write }` storage backed by a Web-Storage-like object [ls] (real `localStorage` in the
+ * glue, a fake in tests), degrading to an in-memory copy when localStorage is unavailable — and, crucially,
+ * READ AND WRITE AGREE ON ONE AUTHORITATIVE BACKING. The trap this avoids: Safari private mode / quota
+ * lets reads succeed but throws on write; a naive `read()` that only falls back to memory on a read THROW
+ * would then return stale localStorage and never see a freshly-written toast. So we latch `usingMemory`
+ * the first time a write throws (or a read throws), and thereafter both read and write use `memory` only,
+ * never localStorage. Pure over the injected [ls], so the latch behaviour is unit-testable.
+ */
+export function localStorageBacking(ls, key = STORAGE_KEY) {
+  let memory = [];
+  let usingMemory = false;
+  return {
+    read() {
+      if (usingMemory) return memory;
+      try {
+        const raw = ls.getItem(key);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        usingMemory = true; // a read fault also flips us to the in-memory backing
+        return memory;
+      }
+    },
+    write(toasts) {
+      memory = toasts;
+      if (usingMemory) return; // already memory-only — don't re-touch a known-bad localStorage
+      try {
+        ls.setItem(key, JSON.stringify(toasts));
+      } catch (e) {
+        usingMemory = true; // writes throw (private mode / quota) → memory becomes authoritative
+      }
+    },
+  };
+}

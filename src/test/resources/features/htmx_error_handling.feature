@@ -27,10 +27,22 @@ Feature: Honest failure UX for htmx requests
     And the response has no error fragment body
     And the response carries an htmx error trigger with status 503
 
+  # A timeout maps to 504 — a second distinct status, so the mapping (not just one code) is exercised.
+  Scenario: A timed-out compose preview signals 504 with a toast
+    Given the LLM will fail with a timeout
+    When the owner previews a persona prompt over htmx and the model fails
+    Then the response status is 504
+    And the response has no error fragment body
+    And the response carries an htmx error trigger with status 504
+
   # The advice is htmx-scoped: a NON-htmx request to the same failing endpoint keeps Boot's default
-  # handling (Whitelabel at the real error status, and NO htmx error trigger), so existing API/page
-  # behaviour is unchanged.
+  # handling — the rethrow surfaces as Boot's error response with a NON-empty body (the Whitelabel error)
+  # and NO htmx error trigger. The status is Boot's default 500 (the 502/503/504 mapping lives only in the
+  # advice's htmx branch; a bare rethrown exception carries no @ResponseStatus, so Boot uses 500). This
+  # guards against a regression to swallowing the exception into a 200 — it must stay an honest error.
   Scenario: A non-htmx request to the same failing endpoint keeps Boot's default handling
     Given the LLM will fail with a process error
     When the owner previews a persona prompt without htmx and the model fails
-    Then the response carries no htmx error trigger
+    Then the response status is 500
+    And the response has a non-empty error body
+    And the response carries no htmx error trigger

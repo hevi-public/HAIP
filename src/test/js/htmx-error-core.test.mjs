@@ -5,6 +5,7 @@ import {
   addToast,
   dismissToast,
   listToasts,
+  localStorageBacking,
   MAX_TOASTS,
   SEND_ERROR,
   ERROR_EVENT,
@@ -112,6 +113,15 @@ test("a consecutive duplicate (same kind+status) collapses instead of stacking",
   assert.equal(got[0].id, "b", "the newcomer's id wins (the latest occurrence)");
 });
 
+test("two consecutive sendErrors (null status) collapse to one (offline-retry de-dupe)", () => {
+  const s = fakeStorage();
+  addToast(s, rec("a", SEND_ERROR, null));
+  addToast(s, rec("b", SEND_ERROR, null)); // retried while still offline
+  const got = listToasts(s);
+  assert.equal(got.length, 1, "repeated offline failures shouldn't stack identical toasts");
+  assert.equal(got[0].id, "b", "the newcomer wins");
+});
+
 test("a different status after a duplicate is NOT collapsed", () => {
   const s = fakeStorage();
   addToast(s, rec("a", ERROR_EVENT, 503));
@@ -153,4 +163,61 @@ test("a fresh store over the same backing reads the persisted toasts (rehydratio
 test("listToasts tolerates a corrupt/empty backing", () => {
   assert.deepEqual(listToasts(fakeStorage(null)), []);
   assert.deepEqual(listToasts(fakeStorage("not-an-array")), []);
+});
+
+// ---- localStorageBacking: read/write agree on one authoritative backing --------------------------
+
+// A Web-Storage-like fake. `writeThrows` simulates Safari private mode / quota: getItem works, setItem
+// throws. A spy counts setItem so we can assert it isn't re-touched once we've latched to memory.
+function fakeLocalStorage({ writeThrows = false, readThrows = false } = {}) {
+  const cells = {};
+  return {
+    setCalls: 0,
+    getItem(k) {
+      if (readThrows) throw new Error("read blocked");
+      return Object.prototype.hasOwnProperty.call(cells, k) ? cells[k] : null;
+    },
+    setItem(k, v) {
+      this.setCalls++;
+      if (writeThrows) throw new Error("quota / private mode");
+      cells[k] = v;
+    },
+  };
+}
+
+test("localStorageBacking happy path: persists and reads back through localStorage", () => {
+  const ls = fakeLocalStorage();
+  const b = localStorageBacking(ls, "k");
+  addToast(b, rec("a", ERROR_EVENT, 502));
+  assert.deepEqual(listToasts(b).map((t) => t.id), ["a"]);
+  // a fresh backing over the SAME localStorage rehydrates (read from the persisted JSON)
+  const b2 = localStorageBacking(ls, "k");
+  assert.deepEqual(listToasts(b2).map((t) => t.id), ["a"]);
+});
+
+test("when setItem throws (private mode/quota), the just-written toast STILL surfaces via memory", () => {
+  // The exact bug the latch fixes: getItem succeeds (returns stale/empty), setItem throws — a naive
+  // read() that only falls back on a read-throw would return stale localStorage and hide the new toast.
+  const ls = fakeLocalStorage({ writeThrows: true });
+  const b = localStorageBacking(ls, "k");
+  addToast(b, rec("a", ERROR_EVENT, 502)); // write throws internally, latches to memory
+  assert.deepEqual(listToasts(b).map((t) => t.id), ["a"], "the toast must surface from memory, not stale localStorage");
+});
+
+test("once latched to memory, later writes don't re-touch the known-bad localStorage", () => {
+  const ls = fakeLocalStorage({ writeThrows: true });
+  const b = localStorageBacking(ls, "k");
+  addToast(b, rec("a", ERROR_EVENT, 502)); // 1st setItem throws → latched
+  addToast(b, rec("b", ERROR_EVENT, 500)); // must NOT call setItem again
+  assert.equal(ls.setCalls, 1, "after latching, localStorage.setItem is not called again");
+  assert.deepEqual(listToasts(b).map((t) => t.id), ["a", "b"]);
+});
+
+test("a read fault also flips to the in-memory backing", () => {
+  const ls = fakeLocalStorage({ readThrows: true });
+  const b = localStorageBacking(ls, "k");
+  // first read throws → latches to memory (returns []); a subsequent write+read round-trips via memory
+  assert.deepEqual(listToasts(b), []);
+  addToast(b, rec("a", SEND_ERROR, null));
+  assert.deepEqual(listToasts(b).map((t) => t.id), ["a"]);
 });
