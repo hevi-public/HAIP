@@ -294,23 +294,35 @@ wiring has four moving parts, all reusing the existing seams:
   by design, so an enqueued failure escapes uncaught to the `@ControllerAdvice`. Reuse the existing
   `Given the LLM will fail with a {failureMode}` step (`ScriptableLlmClient`) — the htmx steps only
   drive the request and assert the response; they enqueue nothing new.
-- **Assert on the stable hook, and on the *absence* of a page shell.** "the response is the inline error
-  fragment" checks `data-error-fragment="server"` via the `Html` probe (never the copy). "the response
-  is not a whole error page" asserts the body contains **no `<html>` / `<!DOCTYPE>`** — a bare fragment
-  has no document shell, so its absence proves htmx got a swap-safe fragment, not a page that would
-  corrupt the target. A separate scenario maps a rate-limit to its own status (503 vs 502) while still
-  asserting the fragment, and the non-htmx scenario asserts the fragment is **not** present (Boot's
-  default handling is unchanged).
+- **Assert the fragment + status 200 + the `HX-Trigger` signal — NOT a non-2xx.** This is the part the
+  T1.4 rework changed, so get it right: the advice returns the fragment at **HTTP 200** (htmx 2.0.6
+  discards a non-2xx body without swapping — see [[jte-spring-kotlin]]), and carries the real failure
+  out-of-band on an `HX-Trigger: {"app:error":{"status":<code>}}` response header. So the scenarios
+  assert three things, not a failing status:
+  - "the response is the inline error fragment" → `data-error-fragment="server"` via the `Html` probe
+    (never the copy), and "not a whole error page" → the body has **no `<html>` / `<!DOCTYPE>`** (a bare
+    fragment has no document shell, proving htmx got a swap-safe fragment).
+  - "the response status is **200**" → the literal 200, because that's what lets htmx swap at all.
+  - "the response carries an htmx error trigger with status `<code>`" → read `HX-Trigger` off the
+    response headers (`resp.headers.getFirst("HX-Trigger")`) and assert it contains `app:error` and
+    `"status":<code>`. A rate-limit rides 503 in that payload vs a process error's 502, while *both*
+    responses are still HTTP 200 — the trigger, not the status line, is where the distinction lives.
+  - The non-htmx scenario asserts the fragment is **not** present **and** there's **no `HX-Trigger`**
+    header (Boot's default page renders at its real error status — unchanged).
 
-The gotcha worth pinning here (it dictates how the advice reads the header):
+The gotcha worth pinning here (it dictates how the advice reads the header and signals the status):
 
 > **`@RequestHeader` does NOT bind as an `@ExceptionHandler` argument.** Spring's argument resolution
 > for exception handlers is narrower than for normal controller methods — `@RequestHeader` isn't among
 > the supported parameters, so a handler that declares `@RequestHeader("HX-Request") hx: String?` won't
-> populate it. Read the header off the **`HttpServletRequest`** instead
-> (`request.getHeader("HX-Request")`), which *is* a supported `@ExceptionHandler` arg. (Same story for
-> setting the status: take `HttpServletResponse` as an arg and set `response.status` directly, since
-> returning a bare view name renders 200 and hides the failure from `htmx:responseError`.)
+> populate it. Read the header off the injected **`HttpServletRequest`** instead
+> (`request.getHeader("HX-Request")`), which *is* a supported `@ExceptionHandler` arg.
+
+> **The failure status must travel in the response BODY/header, not the HTTP status line.** Because the
+> fragment is returned at 200 (so htmx swaps it), the real status can't ride the status code — it goes
+> on the ASCII-only `HX-Trigger` header (`{"app:error":{"status":<code>}}`) and the fragment's
+> `data-error-status`. HTTP header values are ISO-8859-1, so the header carries only the numeric status;
+> the human copy (with em-dashes) lives in the UTF-8 response body. Keep human prose out of headers.
 
 ## Common failure points
 
