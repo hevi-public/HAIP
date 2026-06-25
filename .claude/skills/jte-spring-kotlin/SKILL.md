@@ -180,54 +180,46 @@ A fragment whose composer must keep working *after* a swap needs whatever its co
 those through `fragments/replyList` → `fragments/replyNode` as **nullable-default** params so a render
 path that lacks them (e.g. retry) still compiles and just omits the composer.
 
-**The error-fragment view for failed htmx requests (`fragments/errorNotice.kte`).** An *uncaught*
-exception that returns Boot's Whitelabel error **page** would drop a whole `<html>` document into a
-fragment slot and corrupt the view. So a small bare fragment is rendered instead:
+**Failed htmx requests are a TOAST, NOT a rendered view (no error fragment).** Worth calling out *here*
+precisely because the intuitive fix — render a small error `.kte` and let htmx swap it in — is wrong on
+this stack, so don't reach for one. An *uncaught* exception on an htmx request must not return Boot's
+Whitelabel error **page** (htmx would swap a whole `<html>` into the request's target — e.g. the compose
+`<textarea>` — and corrupt the view). The shipped fix (`web/HtmxErrorAdvice`, a `@ControllerAdvice`)
+returns **no body at all**: a `ResponseEntity<Void>` with the **mapped non-2xx status** (RateLimited →
+503, Timeout → 504, other `LlmException` → 502, else 500) plus an `HX-Trigger: {"app:error":{"status":<code>}}`
+header. The client raises a toast off that event. **There is no `errorNotice.kte`, no
+`data-error-fragment`/`data-error-status` hook — that whole fragment design was removed.**
 
-```kotlin
-@param status: Int = 500
-@param message: String = "Something went wrong on the server."
-<div class="error-notice" role="alert"
-     data-error-fragment="server"
-     data-error-status="${status}">
-  <span class="error-notice__icon" aria-hidden="true">⚠</span>
-  <span class="error-notice__text">${message}</span>
-</div>
-```
+Why a non-2xx + empty body rather than a swapped fragment (all verified against the vendored htmx 2.0.6
+`dist/htmx.js`):
 
-It's a **bare fragment** — no `layout.kte`, no `<head>` — so htmx drops it cleanly into the swap target
-(the "only full pages wrap in the layout" rule above). `web/HtmxErrorAdvice` (a `@ControllerAdvice`)
-renders it by returning the view name `"fragments/errorNotice"` (resolved by the JTE ViewResolver like
-any other).
-
-**The load-bearing subtlety: the fragment is returned at HTTP 200, NOT a non-2xx — and that's *why* it
-swaps.** htmx 2.0.6's default `responseHandling` maps `[45]..` statuses to `{ swap: false, error: true }`
-(verified against the vendored `dist/htmx.js`), so a fragment returned at a 4xx/5xx is **fetched then
-discarded — never swapped** (only `htmx:responseError` fires). Returning it at **200** is what makes
-htmx actually drop it into the target. Don't assume "a fragment swaps at any status" — at a non-2xx
-this exact fragment would silently vanish.
-
-The real failure status therefore rides **out-of-band** on an `HX-Trigger` response header, not the
-HTTP status: `HX-Trigger: {"app:error":{"status":<code>}}`. htmx processes `HX-Trigger` at the top of
-`handleAjaxResponse` (before any swap/error branch), dispatches it as an `app:error` CustomEvent whose
-`detail` is the inner object, and the client (`htmx-error.js`) words a non-blocking toast off
-`detail.status`. The fragment body (rendered via JTE in the UTF-8 response body) still shows the full
-human message; `data-error-status` records the mapped status for anyone reading the DOM.
+- htmx's default `responseHandling` maps `[45]..` to `{ swap: false, error: true }`, so on a non-2xx the
+  body is **fetched then discarded — htmx swaps nothing**. Returning the *real* error status is
+  therefore exactly what guarantees nothing lands in the compose field. (This is the inverse of the
+  intuition that you must return 200 to make htmx render something — here you *want* it to render
+  nothing.)
+- `HX-Trigger` is processed at the **top** of `handleAjaxResponse`, before the swap/error branches, so
+  the `app:error` event fires regardless of the non-2xx status. The failure travels out-of-band on that
+  header, not in a body.
+- htmx already re-enables `hx-disabled-elt` controls and clears `hx-indicator` spinners on every
+  terminal request path, so there's no stuck control to fix. The only gap it leaves is user-visible
+  failure feedback — which the toast supplies.
 
 > **`HX-Trigger` header values must be ASCII (ISO-8859-1).** HTTP header values are Latin-1, and the
-> owner-facing copy contains non-Latin1 punctuation (em dashes) that Tomcat strips as invalid. So the
-> header payload carries **only the numeric status**, never the human message — the client derives the
-> toast wording from that ASCII/numeric signal, and the full prose lives in the response *body*
-> (the fragment), where UTF-8 is fine. General rule: keep human copy out of HTTP headers; signal with
-> an ASCII code and word it client-side.
+> owner-facing copy contains non-Latin1 punctuation (em dashes) Tomcat strips as invalid. So the header
+> payload carries **only the numeric status** — never the human message. The client words the toast from
+> that ASCII/numeric signal. General rule: keep human prose out of HTTP headers; signal with an ASCII
+> code and word it client-side.
 
-The stable **`data-error-fragment="server"` hook** (plus `data-error-status`) — not the copy or the CSS
-— is what the steps assert on, per the data-* convention below. The advice only fires for `HX-Request`
-calls; a non-htmx request **rethrows**, so Boot's default page renders at its real error status,
-unchanged. (Note htmx 2.0.6 *already* re-enables `hx-disabled-elt` controls and clears `hx-indicator`
-spinners on every terminal request path, so there's no stuck-control problem for the client to fix —
-the only gap htmx leaves is user-visible feedback, which the toast supplies.) See [[cucumber-spring-bdd]]
-for the failure-path acceptance wiring (status **200** + the `HX-Trigger` `app:error` assertion).
+The toast itself lives entirely in **static JS, not a template**: `static/htmx-error-core.mjs` is a pure
+decision + persistence layer (toast wording + a sticky toast STORE — add/dismiss/list with a cap and
+consecutive-duplicate de-dupe, over an *injectable* storage so it's jsTest-unit-testable), and
+`static/htmx-error.js` is the DOM glue loaded as an ES module from `layout.kte` — it backs the store
+with `localStorage`, renders **sticky, dismissible (✕)** toasts, and **rehydrates them on page load**.
+It listens for `app:error` (the server signal) and `htmx:sendError` (request never left). The advice
+only fires for `HX-Request` calls; a non-htmx request **rethrows**, so Boot's default page renders at
+its real status and emits **no `HX-Trigger`**. See [[cucumber-spring-bdd]] for the failure-path
+acceptance wiring (mapped **non-2xx** + empty body + the `HX-Trigger` `app:error` assertion).
 
 ## Static assets & styling (`static/`, `app.css`)
 
@@ -268,7 +260,6 @@ styling. Standardize on:
 | `data-retry-after` | seconds, present only for rate-limit |
 | `data-vote-count` | the firewalled `+1` tally (visible to owner) |
 | `data-scope` | `BRANCH_ONLY` / `WHOLE_THREAD` on the composer (the `ScopeMode` enum name) |
-| `data-error-fragment` | `server` on the htmx error notice (`fragments/errorNotice.kte`); the hook the failure-path steps assert on |
 
 This keeps the same `.feature` files re-pointable at a Playwright layer later — the hooks survive a
 visual redesign.
