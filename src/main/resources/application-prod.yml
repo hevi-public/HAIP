@@ -1,3 +1,10 @@
+server:
+  # Bind to loopback only: this is a single-user local tool with no auth, so it must not be reachable
+  # from the LAN. (T2.1 — turns the "binds 0.0.0.0 / no auth" Critical into a non-issue; full auth
+  # stays deferred to T3.1.) Keeps the default port 8080 — only the bind address is constrained. The
+  # test profile is left untouched (its RANDOM_PORT / TestRestTemplate already use loopback).
+  address: 127.0.0.1
+
 spring:
   datasource:
     # Persistent home-directory DB for long-term work (dev uses a throwaway project-local file).
