@@ -7,6 +7,7 @@ import com.aiforum.dto.ReasoningLeak
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.Instant
 
@@ -116,7 +117,12 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
      * `comment.updated_at`, so the "(edited)" marker tracks whichever version is currently shown. The
      * FIRST edit/regenerate also seeds idx 0 with the body being replaced (carrying its original
      * edited-ness), so nothing is lost. Returns false for an unknown id (nothing to edit).
+     *
+     * @Transactional: the seed-idx0 + addRevision + selectRevision are one atomic unit — a crash or
+     * SQLITE_BUSY mid-way must not leave a half-seeded revision history. Called through the Spring proxy
+     * (external callers); the internal self-calls to addRevision/selectRevision run inside this tx.
      */
+    @Transactional
     fun editBody(id: String, body: String): Boolean {
         val existing = findById(id) ?: return false
         val count = revisionCount(id)
@@ -294,7 +300,11 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
      * URLs) means dependents must go first: `vote.node_id` and `comment.parent_id` both reference
      * `comment(id)`, so we clear the subtree's votes, then delete the comments deepest-first (a child is
      * always removed before its parent). Returns the ids removed; empty if [nodeId] doesn't exist.
+     *
+     * @Transactional: the 3 batch DELETEs + the per-id comment DELETE loop are one atomic unit — a crash
+     * or SQLITE_BUSY mid-loop must not leave votes/revisions/attachments orphaned or a subtree half-cut.
      */
+    @Transactional
     fun deleteSubtree(nodeId: String): List<String> {
         val ids = subtreeIdsDeepestFirst(nodeId)
         if (ids.isEmpty()) return emptyList()
@@ -315,7 +325,11 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
      * FK ordering as [deleteSubtree]: votes first (`vote.node_id` references `comment`), then comments
      * deepest-first so a child is always gone before the parent it points at (`comment.parent_id`).
      * Returns the ids removed; empty if the thread has no comments.
+     *
+     * @Transactional: same shape as [deleteSubtree] — the votes/revisions/attachments DELETEs plus the
+     * per-id comment DELETE loop are one atomic unit, so a mid-loop failure never half-removes the thread.
      */
+    @Transactional
     fun deleteByThread(threadId: String): List<String> {
         val ids = jdbc.query(
             "SELECT id FROM comment WHERE thread_id = ? ORDER BY depth DESC",
