@@ -9,7 +9,9 @@
  * non-blocking toast for the two surfaces that need it:
  *   - app:error      — the server's out-of-band failure signal (HX-Trigger from HtmxErrorAdvice). The
  *                      error fragment itself is swapped into the target at HTTP 200; this toast is the
- *                      always-visible companion (the fragment slot may be off-screen). detail = {status, message}.
+ *                      always-visible companion (the fragment slot may be off-screen). detail = {status}
+ *                      only — the human copy lives in the fragment body, since HX-Trigger header values
+ *                      must be ASCII (no em dashes), so the toast is worded from the status alone.
  *   - htmx:sendError — the request never reached the server (network failure): no response, nothing
  *                      swaps, so the fragment can't speak for itself and the toast is the only feedback.
  */
