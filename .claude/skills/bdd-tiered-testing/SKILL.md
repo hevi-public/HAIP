@@ -94,6 +94,29 @@ Keep the loop runaway-proof while you're here (it runs on a remote box with no m
 monotonic deadline, a floored poll interval, force-kill + reap, bounded stream joins. See
 [[haip-stack-gotchas]] for the `claude -p` envelope shape these tests pin.
 
+### Streaming is a second method on the SAME seam, not a second seam
+
+The IO seam carries a streaming overload — `LlmClient.generate(request, cancellation, sink)` — alongside the
+blocking one (live token streaming; see `plan_docs/streaming-agui.md`). It does **not** add a second mock
+level: the overload ships a **default** that wraps the blocking `generate` and emits the whole reply as one
+delta, so a backend (or the scriptable fake) that implements only the blocking method still satisfies the
+streaming path. The "mock only at Tier 1" guarantee holds. Its tests follow the same pure/IO split:
+
+- **Wire contract → Tier 0.** The internal `AguiEvent` vocabulary is serialised to AG-UI's wire JSON by one
+  object, `AguiWire`; `tier0/AguiWireTest` pins it with golden strings. This is the **only** test coupled to
+  the external spec — a spec bump changes `AguiWire` + this test and nothing else above it moves.
+- **Per-backend normalisation → Tier 0 then Tier 1.** Each backend maps its native stream
+  (`claude -p --output-format stream-json` NDJSON; OpenAI `stream:true` SSE) into the vocabulary via a *pure*
+  parser (`ClaudeStreamParser` / `OpenAiStreamParser`, Tier 0), then the streaming overload is exercised
+  end-to-end through the **same** `spawn()` / `MockRestServiceServer` stand-ins (Tier 1). Both still run the
+  **final** text through the existing `LlmResponseParser` / `OpenAiResponseParser`, so the persisted reply is
+  byte-identical to the blocking path — the deltas are liveness only, not a second source of truth.
+- **Don't grow a new mock level for transport.** The SSE fan-out is plain in-memory state (a per-run channel
+  on `InFlightGenerations`): test it directly at Tier 2 (replay / terminal-complete / unknown-fallback), and
+  assert the wire over **real HTTP** at acceptance — a terminal buffer replays as SSE frames, deterministic
+  without racing a live generation. The `LlmClient` fake gains a `Behavior.Stream` for this; see
+  [[cucumber-spring-bdd]].
+
 ## Error scenarios are first-class
 
 Every failure mode in the generation lifecycle (§4) gets explicit coverage: timeout, process error,

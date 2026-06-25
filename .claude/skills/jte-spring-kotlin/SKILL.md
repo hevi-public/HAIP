@@ -189,6 +189,10 @@ step, no framework. Spring Boot serves `src/main/resources/static/**` at the web
 - `layout.kte` links them in `<head>` (`<link rel="stylesheet" href="/app.css">`,
   `<script src="/app.js" defer>`); every full page inherits them through the shell.
 - `app.js` re-binds on `htmx:afterSwap` so behaviour (composer auto-grow) survives htmx swaps.
+- `stream.js` (live AG-UI generation streaming — see `plan_docs/streaming-agui.md`) likewise keys off the
+  `data-*` hooks: it opens an `EventSource` on each `article.reply[data-state="drafting"]` node, keyed by
+  `data-reply-id`, appends text live, then lets the server-rendered fragment swap in. So those two hooks are
+  load-bearing for the SSE client as well as the acceptance probe — another reason not to rename them.
 
 **Style with `class=`, never with `data-*`.** The probe (`Html.kt`) reads attributes by **regex off the
 single opening tag** and substring-matches text, so when styling templates:
