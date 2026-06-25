@@ -217,13 +217,16 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
         else
             jdbc.query("SELECT * FROM comment WHERE parent_id = ? ORDER BY depth, created_at", mapper, parentId)
 
-    /** Root → node ancestor path (branch-only scope) via recursive CTE. */
+    /** Root → node ancestor path (branch-only scope) via recursive CTE. The `lvl` counter bounds the
+     *  recursion (< 10000, far above any real thread depth) so a corrupt parent_id cycle terminates
+     *  instead of looping forever — see the T1.3 cycle/depth guard. */
     fun ancestorPath(nodeId: String): List<Comment> =
         jdbc.query(
-            """WITH RECURSIVE ancestors(id) AS (
-                   SELECT id FROM comment WHERE id = ?
+            """WITH RECURSIVE ancestors(id, lvl) AS (
+                   SELECT id, 0 FROM comment WHERE id = ?
                    UNION ALL
-                   SELECT c.parent_id FROM comment c JOIN ancestors a ON c.id = a.id WHERE c.parent_id IS NOT NULL
+                   SELECT c.parent_id, a.lvl + 1 FROM comment c JOIN ancestors a ON c.id = a.id
+                   WHERE c.parent_id IS NOT NULL AND a.lvl < 10000
                )
                SELECT cm.* FROM comment cm JOIN ancestors an ON cm.id = an.id ORDER BY cm.depth""",
             mapper, nodeId,
@@ -245,13 +248,14 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
             mapper, threadId,
         )
 
-    /** Number of descendants under [nodeId] (excluding the node itself) via recursive CTE. */
+    /** Number of descendants under [nodeId] (excluding the node itself) via recursive CTE. The `lvl`
+     *  counter bounds the recursion (< 10000) so a corrupt parent_id cycle terminates — see T1.3. */
     fun descendantCount(nodeId: String): Int =
         jdbc.queryForObject(
-            """WITH RECURSIVE sub(id) AS (
-                   SELECT id FROM comment WHERE id = ?
+            """WITH RECURSIVE sub(id, lvl) AS (
+                   SELECT id, 0 FROM comment WHERE id = ?
                    UNION ALL
-                   SELECT c.id FROM comment c JOIN sub s ON c.parent_id = s.id
+                   SELECT c.id, s.lvl + 1 FROM comment c JOIN sub s ON c.parent_id = s.id WHERE s.lvl < 10000
                )
                SELECT COUNT(*) - 1 FROM sub""",
             Int::class.java, nodeId,
@@ -327,13 +331,16 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
         return ids
     }
 
-    /** Ids of [nodeId]'s subtree (itself + all descendants) ordered deepest depth first, for FK-safe delete. */
+    /** Ids of [nodeId]'s subtree (itself + all descendants) ordered deepest depth first, for FK-safe
+     *  delete. The `lvl` recursion counter (distinct from the stored `depth`) bounds the walk (< 10000)
+     *  so a corrupt parent_id cycle terminates instead of looping forever — see T1.3. */
     private fun subtreeIdsDeepestFirst(nodeId: String): List<String> =
         jdbc.query(
-            """WITH RECURSIVE sub(id, depth) AS (
-                   SELECT id, depth FROM comment WHERE id = ?
+            """WITH RECURSIVE sub(id, depth, lvl) AS (
+                   SELECT id, depth, 0 FROM comment WHERE id = ?
                    UNION ALL
-                   SELECT c.id, c.depth FROM comment c JOIN sub s ON c.parent_id = s.id
+                   SELECT c.id, c.depth, s.lvl + 1 FROM comment c JOIN sub s ON c.parent_id = s.id
+                   WHERE s.lvl < 10000
                )
                SELECT id FROM sub ORDER BY depth DESC""",
             { rs, _ -> rs.getString("id") }, nodeId,
