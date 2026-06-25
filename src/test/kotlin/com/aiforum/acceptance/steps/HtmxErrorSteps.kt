@@ -81,8 +81,9 @@ class HtmxErrorSteps(
     fun responseCarriesErrorTrigger(status: Int) {
         val trigger = world.lastHxTrigger
         assertNotNull(trigger, "expected an HX-Trigger header on the response, but there was none")
-        // The advice emits {"app:error":{"status":<code>,"message":"…"}}; htmx dispatches that as an
-        // app:error event whose detail carries the mapped status the client toasts off.
+        // The advice emits {"app:error":{"status":<code>}} (status only — no message: HTTP header values
+        // are ISO-8859-1 and the copy has non-Latin1 punctuation, so the client words the toast from the
+        // status). htmx dispatches that as an app:error event whose detail carries the mapped status.
         assertTrue(
             trigger!!.contains("app:error"),
             "expected the HX-Trigger to carry an app:error event, got: $trigger",
