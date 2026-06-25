@@ -65,6 +65,22 @@ class SqliteBackupTest {
     }
 
     @Test
+    fun `two snapshots in the same clock-second both succeed with distinct filenames`(@TempDir tmp: Path) {
+        val jdbc = sourceJdbc(tmp.resolve("source.db"))
+        val backupDir = tmp.resolve("backup")
+        // Same fixed instant for both calls => the timestamp collides; the uniquifying suffix must keep
+        // them distinct (and `VACUUM INTO` must not fail on a pre-existing dest).
+        val backup = SqliteBackup(jdbc, fixedClock("2026-06-25T08:09:10Z"), backupDir, keep = 7)
+
+        val first = backup.backup()
+        val second = backup.backup()
+
+        assertEquals(backupDir.resolve("aiforum-20260625T080910Z.db"), first)
+        assertEquals(backupDir.resolve("aiforum-20260625T080910Z-1.db"), second)
+        assertTrue(Files.isRegularFile(first) && Files.isRegularFile(second), "both snapshots exist")
+    }
+
+    @Test
     fun `creates the backup directory if it is absent`(@TempDir tmp: Path) {
         val jdbc = sourceJdbc(tmp.resolve("source.db"))
         val backupDir = tmp.resolve("nested/backup")

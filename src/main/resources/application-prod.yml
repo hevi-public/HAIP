@@ -22,6 +22,11 @@ spring:
 aiforum:
   backups:
     enabled: true
+    # Persistent home-directory snapshots, sibling of the prod DB. Pinned explicitly (rather than relying
+    # on the SqliteBackup @Value defaults) so the prod backup target is legible here. ${user.home} is
+    # Spring-resolved before the path is read, so no literal ~ reaches the filesystem.
+    dir: ${user.home}/.haip/backup
+    keep: 7
   llm:
     # Personas reach the network in prod too.
     # ⚠ SECURITY: the Docker jail (requirements §12) is NOT built yet, so prod personas fetch from the

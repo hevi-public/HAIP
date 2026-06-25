@@ -68,7 +68,14 @@ class SqliteBackup(
      * Take one snapshot now, then trim old snapshots to the retention limit. Returns the snapshot path.
      * Idempotent enough for repeated calls (the timestamp + a uniquifying suffix avoid a name clash even
      * within the same clock-second).
+     *
+     * `@Synchronized`: the default `@Scheduled` executor is single-threaded so startup + daily snapshots
+     * never overlap today, but `uniqueDestination()`'s `Files.exists` check-then-act is a TOCTOU window —
+     * the lock makes the public method safe under any caller (tests, a future multi-threaded scheduler)
+     * without relying on that implicit guarantee. (Worst case without it is only a logged `backup.failed`,
+     * since `VACUUM INTO` refuses an existing file — no corruption — but the lock removes the foot-gun.)
      */
+    @Synchronized
     fun backup(): Path {
         Files.createDirectories(backupDir)
         val dest = uniqueDestination()
