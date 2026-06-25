@@ -84,6 +84,8 @@ class HttpClient(private val env: Environment) {
             .exchange { _, res -> capture(res) }
     }
 
+    // Preserve the response headers too, not just status + body: T1.4 asserts on the HX-Trigger header
+    // the htmx error advice emits. Existing callers only read status/body, so this is backward-compatible.
     private fun capture(res: RestClient.RequestHeadersSpec.ConvertibleClientHttpResponse): ResponseEntity<String> =
-        ResponseEntity.status(res.statusCode).body(res.bodyTo(String::class.java) ?: "")
+        ResponseEntity.status(res.statusCode).headers(res.headers).body(res.bodyTo(String::class.java) ?: "")
 }

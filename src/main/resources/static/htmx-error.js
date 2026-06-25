@@ -1,52 +1,30 @@
 /*
- * htmx-error.js — DOM glue for honest htmx failure handling (T1.4). The decisions (notice copy,
- * which control to re-enable) live in htmx-error-core.mjs and are unit-tested; this file is the
- * (manually-verified) wiring: it listens for the two htmx error events globally, re-enables the
- * control htmx left disabled, and surfaces a non-blocking toast.
+ * htmx-error.js — DOM glue for honest htmx failure handling (T1.4). The notice copy lives in
+ * htmx-error-core.mjs and is unit-tested; this file is the (manually-verified) wiring. Loaded directly
+ * as an ES module from layout.kte (<script type="module" src="/htmx-error.js">), like the other glue.
  *
- * Without this, a failed poll / Regenerate / +1 leaves the `hx-disabled-elt` button permanently
- * disabled (the re-enabling swap never arrives on an error) and the `hx-indicator` spinner spinning,
- * with no feedback. The server-side fragment (HtmxErrorAdvice) handles the swap-target corruption; this
- * handles the stuck control + silence. Loaded as an ES module from layout.kte like the other glue.
+ * htmx 2.0.6 already re-enables hx-disabled-elt controls and clears hx-indicator spinners on every
+ * terminal request path (verified against the vendored dist/htmx.js), so there is nothing to re-enable
+ * here. What htmx gives NO default for is user-visible feedback that a request failed — so this raises a
+ * non-blocking toast for the two surfaces that need it:
+ *   - app:error      — the server's out-of-band failure signal (HX-Trigger from HtmxErrorAdvice). The
+ *                      error fragment itself is swapped into the target at HTTP 200; this toast is the
+ *                      always-visible companion (the fragment slot may be off-screen). detail = {status, message}.
+ *   - htmx:sendError — the request never reached the server (network failure): no response, nothing
+ *                      swaps, so the fragment can't speak for itself and the toast is the only feedback.
  */
-import { noticeFor, shouldReEnable, RESPONSE_ERROR, SEND_ERROR } from "./htmx-error-core.mjs";
+import { noticeFor, SEND_ERROR, ERROR_EVENT } from "./htmx-error-core.mjs";
 
 (function () {
-  // Re-enable [el] if it's a control htmx left disabled for the failed request.
-  function reEnable(el) {
-    if (shouldReEnable(el)) {
-      el.disabled = false;
-      // htmx also adds [aria-disabled]/removes it via the swap; clear it so AT sees the live control.
-      el.removeAttribute("aria-disabled");
-    }
-  }
-
-  // Re-enable the triggering element AND anything its hx-disabled-elt pointed at (it's the swap that
-  // would have re-enabled them, and on an error the swap never runs). "this" / "closest …" / a plain
-  // selector are the shapes htmx accepts; we resolve them relative to the triggering element.
-  function reEnableDisabledElts(trigger) {
-    if (!trigger) return;
-    reEnable(trigger);
-    var spec = trigger.getAttribute && trigger.getAttribute("hx-disabled-elt");
-    if (!spec) return;
-    spec.split(",").forEach(function (raw) {
-      var sel = raw.trim();
-      if (!sel || sel === "this") return; // "this" is the trigger, already handled above
-      var targets = sel.indexOf("closest ") === 0
-        ? [trigger.closest(sel.slice("closest ".length).trim())]
-        : Array.prototype.slice.call(document.querySelectorAll(sel));
-      targets.forEach(reEnable);
-    });
-  }
-
-  // A self-dismissing toast in a shared live region — non-blocking, never steals focus. Created lazily.
+  // A self-dismissing toast in a shared live region — non-blocking, never steals focus. role="status"
+  // already implies aria-live="polite", so we don't set aria-live too (a contradictory explicit value
+  // would override the role's politeness). Created lazily on first error.
   function toast(message) {
     var region = document.querySelector("[data-error-toasts]");
     if (!region) {
       region = document.createElement("div");
       region.setAttribute("data-error-toasts", "");
       region.className = "error-toasts";
-      region.setAttribute("aria-live", "assertive");
       region.setAttribute("role", "status");
       document.body.appendChild(region);
     }
@@ -58,14 +36,14 @@ import { noticeFor, shouldReEnable, RESPONSE_ERROR, SEND_ERROR } from "./htmx-er
     setTimeout(function () { note.remove(); }, 6000);
   }
 
-  function onError(e) {
-    var detail = e.detail || {};
-    var trigger = detail.elt || e.target;
-    reEnableDisabledElts(trigger);
-    var status = detail.xhr ? detail.xhr.status : null;
-    toast(noticeFor(e.type, status));
-  }
+  // The server-error signal carries the mapped status in its detail; word the toast from it.
+  document.body.addEventListener(ERROR_EVENT, function (e) {
+    var status = e.detail && typeof e.detail.status === "number" ? e.detail.status : null;
+    toast(noticeFor(ERROR_EVENT, status));
+  });
 
-  document.body.addEventListener(RESPONSE_ERROR, onError);
-  document.body.addEventListener(SEND_ERROR, onError);
+  // A request that never left (no response, no swap): the toast is the only feedback htmx leaves room for.
+  document.body.addEventListener(SEND_ERROR, function () {
+    toast(noticeFor(SEND_ERROR, null));
+  });
 })();

@@ -6,13 +6,21 @@ import com.aiforum.acceptance.support.ScenarioWorld
 import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.springframework.http.ResponseEntity
 
 /**
  * The honest-failure-UX acceptance steps (T1.4). The model failure itself is enqueued by the existing
  * `the LLM will fail with a {failureMode}` step (GenerationSteps) — the single LlmClient seam — so these
- * steps only drive the htmx-vs-not request and assert on the rendered error fragment's stable data-*
- * hook (per the jte-spring-kotlin convention), never on the copy.
+ * steps only drive the htmx-vs-not request and assert on the corrected contract: a SWAPPABLE error
+ * fragment (stable data-error-fragment hook, per the jte-spring-kotlin convention) at HTTP 200, plus the
+ * out-of-band failure signal htmx will actually deliver — the HX-Trigger response header (app:error).
+ *
+ * Why 200 + HX-Trigger: htmx 2.0.6's default responseHandling maps [45].. to swap:false, so a fragment
+ * returned at a non-2xx is fetched then DISCARDED (never swapped). Returning it at 200 makes htmx swap
+ * it; the real status rides the HX-Trigger header, which htmx processes regardless of status code.
  *
  * The surface is the persona prompt-compose PREVIEW (POST /personas/compose): its synchronous LLM call
  * (PromptComposer → llm.generate) is unguarded by design, so an enqueued failure escapes uncaught to
@@ -30,17 +38,15 @@ class HtmxErrorSteps(
     )
 
     @When("the owner previews a persona prompt over htmx and the model fails")
-    fun previewOverHtmx() {
-        val resp = http.postFormHtmx("/personas/compose", previewForm)
-        world.lastStatus = resp.statusCode.value()
-        world.lastBody = resp.body
-    }
+    fun previewOverHtmx() = capture(http.postFormHtmx("/personas/compose", previewForm))
 
     @When("the owner previews a persona prompt without htmx and the model fails")
-    fun previewWithoutHtmx() {
-        val resp = http.postForm("/personas/compose", previewForm)
+    fun previewWithoutHtmx() = capture(http.postForm("/personas/compose", previewForm))
+
+    private fun capture(resp: ResponseEntity<String>) {
         world.lastStatus = resp.statusCode.value()
         world.lastBody = resp.body
+        world.lastHxTrigger = resp.headers.getFirst("HX-Trigger")
     }
 
     @Then("the response is the inline error fragment")
@@ -68,6 +74,30 @@ class HtmxErrorSteps(
         assertFalse(
             body.contains("<html", ignoreCase = true) || body.contains("<!DOCTYPE", ignoreCase = true),
             "expected a bare fragment (no <html>/<!DOCTYPE>), but got a whole page:\n$body",
+        )
+    }
+
+    @Then("the response carries an htmx error trigger with status {int}")
+    fun responseCarriesErrorTrigger(status: Int) {
+        val trigger = world.lastHxTrigger
+        assertNotNull(trigger, "expected an HX-Trigger header on the response, but there was none")
+        // The advice emits {"app:error":{"status":<code>,"message":"…"}}; htmx dispatches that as an
+        // app:error event whose detail carries the mapped status the client toasts off.
+        assertTrue(
+            trigger!!.contains("app:error"),
+            "expected the HX-Trigger to carry an app:error event, got: $trigger",
+        )
+        assertTrue(
+            trigger.contains("\"status\":$status"),
+            "expected the HX-Trigger app:error to carry status $status, got: $trigger",
+        )
+    }
+
+    @Then("the response carries no htmx error trigger")
+    fun responseCarriesNoErrorTrigger() {
+        assertNull(
+            world.lastHxTrigger,
+            "expected NO HX-Trigger header on a non-htmx error, but got: ${world.lastHxTrigger}",
         )
     }
 }

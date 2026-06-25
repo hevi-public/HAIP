@@ -2,15 +2,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   noticeFor,
-  shouldReEnable,
-  RESPONSE_ERROR,
   SEND_ERROR,
+  ERROR_EVENT,
 } from "../../main/resources/static/htmx-error-core.mjs";
 
 /*
- * The frontend "Tier 0" for honest htmx failure handling (T1.4): the pure decisions behind the global
- * error listener — what notice to show and whether the triggering control must be re-enabled. The DOM
- * glue (htmx-error.js) is the manually-verified wiring; this proves the decision layer.
+ * The frontend "Tier 0" for honest htmx failure handling (T1.4): the pure notice decision behind the
+ * global error toast. htmx 2.0.6 already re-enables disabled controls / clears spinners on its own (so
+ * there is no re-enable decision to test), and on a non-2xx it discards the body — the server advice
+ * works around that by returning the fragment at 200 + an app:error HX-Trigger. This proves the toast
+ * copy for that signal and for a network sendError. The DOM glue (htmx-error.js) is manually verified.
  */
 
 test("a send error (request never left) explains the connection problem", () => {
@@ -20,46 +21,24 @@ test("a send error (request never left) explains the connection problem", () => 
   );
 });
 
-test("rate-limit statuses (429 / 503) say the model is busy", () => {
-  assert.equal(noticeFor(RESPONSE_ERROR, 429), "The model is busy right now — try again in a moment.");
-  assert.equal(noticeFor(RESPONSE_ERROR, 503), "The model is busy right now — try again in a moment.");
+test("an app:error carrying a rate-limit status (429 / 503) says the model is busy", () => {
+  assert.equal(noticeFor(ERROR_EVENT, 429), "The model is busy right now — try again in a moment.");
+  assert.equal(noticeFor(ERROR_EVENT, 503), "The model is busy right now — try again in a moment.");
 });
 
-test("a 5xx is a server error", () => {
-  assert.equal(noticeFor(RESPONSE_ERROR, 500), "Something went wrong on the server — please try again.");
-  assert.equal(noticeFor(RESPONSE_ERROR, 502), "Something went wrong on the server — please try again.");
-  assert.equal(noticeFor(RESPONSE_ERROR, 504), "Something went wrong on the server — please try again.");
+test("an app:error with a 5xx status is a server error", () => {
+  assert.equal(noticeFor(ERROR_EVENT, 500), "Something went wrong on the server — please try again.");
+  assert.equal(noticeFor(ERROR_EVENT, 502), "Something went wrong on the server — please try again.");
+  assert.equal(noticeFor(ERROR_EVENT, 504), "Something went wrong on the server — please try again.");
 });
 
-test("a 4xx (other than rate-limit) is a request problem", () => {
-  assert.equal(noticeFor(RESPONSE_ERROR, 400), "That request couldn't be completed — please try again.");
-  assert.equal(noticeFor(RESPONSE_ERROR, 404), "That request couldn't be completed — please try again.");
+test("an app:error with a 4xx status (other than rate-limit) is a request problem", () => {
+  assert.equal(noticeFor(ERROR_EVENT, 400), "That request couldn't be completed — please try again.");
+  assert.equal(noticeFor(ERROR_EVENT, 404), "That request couldn't be completed — please try again.");
 });
 
-test("an unknown event / missing status falls back to a generic notice", () => {
-  assert.equal(noticeFor("htmx:somethingElse", null), "Something went wrong — please try again.");
-  assert.equal(noticeFor(RESPONSE_ERROR, null), "Something went wrong — please try again.");
-});
-
-test("a disabled form control is re-enabled", () => {
-  // hx-disabled-elt="this" disabled the Regenerate <button> for the request; on error it stays disabled.
-  assert.equal(shouldReEnable({ tagName: "BUTTON", disabled: true }), true);
-  assert.equal(shouldReEnable({ tagName: "input", disabled: true }), true);
-  assert.equal(shouldReEnable({ tagName: "fieldset", disabled: true }), true);
-});
-
-test("an already-enabled control is left alone", () => {
-  assert.equal(shouldReEnable({ tagName: "BUTTON", disabled: false }), false);
-});
-
-test("a non-control element is never touched", () => {
-  // The triggering element of a poll can be a <div> (hx-trigger=every 1s) — it has no `disabled`.
-  assert.equal(shouldReEnable({ tagName: "DIV", disabled: true }), false);
-  assert.equal(shouldReEnable({ tagName: "article" }), false);
-});
-
-test("a missing / malformed element is treated as 'do not re-enable'", () => {
-  assert.equal(shouldReEnable(null), false);
-  assert.equal(shouldReEnable(undefined), false);
-  assert.equal(shouldReEnable({}), false);
+test("a missing / non-numeric status falls back to a generic notice", () => {
+  assert.equal(noticeFor(ERROR_EVENT, null), "Something went wrong — please try again.");
+  assert.equal(noticeFor(ERROR_EVENT, undefined), "Something went wrong — please try again.");
+  assert.equal(noticeFor("app:somethingElse", null), "Something went wrong — please try again.");
 });

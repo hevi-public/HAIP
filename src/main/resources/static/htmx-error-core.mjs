@@ -1,35 +1,42 @@
 /*
  * htmx-error-core — pure decision layer for honest htmx failure handling (T1.4).
  *
- * NO DOM, NO globals: these functions decide, from the shape of a failed htmx event, (a) the
- * non-blocking notice to surface and (b) whether the triggering control must be re-enabled. The DOM
- * glue (htmx-error.js, wired from app.js) reads the event off the page, calls these, and applies the
- * result — re-enabling the stuck `hx-disabled-elt` button and showing the notice. See
- * src/test/js/htmx-error-core.test.mjs.
+ * NO DOM, NO globals: this one function decides the non-blocking notice to surface for a failed htmx
+ * interaction. The DOM glue (htmx-error.js, loaded directly from layout.kte) listens for the events and
+ * shows the toast. See src/test/js/htmx-error-core.test.mjs.
  *
- * Why this exists: when a request errors, htmx fires `htmx:responseError` (a non-2xx came back) or
- * `htmx:sendError` (the request never reached the server). In neither case does the normal swap run,
- * so a control disabled for the request's duration (`hx-disabled-elt`) never re-enables and any
- * spinner (`hx-indicator`) keeps spinning. The fix is to react to those two events ourselves.
+ * What htmx 2.0.6 already does (verified against the vendored dist/htmx.js, so we DON'T re-do it):
+ *   - It re-enables `hx-disabled-elt` controls and clears `hx-indicator` spinners on EVERY terminal xhr
+ *     path — onload (incl. non-2xx), onerror (sendError), ontimeout — via removeRequestIndicators(). So
+ *     there is no "stuck control" to fix on the client; that belief was wrong.
+ *   - On a non-2xx it does NOT swap the body (default responseHandling: [45].. → swap:false). Our server
+ *     advice works around that by returning the error fragment at HTTP 200 (so htmx swaps it) and
+ *     signalling the real failure out-of-band via an `app:error` HX-Trigger event.
+ *
+ * What htmx does NOT do, and is the load-bearing reason this module exists: it gives NO default
+ * user-visible feedback when a request fails. So the genuinely useful client piece is a toast, raised
+ * for (a) the server-error signal (`app:error`, carrying the mapped status) and (b) `htmx:sendError`
+ * (the request never reached the server — there's no response and nothing swaps, so the fragment can't
+ * speak for itself).
  */
 
-// The two htmx error events we own. A response came back non-2xx, or the request never left.
-export const RESPONSE_ERROR = "htmx:responseError";
+// The htmx event for a request that never reached the server (network failure). No response, no swap.
 export const SEND_ERROR = "htmx:sendError";
+// Our server's out-of-band failure signal, dispatched by htmx from the advice's HX-Trigger header.
+export const ERROR_EVENT = "app:error";
 
 /**
- * The owner-facing notice for a failed htmx event.
+ * The owner-facing notice for a failed htmx interaction.
  *
- * @param {string} eventType        the htmx event name (RESPONSE_ERROR | SEND_ERROR | other)
- * @param {number|null} status      the HTTP status for a responseError, else null
+ * @param {string} eventType   the event name (SEND_ERROR | ERROR_EVENT)
+ * @param {number|null} status the mapped HTTP status carried by an app:error event, else null
  * @returns {string} a short, non-blocking message
  */
 export function noticeFor(eventType, status) {
   if (eventType === SEND_ERROR) {
     return "Couldn't reach the server — check your connection and try again.";
   }
-  // A response came back, but non-2xx. The server's error fragment (if any) is swapped in separately;
-  // this notice is the always-present fallback so even an empty/odd body never leaves silence.
+  // app:error (or anything else with a status): word it from the mapped status the server sent.
   if (status === 429 || status === 503) {
     return "The model is busy right now — try again in a moment.";
   }
@@ -41,22 +48,3 @@ export function noticeFor(eventType, status) {
   }
   return "Something went wrong — please try again.";
 }
-
-/**
- * Whether [el] is a control that htmx may have left disabled for the failed request and that we should
- * therefore re-enable. We re-enable form controls (buttons/inputs/etc.) that carry the `disabled`
- * property; non-controls (or already-enabled controls) are left alone. Pure: takes a minimal shape, not
- * a live element, so it's testable without a DOM.
- *
- * @param {{tagName?: string, disabled?: boolean}} el
- * @returns {boolean}
- */
-export function shouldReEnable(el) {
-  if (!el || typeof el.tagName !== "string") return false;
-  // Only form controls have a meaningful `disabled` — and only re-enable one that IS disabled.
-  if (!CONTROLS.has(el.tagName.toLowerCase())) return false;
-  return el.disabled === true;
-}
-
-// The form controls hx-disabled-elt can disable for a request's duration.
-const CONTROLS = new Set(["button", "input", "select", "textarea", "fieldset"]);
