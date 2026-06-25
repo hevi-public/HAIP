@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.springframework.jdbc.core.JdbcTemplate
 import java.time.Clock
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Tier-2: the service runs real Tier-0 logic over fakes at the single IO seam (see the
@@ -98,11 +100,19 @@ class GenerationServiceTest {
         }
     }
 
-    /** An in-memory repository that just records writes, so we can assert on what was persisted. */
-    private class RecordingComments : CommentRepository(JdbcTemplate(), Clock.systemUTC()) {
+    /**
+     * An in-memory repository that just records writes, so we can assert on what was persisted. [onSettle]
+     * fires after each insert (default no-op) — the async test uses it to release a latch the instant the
+     * settle WRITE lands, so it can await that exact event instead of wall-clock polling. Inserts are
+     * synchronized: a worker thread does the write while the test thread reads [saved], and the latch the
+     * hook trips establishes the happens-before the assertions rely on.
+     */
+    private class RecordingComments(
+        private val onSettle: (Comment) -> Unit = {},
+    ) : CommentRepository(JdbcTemplate(), Clock.systemUTC()) {
         val saved = mutableListOf<Comment>()
-        override fun insert(c: Comment) { saved += c }
-        override fun findById(id: String): Comment? = saved.lastOrNull { it.id == id }
+        @Synchronized override fun insert(c: Comment) { saved += c; onSettle(c) }
+        @Synchronized override fun findById(id: String): Comment? = saved.lastOrNull { it.id == id }
         override fun threadComments(threadId: String): List<Comment> = emptyList()
         override fun ancestorPath(nodeId: String): List<Comment> = emptyList()
     }
@@ -300,19 +310,20 @@ class GenerationServiceTest {
         // The dispatcher's routing call (first scripted body) AND the persona's reply both run on the
         // worker — summonAsync returns at once without touching the LLM, which is the whole point: the
         // create request never blocks on the model.
+        // Released the instant Sol's reply settles (the persist WRITE), so the await below is event-driven
+        // rather than a wall-clock poll: the timeout is only a failsafe against a hung worker, never a
+        // sampling interval.
+        val solSettled = CountDownLatch(1)
         val llm = ScriptedLlm(listOf("Sol", "Sol's take"))
-        val comments = RecordingComments()
+        val comments = RecordingComments { c ->
+            if (c.authorId == "Sol" && c.state == GenerationState.POSTED) solSettled.countDown()
+        }
         val registry = InFlightGenerations()
         val service = GenerationService(llm, comments, roster("Sol", "Paul"), registry)
 
         service.summonAsync("t1", null, listOf(GenerationService.AUTO_PERSONA), "")
 
-        val deadline = System.currentTimeMillis() + 5_000
-        while (System.currentTimeMillis() < deadline &&
-            comments.saved.none { it.authorId == "Sol" && it.state == GenerationState.POSTED }
-        ) {
-            Thread.sleep(10)
-        }
+        assertTrue(solSettled.await(5, TimeUnit.SECONDS), "Sol's reply should settle on the worker")
 
         assertTrue(llm.requests.any { it.persona.name == "Moderator" }, "the dispatcher routed on the worker")
         val sol = comments.saved.singleOrNull { it.authorId == "Sol" }
