@@ -7,3 +7,9 @@
 -- or behaviour change, so there's no backfill and no acceptance test, just a faster hot path.
 
 CREATE INDEX idx_comment_thread_order ON comment(thread_id, depth, created_at);
+
+-- Drop the now-redundant V1 single-column index. The new composite has thread_id as its leftmost
+-- column, so it is a left-prefix superset: bare `WHERE thread_id = ?` lookups stay index-served by
+-- idx_comment_thread_order, and keeping both would just be dead weight on every comment write.
+-- (idx_comment_parent on (parent_id) is unrelated and stays.)
+DROP INDEX idx_comment_thread;
