@@ -4,6 +4,7 @@ import com.aiforum.domain.Attachment
 import com.aiforum.domain.Comment
 import com.aiforum.domain.budget.DepthBudget
 import com.aiforum.domain.context.ContextAssembler
+import com.aiforum.agui.AguiEventSink
 import com.aiforum.domain.lifecycle.GenerationStateMachine
 import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
@@ -179,6 +180,14 @@ class GenerationService(
 
     /** Trip the in-flight token for [replyId] and wait (bounded) for the worker to settle it (§4). */
     fun cancel(replyId: String) = inFlight.cancel(replyId)
+
+    /**
+     * Subscribe to a drafting node's AG-UI event stream (the SSE endpoint). Returns null when the node
+     * isn't in flight (unknown or already settled) — the caller then falls back to the poll, since the
+     * settled row exists. Delegates to [InFlightGenerations]; the service owns the in-flight registry.
+     */
+    fun subscribeEvents(replyId: String, listener: com.aiforum.agui.AguiEventListener) =
+        inFlight.subscribe(replyId, listener)
 
     /** The transient DRAFTING view while a node is still in flight — the poll endpoint's DB-first fallback. */
     fun inFlightView(replyId: String): ReplyView? = inFlight.view(replyId)
@@ -494,8 +503,12 @@ class GenerationService(
 
     /** Run one persona's reply against the seam with [token], classify any failure, and persist it. */
     private fun settleOne(plan: GenPlan, token: CancellationToken): ReplyView {
+        // Stream AG-UI events to the node's in-flight channel as the reply generates (a no-op for the
+        // synchronous generate/autoGrow paths, which register no holder). runId == the node id so the SSE
+        // endpoint /replies/{id}/stream and the channel route to the right drafting node.
+        val sink = AguiEventSink { inFlight.publish(plan.id, it) }
         val comment = try {
-            val resp = llm.generate(LlmRequest(plan.contextOf(), PersonaRef(plan.persona.id, plan.persona.name, plan.persona.model), timeout), token)
+            val resp = llm.generate(LlmRequest(plan.contextOf(), PersonaRef(plan.persona.id, plan.persona.name, plan.persona.model), timeout, runId = plan.id), token, sink)
             resp.reasoningLeak?.let { log.warn("reasoning leak ({}) in reply {} by persona {}", it, plan.id, plan.persona.id) }
             Comment(plan.id, plan.threadId, plan.parentId, plan.persona.id, resp.text, GenerationState.POSTED, null, plan.depth, depthBudget = plan.budget, reasoningLeak = resp.reasoningLeak)
         } catch (e: Throwable) {

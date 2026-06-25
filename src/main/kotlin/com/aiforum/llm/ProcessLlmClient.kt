@@ -1,5 +1,7 @@
 package com.aiforum.llm
 
+import com.aiforum.agui.AguiEvent
+import com.aiforum.agui.AguiEventSink
 import com.aiforum.observability.event
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -62,6 +64,11 @@ open class ProcessLlmClient(
     @Value("\${aiforum.llm.github-mcp-config:}") private val githubMcpConfig: String = "",
     // Must match the server key inside that config; authorises `mcp__<name>` (all of the server's read tools).
     @Value("\${aiforum.llm.github-mcp-server-name:gh-readonly}") private val githubMcpServerName: String = "gh-readonly",
+    // Streaming only: pass `--include-partial-messages` so claude emits token-level content_block_delta
+    // events (not just whole assistant messages) for live typing. Default on; flip off if a CLI version
+    // doesn't support the flag — the stream then degrades to whole-message granularity, which
+    // [ClaudeStreamParser] still handles. The non-streaming generate() path ignores this.
+    @Value("\${aiforum.llm.stream-partial-messages:true}") private val streamPartialMessages: Boolean = true,
 ) : LlmClient {
 
     // Explicit class (not javaClass) so the logger name is stable across the test subclasses that override
@@ -82,64 +89,16 @@ open class ProcessLlmClient(
     }
 
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
-        // The model actually selected (persona pin > configured default > the CLI's own default), surfaced
-        // for the operator — generation cost/behaviour hinges on it.
-        val model = request.persona.model.ifBlank { defaultModel }.ifBlank { "(cli default)" }
-        log.atDebug().setMessage("spawning {} for persona {} (model {})")
-            .addArgument(command).addArgument(request.persona.name).addArgument(model)
-            .event(EV_SPAWN).addKeyValue("persona", request.persona.name).addKeyValue("model", model)
-            .log()
-
-        val process = spawn(buildArgs(request.context.personaSystemPrompt, request.persona.model))
-
-        // Feed the prompt on stdin (the CLI reads it there in -p mode) then close. A broken pipe means
-        // the process already died; the parser surfaces that from the exit code, so we don't fail here.
-        try {
-            process.outputStream.use {
-                it.write(PromptRenderer.renderTask(request.context, request.persona.name).toByteArray())
-            }
-        } catch (_: IOException) {
-            // process exited before consuming stdin — classification below handles it
-        }
+        logSpawn(request)
+        val process = spawn(buildArgs(request.context.personaSystemPrompt, request.persona.model, stream = false))
+        writeStdin(process, request)
 
         // Drain both pipes on daemon threads so a chatty subprocess can't deadlock on a full OS buffer
         // while we sit in waitFor.
         val stdout = drain(process.inputStream)
         val stderr = drain(process.errorStream)
 
-        // Termination is bounded and runaway-proof — important because this runs on a remote box where a
-        // hung subprocess can't be killed by hand. Each iteration blocks at most `pollMs` in waitFor, and
-        // there is no exit other than: the process finishing, the token tripping, or the monotonic
-        // deadline firing. The elapsed check uses nanoTime subtraction (wraparound-safe) and the poll
-        // interval is floored at 1ms so a misconfigured 0 can't turn this into a busy-spin.
-        val pollMs = pollMillis.coerceAtLeast(1)
-        val timeoutNanos = request.timeout.toNanos().coerceAtLeast(0)
-        val start = System.nanoTime()
-        try {
-            while (true) {
-                if (cancellation.isCancelled) {
-                    kill(process)
-                    log.atInfo().setMessage("generation for {} cancelled by owner").addArgument(request.persona.name)
-                        .event(EV_CANCELLED).addKeyValue("persona", request.persona.name)
-                        .log()
-                    throw LlmException.Cancelled()
-                }
-                if (process.waitFor(pollMs, TimeUnit.MILLISECONDS)) break
-                if (System.nanoTime() - start >= timeoutNanos) {
-                    kill(process)
-                    val timeoutMs = request.timeout.toMillis()
-                    log.atWarn().setMessage("generation for {} timed out after {}ms")
-                        .addArgument(request.persona.name).addArgument(timeoutMs)
-                        .event(EV_TIMEOUT).addKeyValue("persona", request.persona.name).addKeyValue("timeoutMs", timeoutMs)
-                        .log()
-                    throw LlmException.Timeout()
-                }
-            }
-        } catch (_: InterruptedException) {
-            kill(process)
-            Thread.currentThread().interrupt()
-            throw LlmException.Cancelled()
-        }
+        awaitProcess(process, request.timeout, cancellation, request.persona.name)
 
         await(stderr) // let the reader finish so the pipe closes cleanly; stderr isn't part of the mapping
         return LlmResponseParser.parse(
@@ -149,10 +108,114 @@ open class ProcessLlmClient(
         )
     }
 
-    private fun buildArgs(systemPrompt: String, personaModel: String): List<String> = buildList {
+    /**
+     * Streaming variant: spawn with `--output-format stream-json` and read stdout line by line, handing each
+     * NDJSON line to [ClaudeStreamParser] so token deltas + tool-call status reach [sink] live. The captured
+     * terminal `result` line still goes through [LlmResponseParser], so the returned (and persisted)
+     * [LlmResponse] is identical to the non-streaming path — the deltas are purely for liveness. Reuses the
+     * SAME runaway-proof [awaitProcess] loop, so timeout/cancel/exit-code behaviour can't drift between modes.
+     */
+    override fun generate(request: LlmRequest, cancellation: CancellationToken, sink: AguiEventSink): LlmResponse {
+        sink.emit(AguiEvent.RunStarted(request.runId))
+        try {
+            logSpawn(request)
+            val process = spawn(buildArgs(request.context.personaSystemPrompt, request.persona.model, stream = true))
+            writeStdin(process, request)
+
+            val parser = ClaudeStreamParser(request.runId)
+            // Reading lines IS the drain here — the callback runs per line as it arrives, so deltas reach
+            // the sink while the model is still typing.
+            val stdout = drainLines(process.inputStream) { line -> parser.onLine(line).forEach(sink::emit) }
+            val stderr = drain(process.errorStream)
+
+            awaitProcess(process, request.timeout, cancellation, request.persona.name)
+            await(stderr)
+            awaitDrain(stdout) // barrier: ensure the tail (incl. the result line) is read before we classify
+
+            val response = LlmResponseParser.parse(
+                process.exitValue(),
+                parser.resultJson,
+                Duration.ofSeconds(rateLimitRetryAfterSeconds),
+            )
+            sink.emit(AguiEvent.RunFinished(request.runId))
+            return response
+        } catch (e: Throwable) {
+            sink.emit(AguiEvent.RunError(request.runId, e.message ?: "generation failed"))
+            throw e
+        }
+    }
+
+    /** Log the spawn with the model actually selected (persona pin > configured default > CLI default). */
+    private fun logSpawn(request: LlmRequest) {
+        val model = request.persona.model.ifBlank { defaultModel }.ifBlank { "(cli default)" }
+        log.atDebug().setMessage("spawning {} for persona {} (model {})")
+            .addArgument(command).addArgument(request.persona.name).addArgument(model)
+            .event(EV_SPAWN).addKeyValue("persona", request.persona.name).addKeyValue("model", model)
+            .log()
+    }
+
+    /**
+     * Feed the prompt on stdin (the CLI reads it there in -p mode) then close. A broken pipe means the
+     * process already died; the parser surfaces that from the exit code, so we don't fail here.
+     */
+    private fun writeStdin(process: Process, request: LlmRequest) {
+        try {
+            process.outputStream.use {
+                it.write(PromptRenderer.renderTask(request.context, request.persona.name).toByteArray())
+            }
+        } catch (_: IOException) {
+            // process exited before consuming stdin — classification handles it
+        }
+    }
+
+    /**
+     * Wait for the subprocess, bounded and runaway-proof — important on a remote box where a hung child
+     * can't be killed by hand. Each iteration blocks at most `pollMs` in waitFor; the only exits are the
+     * process finishing, the token tripping, or the monotonic deadline firing (nanoTime subtraction is
+     * wraparound-safe; the poll interval floors at 1ms so a misconfigured 0 can't busy-spin). Shared by
+     * the streaming and non-streaming generate paths so their lifecycle behaviour stays identical.
+     */
+    private fun awaitProcess(process: Process, timeout: Duration, cancellation: CancellationToken, personaName: String) {
+        val pollMs = pollMillis.coerceAtLeast(1)
+        val timeoutNanos = timeout.toNanos().coerceAtLeast(0)
+        val start = System.nanoTime()
+        try {
+            while (true) {
+                if (cancellation.isCancelled) {
+                    kill(process)
+                    log.atInfo().setMessage("generation for {} cancelled by owner").addArgument(personaName)
+                        .event(EV_CANCELLED).addKeyValue("persona", personaName)
+                        .log()
+                    throw LlmException.Cancelled()
+                }
+                if (process.waitFor(pollMs, TimeUnit.MILLISECONDS)) break
+                if (System.nanoTime() - start >= timeoutNanos) {
+                    kill(process)
+                    val timeoutMs = timeout.toMillis()
+                    log.atWarn().setMessage("generation for {} timed out after {}ms")
+                        .addArgument(personaName).addArgument(timeoutMs)
+                        .event(EV_TIMEOUT).addKeyValue("persona", personaName).addKeyValue("timeoutMs", timeoutMs)
+                        .log()
+                    throw LlmException.Timeout()
+                }
+            }
+        } catch (_: InterruptedException) {
+            kill(process)
+            Thread.currentThread().interrupt()
+            throw LlmException.Cancelled()
+        }
+    }
+
+    private fun buildArgs(systemPrompt: String, personaModel: String, stream: Boolean): List<String> = buildList {
         add(command)
         add("-p")
-        add("--output-format"); add("json")
+        // stream-json emits NDJSON (a final `result` line plus, with partial messages, token deltas); the
+        // CLI requires --verbose alongside it in -p mode. Plain json is the single result envelope.
+        add("--output-format"); add(if (stream) "stream-json" else "json")
+        if (stream) {
+            add("--verbose")
+            if (streamPartialMessages) add("--include-partial-messages")
+        }
         add("--system-prompt"); add(systemPrompt)
         // The persona's pinned model wins; a blank one falls back to the configured default; both blank
         // => no --model flag, so the CLI picks its own default.
@@ -211,6 +274,25 @@ open class ProcessLlmClient(
     private fun drain(stream: InputStream): FutureTask<String> =
         FutureTask { stream.use { it.readBytes().decodeToString() } }
             .also { Thread(it).apply { isDaemon = true }.start() }
+
+    /**
+     * Like [drain], but invokes [onLine] for each line AS it arrives (lineSequence reads until the pipe
+     * EOFs when the process exits) — this is how stream-json deltas reach the sink live. The callback runs
+     * on the daemon reader thread.
+     */
+    private fun drainLines(stream: InputStream, onLine: (String) -> Unit): FutureTask<Unit> =
+        FutureTask { stream.bufferedReader(Charsets.UTF_8).use { it.lineSequence().forEach(onLine) } }
+            .also { Thread(it).apply { isDaemon = true }.start() }
+
+    /** Bounded join on a line-drain task — the process has exited, so this returns promptly; the grace is a
+     *  backstop that abandons a stuck reader rather than hanging. */
+    private fun awaitDrain(task: FutureTask<Unit>) {
+        try {
+            task.get(STREAM_GRACE_MILLIS, TimeUnit.MILLISECONDS)
+        } catch (_: Exception) {
+            task.cancel(true)
+        }
+    }
 
     /** Bounded join on a drain task: the process has already exited, so this returns promptly; the grace
      *  is a backstop that turns a stuck reader into empty output rather than a hang. */

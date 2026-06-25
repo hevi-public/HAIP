@@ -46,6 +46,9 @@ class ScriptableLlmClient : LlmClient {
         data class Fail(val ex: () -> RuntimeException) : Behavior
         /** Block until the cancellation token is tripped, then report cancellation. */
         object HangUntilCancelled : Behavior
+        /** Stream these chunks as individual TextDeltas (the aggregate is their concatenation), driving the
+         *  AG-UI event path. Through the non-streaming generate() it degrades to the aggregate reply. */
+        data class Stream(val deltas: List<String>, val leak: ReasoningLeak? = null) : Behavior
     }
 
     private val script = ConcurrentLinkedDeque<Behavior>()
@@ -64,13 +67,41 @@ class ScriptableLlmClient : LlmClient {
 
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
         received += request
-        return when (val behavior = script.pollFirst() ?: Behavior.Respond("default reply")) {
-            is Behavior.Respond -> LlmResponse(behavior.text, behavior.leak)
-            is Behavior.Fail -> throw behavior.ex()
-            Behavior.HangUntilCancelled -> {
-                while (!cancellation.isCancelled) Thread.sleep(10)
-                throw com.aiforum.llm.LlmException.Cancelled()
+        return produce(script.pollFirst() ?: Behavior.Respond("default reply"), cancellation)
+    }
+
+    override fun generate(
+        request: LlmRequest,
+        cancellation: CancellationToken,
+        sink: com.aiforum.agui.AguiEventSink,
+    ): LlmResponse {
+        received += request
+        sink.emit(com.aiforum.agui.AguiEvent.RunStarted(request.runId))
+        return try {
+            val behavior = script.pollFirst() ?: Behavior.Respond("default reply")
+            // Stream emits a genuine per-chunk sequence; every other behaviour frames its aggregate as one
+            // delta (matching the LlmClient default), so the SSE path sees the same shape the real backends do.
+            if (behavior is Behavior.Stream) behavior.deltas.forEach { sink.emit(com.aiforum.agui.AguiEvent.TextDelta(request.runId, it)) }
+            val response = produce(behavior, cancellation)
+            if (behavior !is Behavior.Stream && response.text.isNotEmpty()) {
+                sink.emit(com.aiforum.agui.AguiEvent.TextDelta(request.runId, response.text))
             }
+            sink.emit(com.aiforum.agui.AguiEvent.RunFinished(request.runId))
+            response
+        } catch (e: Throwable) {
+            sink.emit(com.aiforum.agui.AguiEvent.RunError(request.runId, e.message ?: "generation failed"))
+            throw e
+        }
+    }
+
+    /** The behaviour → response mapping shared by both generate paths (no event emission here). */
+    private fun produce(behavior: Behavior, cancellation: CancellationToken): LlmResponse = when (behavior) {
+        is Behavior.Respond -> LlmResponse(behavior.text, behavior.leak)
+        is Behavior.Stream -> LlmResponse(behavior.deltas.joinToString(""), behavior.leak)
+        is Behavior.Fail -> throw behavior.ex()
+        Behavior.HangUntilCancelled -> {
+            while (!cancellation.isCancelled) Thread.sleep(10)
+            throw com.aiforum.llm.LlmException.Cancelled()
         }
     }
 }

@@ -37,6 +37,10 @@
     <%-- Composer affordances (auto-grow, slash/@mention palettes, the note/ask toggle). ES module →
          deferred by default; imports the unit-tested composer-core decision layer. --%>
     <script type="module" src="/app.js"></script>
+    <%-- Live generation streaming (plan: AG-UI hybrid SSR + SSE). ES module → deferred; opens an
+         EventSource on each drafting node to append reply text live, then lets the server-rendered
+         fragment swap in on completion. Pure progressive enhancement over the every-1s poll. --%>
+    <script type="module" src="/stream.js"></script>
     <%-- Vim-style keyboard navigation (plan_docs/keyboard-navigation.md). ES module → deferred by
          default; activates only where [data-nav-item] exists (thread page for now), no-ops elsewhere. --%>
     <script type="module" src="/nav.js"></script>

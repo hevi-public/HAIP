@@ -1,5 +1,7 @@
 package com.aiforum.llm
 
+import com.aiforum.agui.AguiEvent
+import com.aiforum.agui.AguiEventSink
 import com.aiforum.dto.ReasoningLeak
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicBoolean
@@ -12,12 +14,40 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 interface LlmClient {
     fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse
+
+    /**
+     * Streaming overload: identical contract to [generate], but [sink] receives [AguiEvent]s as the reply
+     * is produced — RunStarted, then incremental TextDelta(s) / tool-call status, then a terminal
+     * RunFinished or RunError. The aggregate [LlmResponse] is still returned (and persisted) so the
+     * settle/poll/render path is unchanged.
+     *
+     * The DEFAULT wraps the blocking [generate], emitting the whole reply as one TextDelta, so a
+     * non-streaming backend — and the test double — satisfies the streaming path for free. Backends that
+     * can stream ([ProcessLlmClient], [OpenAiLlmClient]) override this to emit real per-token deltas. This
+     * keeps the SINGLE test seam: callers always go through `generate`, just with or without a sink.
+     */
+    fun generate(request: LlmRequest, cancellation: CancellationToken, sink: AguiEventSink): LlmResponse {
+        sink.emit(AguiEvent.RunStarted(request.runId))
+        try {
+            val response = generate(request, cancellation)
+            if (response.text.isNotEmpty()) sink.emit(AguiEvent.TextDelta(request.runId, response.text))
+            sink.emit(AguiEvent.RunFinished(request.runId))
+            return response
+        } catch (e: Throwable) {
+            sink.emit(AguiEvent.RunError(request.runId, e.message ?: "generation failed"))
+            throw e
+        }
+    }
 }
 
 data class LlmRequest(
     val context: PromptContext,
     val persona: PersonaRef,
     val timeout: Duration,
+    // The in-flight node id this generation settles into — used as the AG-UI `runId`/`messageId` on every
+    // emitted event so the stream can be routed to the right drafting node. Default "" keeps the
+    // non-streaming call sites (retry/regenerate) and terse test fixtures positional.
+    val runId: String = "",
 )
 
 // `reasoningLeak` tags a reply whose model leaked chain-of-thought (set by ReplySanitizer in the
