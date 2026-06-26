@@ -221,6 +221,23 @@ only fires for `HX-Request` calls; a non-htmx request **rethrows**, so Boot's de
 its real status and emits **no `HX-Trigger`**. See [[cucumber-spring-bdd]] for the failure-path
 acceptance wiring (mapped **non-2xx** + empty body + the `HX-Trigger` `app:error` assertion).
 
+Persistence is **best-effort and TTL-bounded**, deliberately — it's a single-user PoC, not a durable
+queue:
+
+- **TTL prune.** Each toast carries a `createdAt`; the store drops any toast older than `TOAST_TTL_MS`
+  (24h) **on load and on every write**, so a stale error from days ago never resurfaces and storage
+  can't accumulate forever (the per-`MAX_TOASTS` cap bounds count; the TTL bounds age).
+- **Best-effort writes.** `localStorage.setItem` is wrapped so a failure is swallowed, not thrown — the
+  toast still shows this session, it just may not survive a reload. **Documented limitation:** Safari
+  private mode (`setItem` *always* throws → no cross-load persistence that session) and hard quota
+  exhaustion are **not** handled, on purpose. Acceptable for a single-user PoC; revisit if it bites.
+  (This TTL + best-effort approach *replaced* an earlier in-memory-fallback latch — don't reintroduce
+  one.)
+- **Relative age label.** A pure-core `ageLabel(createdAt, now)` (native `Intl.RelativeTimeFormat`)
+  renders a rehydrated toast as e.g. "Server error · 3 minutes ago" rather than a contextless message,
+  refreshed on a single ~60s tick. `now` is **injected** (the core never calls `Date.now()`), so the
+  label is deterministic under test — the same Tier-0 purity the store and `noticeFor` already keep.
+
 ## Static assets & styling (`static/`, `app.css`)
 
 The visual layer is hand-written CSS + a little vanilla JS served as **static resources** — no build
