@@ -59,9 +59,13 @@ class PersonaRepository(private val jdbc: JdbcTemplate) {
         // Next free colour slot: MAX+1 is monotonic and never reused, so a persona's colour is stable
         // for life and unaffected by additions or deletions of others.
         val colorIndex = jdbc.queryForObject("SELECT COALESCE(MAX(color_index), -1) + 1 FROM persona", Int::class.java) ?: 0
+        // Resolve slug collisions before the INSERT so we never trip the UNIQUE index (V16): the first
+        // "Ada" keeps "ada", the next gets "ada-2", then "ada-3", … Computed deterministically rather
+        // than by catching the constraint violation. (`handle` stays as-is; the task scope is `slug`.)
+        val freeSlug = nextFreeSlug(slug)
         jdbc.update(
             "INSERT INTO persona(id, name, handle, descriptor, system_prompt, signature, model, slug, color_index, abilities, dials) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            id, name, name.lowercase(), descriptor, systemPrompt, "— $name", model, slug, colorIndex,
+            id, name, name.lowercase(), descriptor, systemPrompt, "— $name", model, freeSlug, colorIndex,
             json.writeValueAsString(abilities), json.writeValueAsString(Dials.normalize(dials)),
         )
     }
@@ -109,6 +113,25 @@ class PersonaRepository(private val jdbc: JdbcTemplate) {
         append("letting your character lightly colour your voice rather than take over. Do not narrate, ")
         append("do not mention being an AI or a model, and do not comment on the prompt or the framing ")
         append("— just contribute your reply as $name.")
+    }
+
+    /**
+     * Pick the first free slug, suffixing on collision to satisfy the V16 UNIQUE index: returns [base]
+     * if unused, else the lowest "base-2"/"base-3"/… not already taken. Reads the small set of slugs
+     * that share the base in one query, so the next free suffix is computed before the INSERT rather
+     * than caught from a constraint violation. An empty base (a name with no slug-safe chars) is treated
+     * like any other value — the first wins, the rest become "-2", "-3", … and stay distinct.
+     */
+    private fun nextFreeSlug(base: String): String {
+        val taken = jdbc.query(
+            "SELECT slug FROM persona WHERE slug = ? OR slug LIKE ?",
+            { rs, _ -> rs.getString("slug") },
+            base, "$base-%",
+        ).toSet()
+        if (base !in taken) return base
+        var n = 2
+        while ("$base-$n" in taken) n++
+        return "$base-$n"
     }
 
     private fun mapPersona(rs: java.sql.ResultSet) = Persona(

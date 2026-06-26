@@ -53,10 +53,15 @@ class InFlightGenerations {
     // in quick succession only clears once both routings finish. Cleared in [reset] between scenarios.
     private val summoning = ConcurrentHashMap<String, Int>()
 
-    // corePoolSize 0 → no threads exist until the first submit, so the default instance the Tier-2
-    // unit test constructs (which never submits) spins nothing.
+    // BOUNDED worker pool (T2.3): each generation worker runs an LLM call AND DB writes against the
+    // 5-connection Hikari pool over single-writer SQLite, so the old unbounded newCachedThreadPool could
+    // spawn arbitrarily many workers and pile contention onto that one writer. A fixed pool of [POOL_SIZE]
+    // caps concurrency; excess submits queue (newFixedThreadPool's unbounded LinkedBlockingQueue) rather
+    // than minting new threads. Lazy start is preserved: a fixed pool's core threads start ON DEMAND at
+    // the first submit (we never call prestartAllCoreThreads), so the default instance the Tier-2 unit
+    // test constructs — which never submits — spins no threads.
     private val threadCount = AtomicLong()
-    private val pool = Executors.newCachedThreadPool { r ->
+    private val pool = Executors.newFixedThreadPool(POOL_SIZE) { r ->
         Thread(r, "generation-${threadCount.incrementAndGet()}").apply { isDaemon = true }
     }
 
@@ -175,6 +180,9 @@ class InFlightGenerations {
     }
 
     private companion object {
+        // Bounded concurrency cap for generation workers (T2.3) — small, since every worker contends for
+        // the single SQLite writer behind the 5-connection Hikari pool.
+        const val POOL_SIZE = 4
         const val CANCEL_AWAIT_MILLIS = 10_000L
         const val RESET_AWAIT_MILLIS = 2_000L
     }

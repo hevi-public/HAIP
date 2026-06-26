@@ -1,3 +1,10 @@
+server:
+  # Bind to loopback only: this is a single-user local tool with no auth, so it must not be reachable
+  # from the LAN. (T2.1 — turns the "binds 0.0.0.0 / no auth" Critical into a non-issue; full auth
+  # stays deferred to T3.1.) Keeps the default port 8080 — only the bind address is constrained. The
+  # test profile is left untouched (its RANDOM_PORT / TestRestTemplate already use loopback).
+  address: 127.0.0.1
+
 spring:
   datasource:
     # Persistent home-directory DB for long-term work (dev uses a throwaway project-local file).
@@ -22,6 +29,11 @@ spring:
 aiforum:
   backups:
     enabled: true
+    # Persistent home-directory snapshots, sibling of the prod DB. Pinned explicitly (rather than relying
+    # on the SqliteBackup @Value defaults) so the prod backup target is legible here. ${user.home} is
+    # Spring-resolved before the path is read, so no literal ~ reaches the filesystem.
+    dir: ${user.home}/.haip/backup
+    keep: 7
   llm:
     # Personas reach the network in prod too.
     # ⚠ SECURITY: the Docker jail (requirements §12) is NOT built yet, so prod personas fetch from the

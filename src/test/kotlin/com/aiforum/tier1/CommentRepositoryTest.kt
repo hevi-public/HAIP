@@ -6,9 +6,11 @@ import com.aiforum.dto.GenerationState
 import com.aiforum.repo.CommentRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTimeoutPreemptively
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import java.time.Duration
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.jdbc.core.JdbcTemplate
@@ -377,5 +379,48 @@ class CommentRepositoryTest {
         data.insertComment(thread, authorId = "sol", body = "cancelled", state = "CANCELLED")
 
         assertEquals(listOf("posted"), comments.recentPosted(limit = 10).map { it.body })
+    }
+
+    /**
+     * T1.3 cycle/depth guard. A corrupt `parent_id` write (one the app's acyclic invariant would never
+     * make) turns each recursive-CTE tree walk into an infinite loop — a hang, not a graceful error.
+     * The depth bound (`lvl < 10000`) on every recursive CTE makes the walk terminate instead. We prove
+     * it by forging a 2-cycle directly in the DB (A.parent = B, B.parent = A) — bypassing the app — and
+     * asserting each CTE method returns within a short timeout rather than spinning forever.
+     */
+    private fun forge2Cycle(): Pair<String, String> {
+        val thread = data.insertThread("Scaling SQLite")
+        val a = data.insertComment(thread, authorId = "vex", body = "A", parentId = null, depth = 0)
+        val b = data.insertComment(thread, authorId = "pike", body = "B", parentId = a, depth = 1)
+        // Forge the cycle the app would never create: A↔B point at each other.
+        jdbc.update("UPDATE comment SET parent_id = ? WHERE id = ?", b, a)
+        jdbc.update("UPDATE comment SET parent_id = ? WHERE id = ?", a, b)
+        return a to b
+    }
+
+    @Test
+    fun `ancestorPath terminates on a cyclic parent_id graph instead of hanging`() {
+        val (a, _) = forge2Cycle()
+        // Without the depth bound this loops forever; the guard makes it return (or throw) promptly.
+        assertTimeoutPreemptively(Duration.ofSeconds(2)) {
+            runCatching { comments.ancestorPath(a) }
+        }
+    }
+
+    @Test
+    fun `descendantCount terminates on a cyclic parent_id graph instead of hanging`() {
+        val (a, _) = forge2Cycle()
+        assertTimeoutPreemptively(Duration.ofSeconds(2)) {
+            runCatching { comments.descendantCount(a) }
+        }
+    }
+
+    @Test
+    fun `deleteSubtree (subtreeIdsDeepestFirst) terminates on a cyclic parent_id graph instead of hanging`() {
+        val (a, _) = forge2Cycle()
+        // deleteSubtree is the only caller of the private subtreeIdsDeepestFirst CTE — drive it through that.
+        assertTimeoutPreemptively(Duration.ofSeconds(2)) {
+            runCatching { comments.deleteSubtree(a) }
+        }
     }
 }

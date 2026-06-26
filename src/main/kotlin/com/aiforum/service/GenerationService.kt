@@ -21,6 +21,7 @@ import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.ThreadRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
 import java.util.UUID
 
@@ -290,7 +291,14 @@ class GenerationService(
      * Children are untouched — the node's body changes, its subtree stays. A transient generation failure
      * leaves the current take in place (no revision appended) and returns the node unchanged, so a flaky
      * model can never destroy a good reply. Returns the re-rendered node (its body now the new revision).
+     *
+     * @Transactional: once the model has answered, the seed-idx0 + addRevision + selectRevision writes are
+     * one atomic unit — a crash or SQLITE_BUSY between them must not leave the revision history half-built
+     * (e.g. a new revision appended but never selected). The on-failure early return happens BEFORE any
+     * write, so the LLM call holds no write lock (SQLite defers the lock to the first statement). Called
+     * through the Spring proxy from the controller, so the boundary is active.
      */
+    @Transactional
     fun regenerate(replyId: String): ReplyView {
         val existing = comments.findById(replyId) ?: error("no reply $replyId")
         require(existing.state == GenerationState.POSTED) { "only a posted reply can be regenerated" }

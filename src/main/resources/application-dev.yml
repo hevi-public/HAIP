@@ -1,4 +1,9 @@
 server:
+  # Bind to loopback only: this is a single-user local tool with no auth, so it must not be reachable
+  # from the LAN. (T2.1 — turns the "binds 0.0.0.0 / no auth" Critical into a non-issue; full auth
+  # stays deferred to T3.1.) Mirrors application-prod.yml; the test profile is left untouched (its
+  # RANDOM_PORT / TestRestTemplate already use loopback).
+  address: 127.0.0.1
   # Dev runs on 8081 so it doesn't collide with a prod instance (prod keeps the 8080 default — no
   # server.port override there). Change with `--server.port=` or SERVER_PORT if 8081 is also taken.
   port: 8081
@@ -23,6 +28,9 @@ spring:
 aiforum:
   backups:
     enabled: true
+    # Throwaway project-local snapshots for dev (mirrors the dev DB + images living under data/), so a
+    # `bootRun` dev session doesn't scatter snapshots into the real ~/.haip/backup store.
+    dir: data/backup-dev
   images:
     # Throwaway project-local image store for dev (mirrors the dev DB living under data/).
     dir: data/images-dev
