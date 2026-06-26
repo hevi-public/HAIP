@@ -106,11 +106,14 @@ streaming path. The "mock only at Tier 1" guarantee holds. Its tests follow the 
   object, `AguiWire`; `tier0/AguiWireTest` pins it with golden strings. This is the **only** test coupled to
   the external spec — a spec bump changes `AguiWire` + this test and nothing else above it moves.
 - **Per-backend normalisation → Tier 0 then Tier 1.** Each backend maps its native stream
-  (`claude -p --output-format stream-json` NDJSON; OpenAI `stream:true` SSE) into the vocabulary via a *pure*
-  parser (`ClaudeStreamParser` / `OpenAiStreamParser`, Tier 0), then the streaming overload is exercised
-  end-to-end through the **same** `spawn()` / `MockRestServiceServer` stand-ins (Tier 1). Both still run the
-  **final** text through the existing `LlmResponseParser` / `OpenAiResponseParser`, so the persisted reply is
-  byte-identical to the blocking path — the deltas are liveness only, not a second source of truth.
+  (`claude -p --output-format stream-json` NDJSON; OpenAI `stream:true` SSE; `opencode run --format json`
+  NDJSON) into the vocabulary via a *pure* parser (`ClaudeStreamParser` / `OpenAiStreamParser` /
+  `OpenCodeStreamParser`, Tier 0), then the streaming overload is exercised end-to-end through the **same**
+  `spawn()` / `MockRestServiceServer` stand-ins (Tier 1). Each still classifies the **final** text through a
+  Tier-0 classifier (`LlmResponseParser` / `OpenAiResponseParser` / `OpenCodeStreamParser.toResponse`), so the
+  persisted reply is byte-identical to the blocking path — the deltas are liveness only, not a second source
+  of truth. (opencode's `text` parts are *cumulative* per `part.id`; the parser emits each new suffix as a
+  delta — capture a real `--format json` run to pin fixtures rather than guessing the shape.)
 - **Don't grow a new mock level for transport.** The SSE fan-out is plain in-memory state (a per-run channel
   on `InFlightGenerations`): test it directly at Tier 2 (replay / terminal-complete / unknown-fallback), and
   assert the wire over **real HTTP** at acceptance — a terminal buffer replays as SSE frames, deterministic
