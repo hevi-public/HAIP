@@ -54,7 +54,7 @@ class MigrationPipelineTest {
             }
         }
 
-        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending V4–V15).
+        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending V4–V17).
         flyway(url, null).migrate()
 
         // 4. The old rows survived, and the new columns carry their migration default / backfill.
@@ -64,13 +64,30 @@ class MigrationPipelineTest {
                     rs.next()
                     assertEquals("Ada", rs.getString("id"), "the pre-existing row must survive the upgrade")
                     assertEquals("", rs.getString("model"), "V4 DEFAULT '' applies to the pre-existing row")
-                    assertEquals("", rs.getString("slug"), "V5 DEFAULT '' applies to the pre-existing row")
+                    // V5's DEFAULT '' applied here, but V16 (the last migration in this run) deduped the
+                    // two empty slugs by falling them back to their unique id — asserted in detail below.
+                    assertEquals("Ada", rs.getString("slug"), "V16 rewrote V5's empty slug to the unique id")
                     assertEquals(0, rs.getInt("color_index"), "V6 backfills colour slots in rowid order")
                     assertEquals("[]", rs.getString("abilities"), "V10 DEFAULT '[]' applies to the pre-existing row")
                     assertEquals("{}", rs.getString("dials"), "V10 DEFAULT '{}' applies to the pre-existing row")
                     rs.next()
                     assertEquals("Bob", rs.getString("id"))
                     assertEquals(1, rs.getInt("color_index"), "the second row gets the next colour slot")
+                }
+
+                // V16 enforces a UNIQUE slug. Both seeded rows reached V16 with slug = '' (V5's DEFAULT),
+                // a built-in duplicate; V16's dedupe-before-index step rewrote them to distinct, non-empty
+                // values (the empty-slug rows fall back to their id) so CREATE UNIQUE INDEX could apply.
+                st.executeQuery("SELECT slug FROM persona ORDER BY rowid").use { rs ->
+                    rs.next()
+                    val adaSlug = rs.getString("slug")
+                    rs.next()
+                    val bobSlug = rs.getString("slug")
+                    assertEquals("Ada", adaSlug, "V16 fell the empty slug back to the unique id")
+                    assertEquals("Bob", bobSlug, "V16 fell the empty slug back to the unique id")
+                    org.junit.jupiter.api.Assertions.assertNotEquals(
+                        adaSlug, bobSlug, "V16 must leave the two rows with distinct slugs",
+                    )
                 }
 
                 // The pre-existing thread survived; the canonical V7's NOT NULL DEFAULT '' gives it ''.
@@ -97,10 +114,10 @@ class MigrationPipelineTest {
                     assertEquals(null, rs.getString("updated_at"), "V11 leaves the pre-existing thread unedited (NULL)")
                 }
 
-                // flyway_schema_history records the full V1..V15 chain as applied.
+                // flyway_schema_history records the full V1..V17 chain as applied.
                 st.executeQuery("SELECT MAX(CAST(version AS INTEGER)) AS v FROM flyway_schema_history").use { rs ->
                     rs.next()
-                    assertEquals(15, rs.getInt("v"), "all fifteen migrations should be recorded as applied")
+                    assertEquals(17, rs.getInt("v"), "all seventeen migrations should be recorded as applied")
                 }
             }
         }
