@@ -15,9 +15,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler
  *
  * Toast-only, NO body swap — the design rests on three facts verified against the vendored htmx 2.0.6
  * source (dist/htmx.js in the webjar):
- *   1. Default `responseHandling` maps `[45]..` to `{ swap: false, error: true }`, so on a non-2xx the
- *      response body is FETCHED THEN DISCARDED — htmx swaps nothing into the target. Returning the real
- *      error status therefore guarantees nothing lands in the compose field.
+ *   1. Default `responseHandling` maps `[45]..` to `{ swap: false, error: true }`. On a non-2xx the swap
+ *      is SKIPPED — the `shouldSwap` check short-circuits the swap block in `handleAjaxResponse`, so htmx
+ *      puts nothing into the target. Returning the real error status therefore guarantees nothing lands in
+ *      the compose field (and we send an empty body anyway).
  *   2. `HX-Trigger` is processed at the TOP of `handleAjaxResponse`, before the swap/error branches, so
  *      it dispatches its event regardless of the status code. We use it to fire `app:error`.
  *   3. `removeRequestIndicators` runs in `xhr.onload` for every completed response (incl. non-2xx), so

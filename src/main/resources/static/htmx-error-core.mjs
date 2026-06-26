@@ -1,10 +1,11 @@
 /*
  * htmx-error-core — pure decision + persistence layer for honest htmx failure handling (T1.4).
  *
- * NO DOM, NO globals, NO clock/random: the toast wording (`noticeFor`) and the sticky toast STORE
- * (add/dismiss/list over an injectable storage) live here and are unit-tested. The DOM glue
- * (htmx-error.js, loaded directly from layout.kte) wires real localStorage + the DOM + the ✕ button +
- * load-time rehydration, and supplies real ids. See src/test/js/htmx-error-core.test.mjs.
+ * NO DOM, NO globals, NO clock/random: the toast wording (`noticeFor`), the relative-age label
+ * (`ageLabel`), and the sticky toast STORE (add/dismiss/list over an injectable storage) live here and
+ * are unit-tested. The DOM glue (htmx-error.js, loaded directly from layout.kte) wires real localStorage
+ * + the DOM + the ✕ button + load-time rehydration, and supplies real ids + the clock. See
+ * src/test/js/htmx-error-core.test.mjs.
  *
  * The toast-only design rests on htmx-2.0.6 behaviour verified against the vendored dist/htmx.js:
  *   - On a non-2xx htmx does NOT swap the body (default responseHandling: [45].. → swap:false), so the
@@ -23,6 +24,32 @@ export const ERROR_EVENT = "app:error";
 
 // Most recent N toasts are kept; older ones are dropped so storage can't grow unbounded.
 export const MAX_TOASTS = 5;
+
+// A documented backstop: persisted toasts older than this are pruned (on load and on write), so a stale
+// error can't linger forever and localStorage usage stays bounded (with the cap-of-5 above).
+export const TOAST_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+const HOUR = 60 * MINUTE;
+
+/**
+ * A relative "time elapsed" label for a toast, e.g. "just now", "3 minutes ago", "2 hours ago" — so a
+ * rehydrated toast reads as `Server error · 3 minutes ago` instead of a contextless message. Uses native
+ * `Intl.RelativeTimeFormat` (zero-dep, matches the no-CDN ethos). [now] is injected so the core stays
+ * deterministic/Tier-0 (no argless Date.now()).
+ *
+ * @param {number} createdAt epoch-ms the toast was raised
+ * @param {number} now       epoch-ms "now"
+ * @returns {string} a short relative label
+ */
+export function ageLabel(createdAt, now) {
+  const elapsed = Math.max(0, now - createdAt);
+  if (elapsed < MINUTE) return "just now";
+  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "always" });
+  if (elapsed < HOUR) return rtf.format(-Math.floor(elapsed / MINUTE), "minute");
+  return rtf.format(-Math.floor(elapsed / HOUR), "hour");
+}
 
 /**
  * The owner-facing notice for a failed htmx interaction.
@@ -51,8 +78,14 @@ export function noticeFor(eventType, status) {
 /*
  * The sticky toast STORE. `storage` is an injectable interface — `{ read(): Toast[], write(toasts) }` —
  * so the glue can back it with localStorage while tests back it with a plain in-memory object. A Toast is
- * `{ id, kind, status, message }`; the glue mints `id` (the core never calls Date.now()/Math.random()).
- * Rehydration is implicit: a fresh store over the same storage simply `read()`s what's there.
+ * `{ id, kind, status, message, createdAt }`; the glue mints `id` + `createdAt` (the core never calls
+ * Date.now()/Math.random()). Rehydration is implicit: a fresh store over the same storage `read()`s it.
+ *
+ * Persistence is BEST-EFFORT and TTL-BOUNDED: toasts older than TOAST_TTL_MS (24h) are pruned on read and
+ * write, and `localStorage.setItem` is wrapped so a throw never breaks the toast path (the in-session
+ * toast still renders, it just won't persist that session). Deliberately NOT handled — acceptable for a
+ * single-user PoC, revisit if it bites: Safari private mode (setItem always throws → no persistence that
+ * session) and hard quota exhaustion. The cap-of-5 + TTL keep localStorage usage hard-bounded.
  */
 
 /** The active toasts, oldest-first. Tolerates a missing/corrupt store by treating it as empty. */
@@ -92,36 +125,45 @@ export function dismissToast(storage, id) {
 // The key under which toasts persist.
 export const STORAGE_KEY = "haip.errorToasts";
 
+/** Drop toasts whose createdAt is older than TOAST_TTL_MS relative to [now]. Missing createdAt = kept. */
+export function pruneExpired(toasts, now) {
+  if (!Array.isArray(toasts)) return [];
+  return toasts.filter((t) => typeof t.createdAt !== "number" || now - t.createdAt < TOAST_TTL_MS);
+}
+
 /**
  * Build a `{ read, write }` storage backed by a Web-Storage-like object [ls] (real `localStorage` in the
- * glue, a fake in tests), degrading to an in-memory copy when localStorage is unavailable — and, crucially,
- * READ AND WRITE AGREE ON ONE AUTHORITATIVE BACKING. The trap this avoids: Safari private mode / quota
- * lets reads succeed but throws on write; a naive `read()` that only falls back to memory on a read THROW
- * would then return stale localStorage and never see a freshly-written toast. So we latch `usingMemory`
- * the first time a write throws (or a read throws), and thereafter both read and write use `memory` only,
- * never localStorage. Pure over the injected [ls], so the latch behaviour is unit-testable.
+ * glue, a fake in tests), with TTL pruning + best-effort persistence:
+ *   - read(): load from localStorage (→ [] on any read fault), then prune entries older than TOAST_TTL_MS
+ *     using the injected [now] — so a stale error never rehydrates after 24h.
+ *   - write(toasts): prune, keep an in-session memory copy (so a toast still lists even if persistence
+ *     fails), then best-effort `setItem` wrapped in try/catch — a throw (Safari private mode / quota)
+ *     NEVER breaks the toast path; the toast just won't persist that session.
+ * [now] is a `() => epoch-ms` clock, injected so pruning is deterministic/testable.
  */
-export function localStorageBacking(ls, key = STORAGE_KEY) {
-  let memory = [];
-  let usingMemory = false;
+export function toastStorage(ls, now, key = STORAGE_KEY) {
+  let memory = null; // the in-session copy; non-null once we've written this session
   return {
     read() {
-      if (usingMemory) return memory;
-      try {
-        const raw = ls.getItem(key);
-        return raw ? JSON.parse(raw) : [];
-      } catch (e) {
-        usingMemory = true; // a read fault also flips us to the in-memory backing
-        return memory;
+      // Prefer the in-session copy (it reflects writes that may not have persisted); else load+parse.
+      let toasts = memory;
+      if (toasts == null) {
+        try {
+          const raw = ls.getItem(key);
+          toasts = raw ? JSON.parse(raw) : [];
+        } catch (e) {
+          toasts = [];
+        }
       }
+      return pruneExpired(Array.isArray(toasts) ? toasts : [], now());
     },
     write(toasts) {
-      memory = toasts;
-      if (usingMemory) return; // already memory-only — don't re-touch a known-bad localStorage
+      const pruned = pruneExpired(Array.isArray(toasts) ? toasts : [], now());
+      memory = pruned; // authoritative for this session regardless of whether persistence succeeds
       try {
-        ls.setItem(key, JSON.stringify(toasts));
+        ls.setItem(key, JSON.stringify(pruned)); // best-effort — a throw must not break the toast path
       } catch (e) {
-        usingMemory = true; // writes throw (private mode / quota) → memory becomes authoritative
+        /* private mode / quota: keep the in-session copy, skip persistence */
       }
     },
   };

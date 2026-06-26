@@ -1,26 +1,26 @@
 /*
- * htmx-error.js — DOM glue for honest htmx failure handling (T1.4). The wording (noticeFor), the sticky
- * toast store (add/dismiss/list + cap + de-dupe), and the localStorage backing (with the in-memory
- * fallback latch) live in htmx-error-core.mjs and are unit-tested; this file is the thin,
- * manually-verified wiring: the DOM region, the ✕ dismiss button, focus handling, and load-time
- * rehydration. Loaded directly as an ES module from layout.kte, like the other glue.
+ * htmx-error.js — DOM glue for honest htmx failure handling (T1.4). The wording (noticeFor), the relative
+ * age label (ageLabel), the sticky toast store (add/dismiss/list + cap + de-dupe), and the TTL-pruning
+ * best-effort localStorage backing (toastStorage) live in htmx-error-core.mjs and are unit-tested; this
+ * file is the thin, manually-verified wiring: the DOM region, the ✕ dismiss button, focus handling, the
+ * shared age-refresh timer, and load-time rehydration. Loaded directly as an ES module from layout.kte.
  *
  * Toast-only by design (verified against vendored htmx 2.0.6): on a non-2xx htmx swaps nothing, so the
  * server returns the real error status + an app:error HX-Trigger and NOTHING lands in the compose field;
  * htmx also re-enables hx-disabled-elt controls itself, so there is no stuck control to fix. The toast is
- * the sole, honest feedback, and it's STICKY (no auto-dismiss) + persisted across refresh until the owner
- * clicks ✕. Two surfaces raise one:
+ * the sole, honest feedback, and it's STICKY (no auto-dismiss) + persisted across refresh (best-effort,
+ * TTL-bounded) until the owner clicks ✕. It carries a live "time elapsed" label. Two surfaces raise one:
  *   - app:error      — the server's failure signal. detail = {status} only (HX-Trigger header values must
  *                      be ASCII, no em dashes), so the toast is worded from the status alone.
  *   - htmx:sendError — the request never reached the server (network failure): no response, no swap.
  */
-import { noticeFor, addToast, dismissToast, listToasts, localStorageBacking, SEND_ERROR, ERROR_EVENT } from "./htmx-error-core.mjs";
+import { noticeFor, ageLabel, addToast, dismissToast, listToasts, toastStorage, SEND_ERROR, ERROR_EVENT } from "./htmx-error-core.mjs";
 
 (function () {
-  // One authoritative backing: real localStorage, degrading to in-memory if it's unavailable (private
-  // mode / quota). The read/write-agree latch lives in the core (localStorageBacking), so a write fault
-  // can't leave read() returning stale localStorage that hides a just-raised toast.
-  var storage = localStorageBacking(window.localStorage);
+  // TTL-pruning, best-effort localStorage backing. The clock is injected so the core's pruning stays
+  // deterministic; here it's the real wall clock.
+  var now = function () { return Date.now(); };
+  var storage = toastStorage(window.localStorage, now);
 
   // Monotonic id for new toasts — unique within a page session (rehydrated toasts keep their stored id).
   var seq = 0;
@@ -45,7 +45,7 @@ import { noticeFor, addToast, dismissToast, listToasts, localStorageBacking, SEN
     return regionEl;
   }
 
-  // Render one toast row (text + ✕). Idempotent per id, so a re-render (rehydrate) won't duplicate it.
+  // Render one toast row (text · age + ✕). Idempotent per id, so a re-render (rehydrate) won't duplicate.
   function renderOne(rec) {
     if (document.querySelector('[data-error-toast="' + cssEscape(rec.id) + '"]')) return;
     var note = document.createElement("div");
@@ -56,6 +56,13 @@ import { noticeFor, addToast, dismissToast, listToasts, localStorageBacking, SEN
     text.className = "error-toast__text";
     text.textContent = rec.message;
     note.appendChild(text);
+
+    // The live "· N minutes ago" suffix, refreshed by the shared timer below.
+    var age = document.createElement("span");
+    age.className = "error-toast__age";
+    age.setAttribute("data-error-toast-age", rec.createdAt);
+    age.textContent = ageSuffix(rec.createdAt);
+    note.appendChild(age);
 
     var close = document.createElement("button");
     close.type = "button";
@@ -68,6 +75,10 @@ import { noticeFor, addToast, dismissToast, listToasts, localStorageBacking, SEN
     note.appendChild(close);
 
     ensureRegion().appendChild(note);
+  }
+
+  function ageSuffix(createdAt) {
+    return " · " + ageLabel(Number(createdAt), now());
   }
 
   function remove(id) {
@@ -83,12 +94,13 @@ import { noticeFor, addToast, dismissToast, listToasts, localStorageBacking, SEN
     }
     dismissToast(storage, id);
     if (node) node.remove();
+    syncTimer();
   }
 
   // Add a toast for an error, persist it (with cap + de-dupe in the core), and render whatever the store
   // now holds — so a de-duped/collapsed toast updates in place rather than stacking.
   function raise(kind, status) {
-    var rec = { id: nextId(), kind: kind, status: status, message: noticeFor(kind, status) };
+    var rec = { id: nextId(), kind: kind, status: status, message: noticeFor(kind, status), createdAt: now() };
     addToast(storage, rec);
     rerender();
   }
@@ -102,6 +114,26 @@ import { noticeFor, addToast, dismissToast, listToasts, localStorageBacking, SEN
     for (var i = 0; i < rows.length; i++) {
       var id = rows[i].getAttribute("data-error-toast");
       if (!ids[id]) rows[i].remove();
+    }
+    refreshAges();
+    syncTimer();
+  }
+
+  // ---- one shared ~60s timer refreshes every visible age (started on first toast, cleared on the last).
+  var ageTimer = null;
+  function refreshAges() {
+    var ages = document.querySelectorAll("[data-error-toast-age]");
+    for (var i = 0; i < ages.length; i++) {
+      ages[i].textContent = ageSuffix(ages[i].getAttribute("data-error-toast-age"));
+    }
+  }
+  function syncTimer() {
+    var any = document.querySelector("[data-error-toast]");
+    if (any && !ageTimer) {
+      ageTimer = setInterval(refreshAges, 60000);
+    } else if (!any && ageTimer) {
+      clearInterval(ageTimer);
+      ageTimer = null;
     }
   }
 
@@ -120,8 +152,8 @@ import { noticeFor, addToast, dismissToast, listToasts, localStorageBacking, SEN
     raise(SEND_ERROR, null);
   });
 
-  // Create the region + rehydrate any toasts the owner hadn't dismissed before the last refresh, once the
-  // body exists.
+  // Create the region + rehydrate any (non-expired) toasts the owner hadn't dismissed before the last
+  // refresh, once the body exists. rerender recomputes the ages and (re)starts the timer if any survive.
   function bootstrap() { ensureRegion(); rerender(); }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", bootstrap);

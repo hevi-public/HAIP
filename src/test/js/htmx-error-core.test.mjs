@@ -2,10 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   noticeFor,
+  ageLabel,
   addToast,
   dismissToast,
   listToasts,
-  localStorageBacking,
+  toastStorage,
   MAX_TOASTS,
   SEND_ERROR,
   ERROR_EVENT,
@@ -165,18 +166,39 @@ test("listToasts tolerates a corrupt/empty backing", () => {
   assert.deepEqual(listToasts(fakeStorage("not-an-array")), []);
 });
 
-// ---- localStorageBacking: read/write agree on one authoritative backing --------------------------
+// ---- ageLabel (relative "time elapsed", with an injected now) ------------------------------------
 
-// A Web-Storage-like fake. `writeThrows` simulates Safari private mode / quota: getItem works, setItem
-// throws. A spy counts setItem so we can assert it isn't re-touched once we've latched to memory.
-function fakeLocalStorage({ writeThrows = false, readThrows = false } = {}) {
+const T0 = 1_700_000_000_000; // a fixed epoch-ms anchor for deterministic age tests
+
+test("ageLabel reads 'just now' for sub-minute elapsed", () => {
+  assert.equal(ageLabel(T0, T0), "just now");
+  assert.equal(ageLabel(T0, T0 + 1000), "just now");        // 1s
+  assert.equal(ageLabel(T0, T0 + 59 * 1000), "just now");   // 59s
+});
+
+test("ageLabel reads minutes for sub-hour elapsed", () => {
+  assert.equal(ageLabel(T0, T0 + 60 * 1000), "1 minute ago");
+  assert.equal(ageLabel(T0, T0 + 3 * 60 * 1000), "3 minutes ago");
+  assert.equal(ageLabel(T0, T0 + 59 * 60 * 1000), "59 minutes ago");
+});
+
+test("ageLabel reads hours from an hour up", () => {
+  assert.equal(ageLabel(T0, T0 + 60 * 60 * 1000), "1 hour ago");
+  assert.equal(ageLabel(T0, T0 + 5 * 60 * 60 * 1000), "5 hours ago");
+});
+
+test("ageLabel never goes negative if the clock skews backwards", () => {
+  assert.equal(ageLabel(T0, T0 - 5000), "just now");
+});
+
+// ---- toastStorage: TTL pruning + best-effort persistence -----------------------------------------
+
+// A Web-Storage-like fake. `writeThrows` simulates Safari private mode / quota (setItem throws).
+function fakeLocalStorage({ writeThrows = false } = {}) {
   const cells = {};
   return {
     setCalls: 0,
-    getItem(k) {
-      if (readThrows) throw new Error("read blocked");
-      return Object.prototype.hasOwnProperty.call(cells, k) ? cells[k] : null;
-    },
+    getItem(k) { return Object.prototype.hasOwnProperty.call(cells, k) ? cells[k] : null; },
     setItem(k, v) {
       this.setCalls++;
       if (writeThrows) throw new Error("quota / private mode");
@@ -185,39 +207,42 @@ function fakeLocalStorage({ writeThrows = false, readThrows = false } = {}) {
   };
 }
 
-test("localStorageBacking happy path: persists and reads back through localStorage", () => {
+const trec = (id, status, createdAt) => ({ id, kind: ERROR_EVENT, status, message: noticeFor(ERROR_EVENT, status), createdAt });
+
+test("toastStorage happy path: persists and a fresh store rehydrates", () => {
   const ls = fakeLocalStorage();
-  const b = localStorageBacking(ls, "k");
-  addToast(b, rec("a", ERROR_EVENT, 502));
-  assert.deepEqual(listToasts(b).map((t) => t.id), ["a"]);
-  // a fresh backing over the SAME localStorage rehydrates (read from the persisted JSON)
-  const b2 = localStorageBacking(ls, "k");
-  assert.deepEqual(listToasts(b2).map((t) => t.id), ["a"]);
+  let clock = T0;
+  const s = toastStorage(ls, () => clock, "k");
+  addToast(s, trec("a", 502, T0));
+  // a brand-new store over the SAME localStorage (a page refresh) reads it back
+  const s2 = toastStorage(ls, () => clock, "k");
+  assert.deepEqual(listToasts(s2).map((t) => t.id), ["a"]);
 });
 
-test("when setItem throws (private mode/quota), the just-written toast STILL surfaces via memory", () => {
-  // The exact bug the latch fixes: getItem succeeds (returns stale/empty), setItem throws — a naive
-  // read() that only falls back on a read-throw would return stale localStorage and hide the new toast.
+test("toastStorage prunes a >24h toast on rehydration, keeps a <24h one", () => {
+  const ls = fakeLocalStorage();
+  // Seed the backing directly with an old + a fresh toast.
+  const old = trec("old", 502, T0 - (25 * 60 * 60 * 1000)); // 25h ago
+  const fresh = trec("fresh", 503, T0 - (1 * 60 * 60 * 1000)); // 1h ago
+  ls.setItem("k", JSON.stringify([old, fresh]));
+  const s = toastStorage(ls, () => T0, "k");
+  assert.deepEqual(listToasts(s).map((t) => t.id), ["fresh"], "the 25h-old toast is pruned, the 1h one kept");
+});
+
+test("toastStorage prunes expired entries on write too", () => {
+  const ls = fakeLocalStorage();
+  let clock = T0;
+  const s = toastStorage(ls, () => clock, "k");
+  addToast(s, trec("a", 502, T0)); // created now
+  clock = T0 + (25 * 60 * 60 * 1000); // advance 25h
+  addToast(s, trec("b", 503, clock)); // a new toast; the write prunes the now-expired "a"
+  assert.deepEqual(listToasts(s).map((t) => t.id), ["b"]);
+});
+
+test("best-effort persist: a throwing setItem doesn't break add/list (toast still lists this session)", () => {
   const ls = fakeLocalStorage({ writeThrows: true });
-  const b = localStorageBacking(ls, "k");
-  addToast(b, rec("a", ERROR_EVENT, 502)); // write throws internally, latches to memory
-  assert.deepEqual(listToasts(b).map((t) => t.id), ["a"], "the toast must surface from memory, not stale localStorage");
-});
-
-test("once latched to memory, later writes don't re-touch the known-bad localStorage", () => {
-  const ls = fakeLocalStorage({ writeThrows: true });
-  const b = localStorageBacking(ls, "k");
-  addToast(b, rec("a", ERROR_EVENT, 502)); // 1st setItem throws → latched
-  addToast(b, rec("b", ERROR_EVENT, 500)); // must NOT call setItem again
-  assert.equal(ls.setCalls, 1, "after latching, localStorage.setItem is not called again");
-  assert.deepEqual(listToasts(b).map((t) => t.id), ["a", "b"]);
-});
-
-test("a read fault also flips to the in-memory backing", () => {
-  const ls = fakeLocalStorage({ readThrows: true });
-  const b = localStorageBacking(ls, "k");
-  // first read throws → latches to memory (returns []); a subsequent write+read round-trips via memory
-  assert.deepEqual(listToasts(b), []);
-  addToast(b, rec("a", SEND_ERROR, null));
-  assert.deepEqual(listToasts(b).map((t) => t.id), ["a"]);
+  const s = toastStorage(ls, () => T0, "k");
+  // setItem throws inside write(); the call must not throw, and the toast must still list (in-session).
+  assert.doesNotThrow(() => addToast(s, trec("a", 502, T0)));
+  assert.deepEqual(listToasts(s).map((t) => t.id), ["a"], "the in-session toast still renders without persistence");
 });
