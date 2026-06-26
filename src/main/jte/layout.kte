@@ -50,6 +50,14 @@
          deferred; toggles data-rail-left/right on <html>, event-delegated so it serves the header
          group and the in-content button alike. Initial state is set by the inline script above. --%>
     <script type="module" src="/layout.js"></script>
+    <%-- Honest htmx failure handling (T1.4): toast-only. A global listener raises a sticky, dismissible
+         toast on a failed htmx interaction — off the server's app:error HX-Trigger (HtmxErrorAdvice
+         returns the mapped non-2xx status, which htmx does NOT swap, so nothing lands in the compose
+         field) and off htmx:sendError (a network failure). htmx 2.0.6 re-enables disabled controls /
+         clears spinners itself, so this only adds the feedback htmx leaves out; toasts persist across
+         refresh via localStorage until dismissed. ES module, deferred; the wording + toast store
+         (htmx-error-core) are unit-tested. --%>
+    <script type="module" src="/htmx-error.js"></script>
 </head>
 <body>
     @template.fragments.siteHeader(activeNav = activeNav)

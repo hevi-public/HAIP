@@ -1054,6 +1054,36 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Honest failure UX (T1.4): toast-only. When an htmx request errors, HtmxErrorAdvice returns the mapped
+   non-2xx status (htmx swaps nothing on a non-2xx) + an app:error HX-Trigger; htmx-error.js raises a
+   sticky, dismissible toast off it — the sole, honest feedback (no fragment swapped into the compose
+   field). Styled off --clay (the existing danger token). Toasts persist across refresh (localStorage)
+   until the owner dismisses them with the ✕. */
+.error-toasts {
+  position: fixed; right: 16px; bottom: 16px; z-index: 1000;
+  display: flex; flex-direction: column; gap: 8px;
+  max-width: min(360px, calc(100vw - 32px)); pointer-events: none;
+}
+.error-toast {
+  pointer-events: auto;
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--clay); border-left-width: 3px; border-radius: var(--r, 6px);
+  background: var(--card); color: var(--ink);
+  font-size: 13px; line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+}
+.error-toast__text { flex: 0 1 auto; }
+/* The live "· N minutes ago" suffix — muted, takes the slack so the ✕ stays hard right. */
+.error-toast__age { flex: 1 1 auto; color: var(--muted); font-size: 11.5px; }
+.error-toast__dismiss {
+  flex: none; margin: -2px -4px 0 0;
+  border: 0; background: transparent; cursor: pointer;
+  color: var(--muted); font-size: 15px; line-height: 1; padding: 2px 4px;
+}
+.error-toast__dismiss:hover { color: var(--ink); }
+.error-toast__dismiss:focus-visible { outline: 2px solid var(--sage); outline-offset: 1px; }
+
 /* ------------------------------------------------------------------ mobile */
 @media (max-width: 600px) {
   .container { padding: 14px 12px 32px; }
