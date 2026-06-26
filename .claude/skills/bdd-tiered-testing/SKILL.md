@@ -24,7 +24,7 @@ controller + view actually compose correctly.
 
 | Tier | What it tests | Mocks | Example |
 |------|---------------|-------|---------|
-| **Tier 0** | Pure functions / logic, no side effects | none | `DepthBudget.isExhausted()`, `ContextAssembler` firewalling `+1`, `GenerationStateMachine` transitions |
+| **Tier 0** | Pure functions / logic, no side effects | none | `DepthBudget.isExhausted()`, `ContextAssembler` firewalling `+1`, `GenerationStateMachine` transitions; also the JS pure-core `htmx-error-core.mjs` (toast store + `ageLabel`, deterministic via an injected `now`, jsTest) |
 | **Tier 1** | The IO boundary itself | nothing above it; this *is* the seam | `JdbcCommentRepository` against a real test SQLite DB; the `LlmClient` fake's own behaviour |
 | **Tier 2+** | Controllers / domain orchestration | the single Tier-1 fake (`LlmClient`, `Clock`, a repo fake) | `GenerationService` running real Tier-0 logic, calling the scripted `LlmClient` |
 | **Acceptance / E2E** | Full stack over HTTP | only the `LlmClient` fake (DB is real test SQLite) | Cucumber scenarios via `TestRestTemplate` |
@@ -104,6 +104,91 @@ inject a fake that throws or returns the failure, then assert the **state transi
 
 Validation is asserted at the controller tier (no LLM call should happen — assert the fake's spy
 received nothing). Cancel exercises the subprocess-kill path via a `CancellationToken`.
+
+## Three audit test patterns (all hold the one-seam line)
+
+The Tier-1/2 audit added three new test shapes. The throughline: **none introduced a second mock
+seam.** Each forces a fault at a *real* IO boundary, or asserts a real-DB property, so a green result
+still means the wired-together system works.
+
+### Forced-rollback atomicity (Tier 1) — fault at the real IO boundary, one statement deeper
+
+The `@Transactional` repo writes (`deleteSubtree`/`deleteByThread`/`editBody`; see
+[[sqlite-spring-jdbc]]) must roll back wholly on a mid-unit failure. The honest way to prove that is to
+*make a real statement fail mid-transaction* — not to mock the repository (that would hide the very
+integration under test). So `CommentRepositoryTransactionTest` swaps in a `@Primary` **`FailingJdbcTemplate`
+(a real `JdbcTemplate` subclass over the real test `DataSource`)** that throws on the Nth `update` whose
+SQL contains a target fragment. The genuinely Spring-wired `CommentRepository` runs its real production
+code against it; because the failing template shares the **same DataSource the autoconfigured
+`DataSourceTransactionManager` binds**, the statements that *did* run before the throw are enrolled in
+the active transaction and get rolled back. It's the `FailingCommentRepository` IO-boundary fault, one
+statement deeper.
+
+```kotlin
+class FailingJdbcTemplate(ds: DataSource) : JdbcTemplate(ds) {
+    @Volatile var targetSql = "__never_match__"; @Volatile var failOnMatch = Int.MAX_VALUE
+    override fun update(sql: String, vararg args: Any?): Int {
+        if (sql.contains(targetSql) && seen.incrementAndGet() == failOnMatch)
+            throw IllegalStateException("simulated mid-unit write failure (test seam) on: $sql")
+        return super.update(sql, *args)
+    }
+}
+@TestConfiguration class FailingRepoConfig {
+    @Bean @Primary fun failingJdbcTemplate(ds: DataSource) = FailingJdbcTemplate(ds)
+}
+```
+
+Two things make it a real proof, not a tautology:
+
+- **Fails-without / passes-with.** Remove the `@Transactional` annotations and these tests fail (each
+  DELETE/INSERT auto-commits independently, so the partial state sticks). That's the point: the test
+  *proves Boot's autoconfigured transaction boundary is live* even though there's no explicit
+  `@EnableTransactionManagement`. Keep a "with the seam disarmed, the same methods commit normally" case
+  too, so a broken seam (e.g. one that swallows a real update) can't pass by hiding the happy path.
+- **FK-safe `@BeforeEach` *and* `@AfterEach` cleanup.** This class **commits** `comment` +
+  `comment_revision` rows (the forced rollback restores the *pre-call* state, which still includes the
+  seeded comment and its revision). Wipe in FK-safe order (`vote`, `comment_revision`, `attachment`, …
+  before `comment` before `thread`) **both before and after** each test — otherwise a sibling tier1
+  class that deletes `comment` but not `comment_revision` trips an FK violation on a leftover row,
+  flaking by run order. `@Bean @Primary` over the *autoconfigured* `JdbcTemplate` also means building
+  the failing template from the `DataSource` directly (depending on the default `JdbcTemplate` would be
+  a cycle — this bean *is* one).
+
+### Termination under a forged cycle (Tier 1) — `assertTimeoutPreemptively` + a hand-built 2-cycle
+
+The recursive-CTE depth guard (`lvl < 10000`, see [[sqlite-spring-jdbc]]) is a *termination* property,
+which you test by proving the query **returns within a deadline** on input that would otherwise hang.
+Forge the corrupt state the app's acyclic invariant would never write — a 2-cycle straight in the DB
+(`A.parent = B`, `B.parent = A`, via raw `UPDATE`s that bypass the repo) — then drive each CTE method
+inside `assertTimeoutPreemptively(Duration.ofSeconds(2)) { runCatching { … } }`. Without the bound the
+walk loops forever and the preemptive timeout fails the test; with it, the method returns (or throws)
+promptly. One test per CTE entry point (`ancestorPath`, `descendantCount`, and `deleteSubtree`, which is
+the only caller of the private subtree CTE). `runCatching` because *termination*, not the return value,
+is what's asserted.
+
+### De-flake via a test-double latch, not wall-clock polling (Tier 2)
+
+An async settle (`summonAsync` runs the LLM + persist on a worker thread) used to be awaited by
+sampling the recording repo on a wall-clock loop — inherently flaky (too short → false failure under
+load, too long → slow suite). Replace the poll with an **event-driven latch tripped by a hook on the
+test double at the exact settle write.** The in-memory `RecordingComments` gains an `onSettle:
+(Comment) -> Unit` hook fired inside its `@Synchronized insert`; the test passes a hook that counts down
+a `CountDownLatch` the instant the awaited row lands, then `await`s it:
+
+```kotlin
+val solSettled = CountDownLatch(1)
+val comments = RecordingComments { c ->
+    if (c.authorId == "Sol" && c.state == GenerationState.POSTED) solSettled.countDown()
+}
+// … service.summonAsync(…) returns immediately (no LLM call on the request thread) …
+assertTrue(solSettled.await(5, TimeUnit.SECONDS), "Sol's reply should settle on the worker")
+```
+
+The timeout is now only a **failsafe against a hung worker, never a sampling interval** — so it can be
+generous without slowing the happy path. The `@Synchronized insert` + the latch's countDown also
+establish the happens-before the post-await assertions rely on (worker writes, test thread reads). Still
+one seam: `RecordingComments` is the repo test-double the tier already uses; the hook is a probe on it,
+not a new mock.
 
 ## Logging is IO — assert it
 
