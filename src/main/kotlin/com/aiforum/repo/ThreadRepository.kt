@@ -37,6 +37,9 @@ class ThreadRepository(private val jdbc: JdbcTemplate, private val clock: Clock)
         // caller already removed the comments (and their attachments); the content-addressed blobs on disk
         // are left for a future dedup-aware GC.
         jdbc.update("DELETE FROM attachment WHERE thread_id = ?", id)
+        // A GitHub-PR thread carries a github_pr_thread mapping row that also references thread(id); clear it
+        // too (no-op for ordinary threads) so the delete doesn't trip the foreign key.
+        jdbc.update("DELETE FROM github_pr_thread WHERE thread_id = ?", id)
         jdbc.update("DELETE FROM thread WHERE id = ?", id)
     }
 

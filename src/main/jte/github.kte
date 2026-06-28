@@ -39,6 +39,13 @@
                                     <span class="github__badge" data-github-badge="draft">draft</span>
                                 @endif
                                 <div class="github__item-meta">${pr.author} · ${pr.ago}</div>
+                                @if(pr.threadId != null)
+                                    <a class="github__action" data-github-pr-thread="${pr.number}" href="/threads/${pr.threadId}">View thread →</a>
+                                @else
+                                    <form class="github__action-form" method="post" action="/github/pr/${pr.number}/discuss">
+                                        <button class="github__action github__action--button" type="submit" data-github-pr-discuss="${pr.number}">Discuss in the forum</button>
+                                    </form>
+                                @endif
                             </li>
                         @endfor
                     </ul>

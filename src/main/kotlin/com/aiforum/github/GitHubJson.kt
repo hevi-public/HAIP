@@ -27,6 +27,9 @@ object GitHubJson {
     /** `gh issue list --json number,title,author,url,createdAt`. */
     val ISSUE_FIELDS = "number,title,author,url,createdAt"
 
+    /** `gh pr view <n> --json …` — the in-depth single-PR fields (diff is fetched separately, `gh pr diff`). */
+    val PULL_FIELDS = "number,title,author,url,state,isDraft,body,baseRefName,headRefName,headRefOid,files"
+
     fun parseRepo(json: String): RepoSummary {
         val env = mapper.readValue(json, RepoEnvelope::class.java)
         return RepoSummary(
@@ -63,6 +66,25 @@ object GitHubJson {
             )
         }
 
+    /** Parse one `gh pr view --json` envelope. `diff` is left blank — the client fills it from `gh pr diff`. */
+    fun parsePull(json: String): PullDetail {
+        val env = mapper.readValue(json, PullEnvelope::class.java)
+        return PullDetail(
+            number = env.number,
+            title = env.title,
+            author = env.author?.login ?: "ghost",
+            url = env.url,
+            state = env.state,
+            isDraft = env.isDraft,
+            body = env.body,
+            baseRef = env.baseRefName,
+            headRef = env.headRefName,
+            headSha = env.headRefOid,
+            changedFiles = env.files.map { ChangedFile(it.path, it.additions, it.deletions) },
+            diff = "",
+        )
+    }
+
     // --- wire envelopes (Kotlin module applies the defaults for any omitted field) ---
 
     private data class RepoEnvelope(
@@ -94,5 +116,25 @@ object GitHubJson {
         val author: Author? = null,
         val url: String = "",
         val createdAt: String = "",
+    )
+
+    private data class FileEnvelope(
+        val path: String = "",
+        val additions: Int = 0,
+        val deletions: Int = 0,
+    )
+
+    private data class PullEnvelope(
+        val number: Int = 0,
+        val title: String = "",
+        val author: Author? = null,
+        val url: String = "",
+        val state: String = "",
+        @param:JsonProperty("isDraft") val isDraft: Boolean = false,
+        val body: String = "",
+        val baseRefName: String = "",
+        val headRefName: String = "",
+        val headRefOid: String = "",
+        val files: List<FileEnvelope> = emptyList(),
     )
 }

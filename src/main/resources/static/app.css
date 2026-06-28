@@ -1322,6 +1322,17 @@ mark.nav-hit {
   display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px;
   background: var(--strip); color: var(--muted); font-family: var(--mono); font-size: 10px;
 }
+/* Per-PR action: "Discuss in the forum" (creates a thread) or "View thread" (already ingested). */
+.github__action-form { margin: 4px 0 0; }
+.github__action {
+  display: inline-block; margin-top: 4px; font-family: var(--mono); font-size: 11px;
+  color: var(--sage-ink); text-decoration: none;
+}
+.github__action--button {
+  border: 1px solid var(--line); border-radius: 999px; background: var(--card);
+  padding: 2px 10px; cursor: pointer;
+}
+.github__action--button:hover { background: var(--strip); }
 /* ── Admin statistics dashboard (/admin) ────────────────────────────────────
    Read-only stat cards in a single column. Shares the card chrome + sage accents
    used across the rails; numbers carry data-stat/data-value hooks the suite asserts on. */

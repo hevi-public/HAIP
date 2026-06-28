@@ -54,7 +54,8 @@ class MigrationPipelineTest {
             }
         }
 
-        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending V4–V17).
+        // 3. Upgrade the EXISTING db to the latest schema (Flyway applies the pending migrations through V19;
+        //    V18 lives on the parallel comment-quotes branch, so this branch has a deliberate V18 gap).
         flyway(url, null).migrate()
 
         // 4. The old rows survived, and the new columns carry their migration default / backfill.
@@ -114,10 +115,11 @@ class MigrationPipelineTest {
                     assertEquals(null, rs.getString("updated_at"), "V11 leaves the pre-existing thread unedited (NULL)")
                 }
 
-                // flyway_schema_history records the full V1..V17 chain as applied.
+                // flyway_schema_history records the chain through V19 as applied (V18 is on the comment-quotes
+                // branch — this branch jumps V17 → V19, which Flyway applies fine as an ordered gap).
                 st.executeQuery("SELECT MAX(CAST(version AS INTEGER)) AS v FROM flyway_schema_history").use { rs ->
                     rs.next()
-                    assertEquals(17, rs.getInt("v"), "all seventeen migrations should be recorded as applied")
+                    assertEquals(19, rs.getInt("v"), "the latest migration (V19) should be recorded as applied")
                 }
             }
         }
