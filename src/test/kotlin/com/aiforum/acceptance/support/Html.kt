@@ -72,6 +72,51 @@ object Html {
         return anchor.groupValues[1].replace(Regex("<[^>]*>"), "").trim()
     }
 
+    /**
+     * The substring of reply [replyId]'s OWN content — from its opening <article> tag up to its first
+     * nested child article (or its matching </article> when it has no children). The reply's head, the
+     * in-reply-to / forward-quotes strips, body and action bar live here; nested children do not. Null if
+     * [replyId] isn't present. Lets the quote-graph probes read a reply's own anchors without catching a
+     * child's or a sibling's.
+     */
+    private fun ownContent(html: String, replyId: String): String? {
+        val open = Regex("<article\\b[^>]*data-reply-id=\"${Regex.escape(replyId)}\"[^>]*>").find(html) ?: return null
+        val token = Regex("<article\\b|</article>")
+        var i = open.range.last + 1
+        var depth = 1
+        var firstChildStart = -1
+        var closeStart = html.length
+        while (true) {
+            val m = token.find(html, i) ?: break
+            if (m.value == "</article>") {
+                depth--
+                if (depth == 0) { closeStart = m.range.first; break }
+            } else {
+                if (depth == 1 && firstChildStart < 0) firstChildStart = m.range.first
+                depth++
+            }
+            i = m.range.last + 1
+        }
+        val end = if (firstChildStart in 0 until closeStart) firstChildStart else closeStart
+        return html.substring(open.range.last + 1, end)
+    }
+
+    /** The target ids of every forward quote anchor (data-quote-source) in reply [srcId]'s own quotes
+     *  strip, in document order. Empty if [srcId] quotes nothing (or isn't present). */
+    fun quoteSources(html: String, srcId: String): List<String> {
+        val span = ownContent(html, srcId) ?: return emptyList()
+        return Regex("data-quote-source=\"([^\"]*)\"").findAll(span).map { it.groupValues[1] }.toList()
+    }
+
+    /** The visible text of [srcId]'s forward quote anchor pointing at [targetId] (data-quote-source=
+     *  "[targetId]"), or null if [srcId] doesn't quote [targetId]. Mirrors [inReplyToText]. */
+    fun quoteRefText(html: String, srcId: String, targetId: String): String? {
+        val span = ownContent(html, srcId) ?: return null
+        val anchor = Regex("<a\\b[^>]*data-quote-source=\"${Regex.escape(targetId)}\"[^>]*>(.*?)</a>", RegexOption.DOT_MATCHES_ALL)
+            .find(span) ?: return null
+        return anchor.groupValues[1].replace(Regex("<[^>]*>"), "").trim()
+    }
+
     /** The data-reply-id of the first <article> whose data-author == [author], or null. */
     fun replyIdWithAuthor(html: String, author: String): String? {
         val tag = Regex("<article\\b[^>]*data-author=\"${Regex.escape(author)}\"[^>]*>").find(html)?.value ?: return null

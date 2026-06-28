@@ -4,10 +4,12 @@ import com.aiforum.domain.Comment
 import com.aiforum.dto.AttachmentView
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
+import com.aiforum.dto.QuoteRef
 import com.aiforum.dto.ReplyView
 import com.aiforum.repo.AttachmentRepository
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
+import com.aiforum.repo.QuoteRepository
 import com.aiforum.repo.VoteRepository
 import org.springframework.stereotype.Component
 
@@ -22,6 +24,7 @@ class ReplyTreeAssembler(
     private val votes: VoteRepository,
     private val personas: PersonaRepository,
     private val attachments: AttachmentRepository,
+    private val quotes: QuoteRepository,
 ) {
 
     /** Build the top-level reply views with their descendants nested, from the flat thread list. */
@@ -36,6 +39,9 @@ class ReplyTreeAssembler(
         val revisionCounts = all.firstOrNull()?.let { comments.revisionCountsByComment(it.threadId) } ?: emptyMap()
         // One batch read for the whole tree's images (no per-node query), folded into each node below.
         val attByComment = attachments.forComments(all.map { it.id })
+        // One batch read for the thread's quote edges, grouped by the quoting (src) comment — folded into
+        // each node's forward "quotes" strip below. Empty thread => no edges.
+        val quotesBySrc = all.firstOrNull()?.let { quotes.bySource(it.threadId) } ?: emptyMap()
         // The "in reply to" anchor only earns its place when a reply is visually separated from the
         // comment it answers. A parent's FIRST child renders immediately under it (depth-first preorder),
         // so the quote would just echo the line above — redundant clutter. Later siblings get pushed
@@ -54,6 +60,13 @@ class ReplyTreeAssembler(
                 revisionCount = (revisionCounts[comment.id] ?: 0).coerceAtLeast(1),
                 regeneratable = comment.state == GenerationState.POSTED && comment.authorId in personaIds,
                 attachments = attByComment[comment.id].orEmpty().map(AttachmentView::of),
+                // Forward quote refs: this comment's edges, resolved to the target's author + a literal
+                // snippet of the snapshot. A target that somehow isn't in the tree is dropped (mapNotNull).
+                quotes = quotesBySrc[comment.id].orEmpty().mapNotNull { edge ->
+                    byId[edge.targetCommentId]?.let { t ->
+                        QuoteRef(t.id, t.authorId, QuoteRef.previewOf(edge.quotedText))
+                    }
+                },
             )
         // Top-level nodes answer the post, not a comment — treat them as direct so they carry no anchor.
         return childrenByParent[null].orEmpty().map { build(it, isDirect = true) }
