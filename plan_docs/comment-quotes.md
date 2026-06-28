@@ -26,11 +26,20 @@ Two directions over one relation:
 
 Authoring:
 
-- **Menu quote** — select text in a comment, right-click → **Quote**. The selection is inserted as a
-  markdown blockquote into a composer, and a quote **edge** is recorded linking the new reply to the
-  source. Destination is **smart**: if a composer is already open/focused, the quote drops into it
-  (you're assembling one reply that cites several sources); otherwise a new inline reply opens as a
-  **child of the quoted comment**, pre-filled.
+- **Toolbar quote** — select text in a comment and a small floating **❝ Quote** toolbar appears above the
+  selection (Medium / Google Docs style). The selection is inserted as a markdown blockquote into a
+  composer, and a quote **edge** is recorded linking the new reply to the source. Destination is
+  **smart**: if a composer is already open/focused, the quote drops into it (you're assembling one reply
+  that cites several sources); otherwise a new inline reply opens as a **child of the quoted comment**,
+  pre-filled.
+
+  > **Why a selection toolbar, not a right-click menu.** The first cut hijacked the `contextmenu` event,
+  > but a web page cannot *extend* the browser's native menu (the `<menu type="context">` API was removed
+  > from the spec and ships in no current browser), so right-click could only **replace** it — costing the
+  > user Copy / Search / Inspect / spellcheck. A floating toolbar triggered by an ordinary left-selection
+  > leaves the native menu untouched and is the established pattern for selection actions. Future actions
+  > (e.g. "copy link to this passage") slot into the same toolbar. Touch and keyboard paths (an action-bar
+  > button, a `nav.js` shortcut) are options for later — the toolbar is mouse-first.
 - **Manual quote** — a hand-typed `> blockquote`. Renders as an ordinary blockquote. It carries **no
   edge** (text alone can't tell us which comment it came from), so it has no link — until/unless it is
   explicitly associated with a source (a later affordance). See §5 on why we don't store a "type".
@@ -204,15 +213,16 @@ A complete vertical slice that establishes the edge model and the forward direct
 **Client** (progressive enhancement; with JS off, nothing breaks — manual `> ` blockquotes still post)
 7. `quote-core.mjs` (pure, unit-tested): `toBlockquote(text)` (multi-line → each line `> `-prefixed,
    trimmed) and serialise/parse of the pending-quotes payload.
-8. `quote.js` (DOM glue, loaded in `layout.kte`): a `contextmenu` handler on comment bodies (`.reply
-   .body` — **not** the OP `.thread__body`, see below) when there's a non-empty selection → a small
-   custom menu with **Quote** →
-   resolve the **smart destination** (active composer else open the source's inline reply `<details>` +
-   focus it) → insert the blockquote → accumulate the pending quote against that form → serialise to
-   `quotesJson` at `htmx:configRequest` (the same seam app.js uses for note/ask path rewriting).
-   Coordinate with `nav.js` (right-click must not place the keyboard cursor or start navigation; text
-   selection must not be swallowed).
-9. CSS for the context menu + the forward strip (extends the in-reply-to styling).
+8. `quote.js` (DOM glue, loaded in `layout.kte`): on a settled selection (`mouseup` / keyboard select)
+   inside a comment body (`.reply .body` — **not** the OP `.thread__body`, see below), float a **❝ Quote**
+   toolbar above the selection rect; hide it when the selection collapses (`selectionchange`), on
+   `Escape`, and reposition it on scroll/resize. The native `contextmenu` is left untouched. Choosing
+   Quote resolves the **smart destination** (active composer else open the source's inline reply
+   `<details>` + focus it) → inserts the blockquote → accumulates the pending quote against that form →
+   serialises to `quotesJson` at `htmx:configRequest` (the same seam app.js uses for note/ask path
+   rewriting). The toolbar button `preventDefault`s its `mousedown` so taking the click doesn't collapse
+   the selection.
+9. CSS for the selection toolbar (`.quote-toolbar`) + the forward strip (extends the in-reply-to styling).
 
 **Tests** (tiered, per the project's BDD discipline)
 10. Tier-0: `quote-core` JS unit test (blockquote building, payload round-trip).
