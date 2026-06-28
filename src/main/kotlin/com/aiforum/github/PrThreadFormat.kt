@@ -18,6 +18,28 @@ object PrThreadFormat {
     /** `#123 — Add gh MCP`. */
     fun title(pull: PullDetail): String = "#${pull.number} — ${pull.title}"
 
+    /**
+     * The markdown body for one ingested PR-discussion node (Slice 2). An issue comment renders as its own
+     * text; a review is prefixed with a bold one-line verdict (Approved / Requested changes / Dismissed) so
+     * a bare approval still reads as something, with the review's own words below when it has any. A plain
+     * COMMENTED review (already filtered to non-empty) just shows its body.
+     */
+    fun commentBody(c: PrComment): String {
+        val body = c.body.trim()
+        if (c.kind != "review") return body
+        val verdict = when (c.reviewState) {
+            "APPROVED" -> "**✓ Approved this pull request.**"
+            "CHANGES_REQUESTED" -> "**✗ Requested changes.**"
+            "DISMISSED" -> "**Review dismissed.**"
+            else -> null // COMMENTED / unknown: the body speaks for itself
+        }
+        return when {
+            verdict == null -> body
+            body.isEmpty() -> verdict
+            else -> "$verdict\n\n$body"
+        }
+    }
+
     /** The opening-post markdown: description, then a meta line, then changed files, then the diff. */
     fun body(pull: PullDetail): String {
         val sb = StringBuilder()

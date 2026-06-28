@@ -1,5 +1,6 @@
 @import com.aiforum.web.StarredThreadSection
 @import com.aiforum.web.StarredPageItem
+@import com.aiforum.web.AuthorLabel
 @param sections: List<StarredThreadSection>
 @param isEmpty: Boolean
 
@@ -18,7 +19,7 @@
                         @for(item in section.items)
                             <li class="starred__item" data-starred-item="${item.id}">
                                 <a class="starred__quote" href="/threads/${section.threadId}#reply-${item.id}">"${item.snippet}"</a>
-                                <div class="starred__meta">${item.authorId} · ${item.ago}</div>
+                                <div class="starred__meta">${AuthorLabel.display(item.authorId)} · ${item.ago}</div>
                             </li>
                         @endfor
                     </ul>

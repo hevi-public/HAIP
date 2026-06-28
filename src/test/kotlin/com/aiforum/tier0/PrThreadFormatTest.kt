@@ -1,6 +1,7 @@
 package com.aiforum.tier0
 
 import com.aiforum.github.ChangedFile
+import com.aiforum.github.PrComment
 import com.aiforum.github.PrThreadFormat
 import com.aiforum.github.PullDetail
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -80,5 +81,35 @@ class PrThreadFormatTest {
     fun `a blank diff means no diff section`() {
         val body = PrThreadFormat.body(pull(diff = ""))
         assertFalse(body.contains("```diff"), "no fence when there's no diff:\n$body")
+    }
+
+    // --- commentBody: one PR-discussion node's markdown (Slice 2) ---
+
+    private fun comment(body: String, kind: String = "comment", reviewState: String? = null) =
+        PrComment(author = "dana", body = body, createdAt = "2026-06-25T09:00:00Z", kind = kind, reviewState = reviewState)
+
+    @Test
+    fun `commentBody renders an issue comment as its own trimmed text`() {
+        assertEquals("Looks reasonable.", PrThreadFormat.commentBody(comment("  Looks reasonable.  ")))
+    }
+
+    @Test
+    fun `commentBody folds an approval verdict in, even with no body`() {
+        assertTrue(PrThreadFormat.commentBody(comment("", kind = "review", reviewState = "APPROVED")).contains("Approved"))
+        val withBody = PrThreadFormat.commentBody(comment("LGTM, ship it", kind = "review", reviewState = "APPROVED"))
+        assertTrue(withBody.contains("Approved"))
+        assertTrue(withBody.contains("LGTM, ship it"))
+    }
+
+    @Test
+    fun `commentBody marks a changes-requested review`() {
+        val body = PrThreadFormat.commentBody(comment("please add a test", kind = "review", reviewState = "CHANGES_REQUESTED"))
+        assertTrue(body.contains("Requested changes"), body)
+        assertTrue(body.contains("please add a test"), body)
+    }
+
+    @Test
+    fun `commentBody shows a plain commented review as just its body`() {
+        assertEquals("a passing note", PrThreadFormat.commentBody(comment("a passing note", kind = "review", reviewState = "COMMENTED")))
     }
 }

@@ -5,6 +5,7 @@
 @import com.aiforum.dto.FailureCategory
 @import com.aiforum.dto.ReasoningLeak
 @import com.aiforum.web.AuthorColor
+@import com.aiforum.web.AuthorLabel
 @import com.aiforum.web.PersonaView
 @param reply: ReplyView
 @param threadId: String? = null
@@ -46,8 +47,8 @@
          data-regeneratable="${reply.regeneratable.toString()}"
          data-depth="${reply.depth.toString()}">
     <header class="reply__head">
-        <span class="monogram" aria-hidden="true" style="--mono-h: ${AuthorColor.hue(reply.authorId, personas)}">${reply.authorId.take(2).uppercase()}</span>
-        <span class="reply__author">${reply.authorId}</span>
+        <span class="monogram" aria-hidden="true" style="--mono-h: ${AuthorColor.hue(reply.authorId, personas)}">${AuthorLabel.monogram(reply.authorId)}</span>
+        <span class="reply__author">${AuthorLabel.display(reply.authorId)}</span>
         @if(reply.state != GenerationState.POSTED)
             <span class="reply__badge reply__badge--${reply.state.name.lowercase()}">${badge}</span>
         @endif
@@ -88,7 +89,7 @@
              up to that comment's node (#reply-<id>). data-in-reply-to carries the parent id — the
              acceptance probe reads the anchor by it. --%>
         <a class="reply__inreplyto" href="#reply-${reply.parent.id}" data-in-reply-to="${reply.parent.id}">
-            <span class="reply__inreplyto-label">in reply to ${reply.parent.author}:</span>
+            <span class="reply__inreplyto-label">in reply to ${AuthorLabel.display(reply.parent.author)}:</span>
             <span class="reply__inreplyto-quote">${reply.parent.quote}</span>
         </a>
     @endif
@@ -101,7 +102,7 @@
         <div class="reply__quotes" data-quotes>
             @for(q in reply.quotes)
                 <a class="reply__quote-ref" href="#reply-${q.targetId}" data-quote-source="${q.targetId}">
-                    <span class="reply__quote-ref-label">↗ ${q.targetAuthor}:</span>
+                    <span class="reply__quote-ref-label">↗ ${AuthorLabel.display(q.targetAuthor)}:</span>
                     <span class="reply__quote-ref-snippet">${q.snippet}</span>
                 </a>
             @endfor
@@ -126,7 +127,7 @@
                     <span class="reply__backlink-passage">“${QuoteRef.previewOf(bl.text)}”</span>
                     @for(q in bl.quoters)
                         <a class="reply__backlink-quoter" href="#reply-${q.commentId}" data-backlink-src="${q.commentId}">
-                            <span class="reply__backlink-author">↩ ${q.author}</span>
+                            <span class="reply__backlink-author">↩ ${AuthorLabel.display(q.author)}</span>
                             <span class="reply__backlink-snippet">${q.snippet}</span>
                         </a>
                     @endfor

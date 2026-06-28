@@ -1,4 +1,5 @@
 @import com.aiforum.dto.BranchIndexEntry
+@import com.aiforum.web.AuthorLabel
 @param entries: List<BranchIndexEntry>
 @param oob: Boolean = false
 
@@ -29,7 +30,7 @@
                              style="--mono-h: ${entry.hue}" fill="currentColor">
                             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                         </svg>
-                        <span class="branch-index__author">${entry.author}</span>
+                        <span class="branch-index__author">${AuthorLabel.display(entry.author)}</span>
                         <span class="branch-index__snippet">${entry.snippet}</span>
                     </a>
                 </li>

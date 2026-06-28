@@ -27,8 +27,9 @@ object GitHubJson {
     /** `gh issue list --json number,title,author,url,createdAt`. */
     val ISSUE_FIELDS = "number,title,author,url,createdAt"
 
-    /** `gh pr view <n> --json …` — the in-depth single-PR fields (diff is fetched separately, `gh pr diff`). */
-    val PULL_FIELDS = "number,title,author,url,state,isDraft,body,baseRefName,headRefName,headRefOid,files"
+    /** `gh pr view <n> --json …` — the in-depth single-PR fields (diff is fetched separately, `gh pr diff`).
+     *  `comments` = issue-level comments; `reviews` = submitted reviews — together the team-mate discussion. */
+    val PULL_FIELDS = "number,title,author,url,state,isDraft,body,baseRefName,headRefName,headRefOid,files,comments,reviews"
 
     fun parseRepo(json: String): RepoSummary {
         val env = mapper.readValue(json, RepoEnvelope::class.java)
@@ -82,7 +83,25 @@ object GitHubJson {
             headSha = env.headRefOid,
             changedFiles = env.files.map { ChangedFile(it.path, it.additions, it.deletions) },
             diff = "",
+            comments = mergeDiscussion(env.comments, env.reviews),
         )
+    }
+
+    /**
+     * Fold a PR's issue comments and submitted reviews into one chronological discussion. A review is kept
+     * only when it carries signal: any non-COMMENTED state (APPROVED / CHANGES_REQUESTED / DISMISSED), or a
+     * COMMENTED review that actually has a body — a bodyless COMMENTED review is just a container for
+     * inline line-comments (not fetched here) and would render as empty noise. Ordered by timestamp so the
+     * thread reads in the order the team-mates spoke; a blank timestamp sorts last.
+     */
+    private fun mergeDiscussion(comments: List<CommentEnvelope>, reviews: List<ReviewEnvelope>): List<PrComment> {
+        val issue = comments.map {
+            PrComment(it.author?.login ?: "ghost", it.body, it.createdAt, kind = "comment")
+        }
+        val review = reviews
+            .filter { it.state != "PENDING" && (it.state != "COMMENTED" || it.body.isNotBlank()) }
+            .map { PrComment(it.author?.login ?: "ghost", it.body, it.submittedAt, kind = "review", reviewState = it.state) }
+        return (issue + review).sortedBy { it.createdAt.ifBlank { "￿" } } // blank timestamps sort last
     }
 
     // --- wire envelopes (Kotlin module applies the defaults for any omitted field) ---
@@ -136,5 +155,20 @@ object GitHubJson {
         val headRefName: String = "",
         val headRefOid: String = "",
         val files: List<FileEnvelope> = emptyList(),
+        val comments: List<CommentEnvelope> = emptyList(),
+        val reviews: List<ReviewEnvelope> = emptyList(),
+    )
+
+    private data class CommentEnvelope(
+        val author: Author? = null,
+        val body: String = "",
+        val createdAt: String = "",
+    )
+
+    private data class ReviewEnvelope(
+        val author: Author? = null,
+        val body: String = "",
+        val state: String = "",
+        val submittedAt: String = "",
     )
 }

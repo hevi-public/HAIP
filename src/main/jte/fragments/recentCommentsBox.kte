@@ -1,4 +1,5 @@
 @import com.aiforum.web.RecentCommentRow
+@import com.aiforum.web.AuthorLabel
 @param comments: List<RecentCommentRow>
 
 <%-- Recent comments: the front-page right-rail feed of the newest posted replies across all threads
@@ -15,7 +16,7 @@
                 <li class="recent-comments__row">
                     <a class="recent-comments__quote" href="/threads/${comment.threadId}#reply-${comment.id}"
                        data-recent-comment="${comment.id}">“${comment.snippet}”</a>
-                    <div class="recent-comments__meta">${comment.author} · ${comment.ago}</div>
+                    <div class="recent-comments__meta">${AuthorLabel.display(comment.author)} · ${comment.ago}</div>
                 </li>
             @endfor
         </ul>
