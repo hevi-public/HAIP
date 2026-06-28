@@ -720,6 +720,78 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 .reply__inreplyto-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
 .reply__inreplyto-quote { font-style: italic; }
 
+/* Forward quote refs (comment-quotes.md): the comments THIS reply cites. Sibling of the in-reply-to
+   anchor — same quote-bar idiom, one row per source, each a jump link to #reply-<targetId>. */
+.reply__quotes { display: flex; flex-direction: column; gap: 2px; margin: 0 0 5px; }
+.reply__quote-ref {
+  display: block; max-width: var(--prose);
+  padding: 2px 0 2px 9px; border-left: 2px solid var(--sage-2);
+  font-size: 12px; line-height: 1.4; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reply__quote-ref:hover { text-decoration: none; border-left-color: var(--spine-live); color: var(--ink); }
+.reply__quote-ref-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
+.reply__quote-ref-snippet { font-style: italic; }
+
+/* "Quote" selection toolbar (quote.js) — a small dark pill that floats above a text selection in a
+   comment (Medium/Docs style), leaving the native right-click menu intact. Matches the slash/@mention
+   palette colours. Fixed so it anchors to the selection's viewport rect; quote.js repositions on scroll. */
+.quote-toolbar {
+  position: fixed; z-index: 60; display: flex;
+  background: #34342a; border: 1px solid #44443a; border-radius: 6px; overflow: hidden;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
+}
+.quote-toolbar__item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 13px; border: none; background: transparent; color: #cdd0bb;
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.quote-toolbar__item:hover { background: #3f3f33; }
+
+/* Backward backlinks (quote-backlinks.js). The .reply__quoted-by block is SSR'd as the no-JS fallback
+   footer (a small "quoted by" list); quote-backlinks.js hides each entry it manages to highlight inline
+   and shows it instead as a hover cone. */
+.reply__quoted-by {
+  margin: 6px 0 0; padding-top: 5px; border-top: 1px dashed var(--line);
+  font-size: 12px; line-height: 1.5; color: var(--muted);
+}
+.reply__quoted-by-summary { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); margin-right: 6px; }
+.reply__backlink { margin-top: 3px; }
+.reply__backlink-passage { font-style: italic; color: var(--muted); }
+.reply__backlink-quoter { display: inline-flex; gap: 5px; margin-left: 8px; max-width: var(--prose); }
+.reply__backlink-author { font-weight: 600; }
+.reply__backlink-snippet { color: var(--faint-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Inline highlight on a quoted passage (added client-side; the body HTML stays untouched server-side).
+   Subtle sage wash + dotted underline to read as "this has citations", with a hover/focus accent. */
+mark.quoted {
+  background: color-mix(in srgb, var(--sage-2) 38%, transparent);
+  color: inherit; border-radius: 2px; padding: 0 1px;
+  text-decoration: underline dotted var(--sage-2); text-underline-offset: 2px;
+  cursor: pointer;
+}
+mark.quoted:hover, mark.quoted.is-open { background: color-mix(in srgb, var(--spine-live) 30%, transparent); }
+
+/* The selector "cone": a popover listing the comments that quoted the hovered passage. Built by
+   quote-backlinks.js from the SSR backlink data; same dark palette as the slash/@mention popovers. */
+.quote-cone {
+  position: fixed; z-index: 60; min-width: 200px; max-width: 320px;
+  background: #34342a; border: 1px solid #44443a; border-radius: 6px; overflow: hidden;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
+}
+.quote-cone__cap {
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  color: #b3b596; padding: 6px 12px; border-bottom: 1px solid #44443a;
+}
+.quote-cone .reply__backlink-quoter {
+  display: flex; gap: 6px; margin: 0; padding: 7px 12px; border-bottom: 1px solid #3c3c32;
+  color: #cdd0bb; max-width: none;
+}
+.quote-cone .reply__backlink-quoter:last-child { border-bottom: none; }
+.quote-cone .reply__backlink-quoter:hover { background: #3f3f33; text-decoration: none; }
+.quote-cone .reply__backlink-author { color: #cdd0bb; flex: none; }
+.quote-cone .reply__backlink-snippet { color: #b9b9a4; }
+
 .reply .body { font-size: 13.5px; line-height: 1.5; color: var(--ink); }
 .reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 5px; }
 

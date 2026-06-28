@@ -1,7 +1,7 @@
 -- Maps an ingested GitHub pull request to the forum thread created for it (plan_docs/github-pr-threads.md).
--- (V19 — the next free version after V17 on this branch; V18 is taken by V18__comment_quote on the parallel
--- comment-quotes branch, so this yields it the lower number to avoid a duplicate-version Flyway collision on
--- merge. A version gap is harmless to Flyway.) The "Discuss this PR" button creates one thread per PR;
+-- (V19 follows V18 = comment_quote. It was numbered V19 to dodge a duplicate-V18 collision with the
+-- comment-quotes branch, now merged — so the chain is contiguous V17 → V18 → V19.) The "Discuss this PR"
+-- button creates one thread per PR;
 -- this table makes that idempotent — a second click finds the existing thread instead of creating a
 -- duplicate, and the /github page shows "View thread" rather than "Discuss" for an already-ingested PR.
 --

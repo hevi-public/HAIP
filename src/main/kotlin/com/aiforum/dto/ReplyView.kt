@@ -34,6 +34,14 @@ data class ReplyView(
     // The comment this reply answers, for the "in reply to" anchor. Null for top-level replies (they
     // answer the post, which has no comment node). Populated on the full thread-page render.
     val parent: ParentRef? = null,
+    // Comments this reply QUOTES (the forward direction of the quote graph, §3 of comment-quotes.md):
+    // each is a "↗ author" anchor to the source comment. Empty for a reply with no quotes (the common
+    // case). Populated by ReplyTreeAssembler; trailing default so bare toReplyView() calls carry none.
+    val quotes: List<QuoteRef> = emptyList(),
+    // Comments that QUOTE this reply (the backward direction): one entry per distinct quoted passage
+    // (per-exact-span coalescing), each carrying its quoters. Drives the SSR "quoted by" fallback + the
+    // client-side inline marks/cone. Empty for a reply nobody has quoted. Populated by the assembler.
+    val quotedBy: List<QuoteBacklink> = emptyList(),
     val children: List<ReplyView> = emptyList(),
     // [body] rendered from GitHub-flavoured markdown to trusted HTML (see MarkdownRenderer); the template
     // emits this via $unsafe{}. Trailing default so positional constructions stay valid. Empty for
