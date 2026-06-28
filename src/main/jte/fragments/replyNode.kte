@@ -1,5 +1,6 @@
 @import com.aiforum.dto.ReplyView
 @import com.aiforum.dto.BranchIndexEntry
+@import com.aiforum.dto.QuoteRef
 @import com.aiforum.dto.GenerationState
 @import com.aiforum.dto.FailureCategory
 @import com.aiforum.dto.ReasoningLeak
@@ -91,12 +92,48 @@
             <span class="reply__inreplyto-quote">${reply.parent.quote}</span>
         </a>
     @endif
+    @if(!reply.quotes.isEmpty())
+        <%-- Forward quote refs (comment-quotes.md §3): this reply cites other comments. Each "↗ author"
+             anchor jumps to the source comment (#reply-<targetId>, the same anchor the branch index and
+             in-reply-to use); the snippet is a literal preview of the quoted span. data-quote-source
+             carries the target id — the acceptance probe reads the anchor by it. The quoted text itself
+             also shows inline as a markdown blockquote in the body below. --%>
+        <div class="reply__quotes" data-quotes>
+            @for(q in reply.quotes)
+                <a class="reply__quote-ref" href="#reply-${q.targetId}" data-quote-source="${q.targetId}">
+                    <span class="reply__quote-ref-label">↗ ${q.targetAuthor}:</span>
+                    <span class="reply__quote-ref-snippet">${q.snippet}</span>
+                </a>
+            @endfor
+        </div>
+    @endif
     @if(reply.reason != null)
         <div class="reason">${reply.reason}</div>
     @endif
     <%-- bodyHtml is markdown rendered to trusted HTML (MarkdownRenderer): raw HTML in a body is escaped
          there, so $unsafe{} here is safe — the only live HTML is commonmark's + our highlighted code. --%>
     <div class="body">$unsafe{reply.bodyHtml}</div>
+    @if(!reply.quotedBy.isEmpty())
+        <%-- Backward backlinks (comment-quotes.md §6): the comments that quote THIS one, grouped per
+             distinct passage. SSR'd as a "quoted by" footer — the no-JS fallback AND the data source
+             quote-backlinks.js promotes into inline <mark>s + a hover cone. data-backlink-text carries the
+             FULL passage (untruncated) so the client can re-find and highlight it; only the label is cut. --%>
+        !{ val quotedByCount = reply.quotedBy.sumOf { it.quoters.size } }
+        <div class="reply__quoted-by" data-quoted-by data-quoted-by-count="${quotedByCount}">
+            <span class="reply__quoted-by-summary">quoted by ${quotedByCount}</span>
+            @for(bl in reply.quotedBy)
+                <div class="reply__backlink" data-backlink-text="${bl.text}">
+                    <span class="reply__backlink-passage">“${QuoteRef.previewOf(bl.text)}”</span>
+                    @for(q in bl.quoters)
+                        <a class="reply__backlink-quoter" href="#reply-${q.commentId}" data-backlink-src="${q.commentId}">
+                            <span class="reply__backlink-author">↩ ${q.author}</span>
+                            <span class="reply__backlink-snippet">${q.snippet}</span>
+                        </a>
+                    @endfor
+                </div>
+            @endfor
+        </div>
+    @endif
     <%-- Owner-attached images (caption-only to the model). Only an owner node shows the Describe control;
          personas never attach images. Renders nothing when there are none. --%>
     @template.fragments.attachments(attachments = reply.attachments, owner = reply.authorId == "owner")
