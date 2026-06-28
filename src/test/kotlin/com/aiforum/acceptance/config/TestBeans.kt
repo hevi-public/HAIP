@@ -5,7 +5,9 @@ import com.aiforum.github.GitHubClient
 import com.aiforum.github.GitHubOverview
 import com.aiforum.github.GitHubResult
 import com.aiforum.github.Issue
+import com.aiforum.github.PullDetail
 import com.aiforum.github.PullRequest
+import com.aiforum.github.PullResult
 import com.aiforum.github.RepoSummary
 import com.aiforum.images.DescribeRequest
 import com.aiforum.images.ImageDescriber
@@ -24,6 +26,7 @@ import org.springframework.stereotype.Component
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -177,6 +180,12 @@ class ScriptableGitHubClient : GitHubClient {
     val pulls = CopyOnWriteArrayList<PullRequest>()
     val issues = CopyOnWriteArrayList<Issue>()
 
+    /** In-depth PR details a scenario programs, keyed by number; drives [pull] (the "Discuss this PR" path). */
+    val pullDetails = ConcurrentHashMap<Int, PullDetail>()
+
+    /** Every number passed to [pull], in order — so a scenario can assert an already-ingested PR isn't re-fetched. */
+    val pullsRequested = CopyOnWriteArrayList<Int>()
+
     /** A repo present => an Ok snapshot; otherwise the unavailable off-state with the programmed reason. */
     override fun overview(): GitHubResult {
         val r = repo
@@ -184,11 +193,19 @@ class ScriptableGitHubClient : GitHubClient {
         else GitHubResult.Unavailable(unavailableReason)
     }
 
+    /** A programmed detail => an Ok pull; otherwise the unavailable off-state (no such PR / integration off). */
+    override fun pull(number: Int): PullResult {
+        pullsRequested += number
+        return pullDetails[number]?.let { PullResult.Ok(it) } ?: PullResult.Unavailable(unavailableReason)
+    }
+
     fun reset() {
         unavailableReason = "GitHub integration is off."
         repo = null
         pulls.clear()
         issues.clear()
+        pullDetails.clear()
+        pullsRequested.clear()
     }
 }
 

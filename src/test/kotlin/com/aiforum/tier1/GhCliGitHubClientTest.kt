@@ -3,6 +3,7 @@ package com.aiforum.tier1
 import ch.qos.logback.classic.Level
 import com.aiforum.github.GhCliGitHubClient
 import com.aiforum.github.GitHubResult
+import com.aiforum.github.PullResult
 import com.aiforum.testsupport.LogCapture
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
@@ -24,6 +25,8 @@ class GhCliGitHubClientTest {
     """.trimIndent()
     private val prJson = """[{"number":12,"title":"Add gh MCP","author":{"login":"octocat"},"url":"u","isDraft":false,"createdAt":"2026-06-20T10:00:00Z"}]"""
     private val issueJson = """[{"number":5,"title":"Bug","author":{"login":"hubot"},"url":"u","createdAt":"2026-06-19T10:00:00Z"}]"""
+    private val pullJson = """{"number":42,"title":"Batch the comment query","author":{"login":"octocat"},"url":"u","state":"OPEN","isDraft":false,"body":"Fixes the N+1.","baseRefName":"main","headRefName":"feature","headRefOid":"deadbeef","files":[{"path":"a.kt","additions":2,"deletions":1}]}"""
+    private val diffText = "diff --git a/a.kt b/a.kt\n+added\n-removed"
 
     /**
      * A client whose [exec] returns scripted output keyed off the gh subcommand, and which records every
@@ -37,6 +40,8 @@ class GhCliGitHubClientTest {
         private val failPrSpawn: Boolean = false,
         private val versionExit: Int = 0,
         private val versionSpawnFails: Boolean = false,
+        private val pullViewExit: Int = 0,
+        private val failDiffSpawn: Boolean = false,
     ) : GhCliGitHubClient(enabled = enabled, repo = repo) {
         val argvs = mutableListOf<List<String>>()
         override fun exec(argv: List<String>): ExecResult {
@@ -46,7 +51,13 @@ class GhCliGitHubClientTest {
                     if (versionSpawnFails) ExecResult.Failed("the `gh` CLI couldn't be launched (gh)")
                     else ExecResult.Completed(versionExit, "gh version 2.40.0", if (versionExit == 0) "" else "boom")
                 argv.getOrNull(0) == "repo" -> ExecResult.Completed(repoExit, if (repoExit == 0) repoJson else "", if (repoExit == 0) "" else "gh: Not Found (HTTP 404)")
-                argv.getOrNull(0) == "pr" -> if (failPrSpawn) ExecResult.Failed("boom") else ExecResult.Completed(0, prJson, "")
+                // `pr` now carries three reads: list (the page), view + diff (PR ingestion).
+                argv.getOrNull(0) == "pr" -> when (argv.getOrNull(1)) {
+                    "list" -> if (failPrSpawn) ExecResult.Failed("boom") else ExecResult.Completed(0, prJson, "")
+                    "view" -> ExecResult.Completed(pullViewExit, if (pullViewExit == 0) pullJson else "", if (pullViewExit == 0) "" else "gh: Not Found (HTTP 404)")
+                    "diff" -> if (failDiffSpawn) ExecResult.Failed("boom") else ExecResult.Completed(0, diffText, "")
+                    else -> ExecResult.Failed("unexpected pr subcommand: $argv")
+                }
                 argv.getOrNull(0) == "issue" -> ExecResult.Completed(0, issueJson, "")
                 else -> ExecResult.Failed("unexpected argv: $argv")
             }
@@ -101,6 +112,78 @@ class GhCliGitHubClientTest {
         val ok = assertInstanceOf(GitHubResult.Ok::class.java, result)
         assertTrue(ok.overview.pulls.isEmpty())
         assertEquals(1, ok.overview.issues.size) // issues still fetched
+    }
+
+    // --- pull(): the in-depth single-PR fetch (gh pr view --json + gh pr diff) for PR ingestion ---
+
+    @Test
+    fun `pull composes the PR detail plus its diff`() {
+        val result = FakeGh(enabled = true, repo = "o/r").pull(42)
+        val ok = assertInstanceOf(PullResult.Ok::class.java, result)
+        assertEquals(42, ok.pull.number)
+        assertEquals("Batch the comment query", ok.pull.title)
+        assertEquals("Fixes the N+1.", ok.pull.body)
+        assertEquals("deadbeef", ok.pull.headSha)
+        assertEquals(1, ok.pull.changedFiles.size)
+        assertEquals("a.kt", ok.pull.changedFiles.first().path)
+        assertEquals(diffText, ok.pull.diff)
+    }
+
+    @Test
+    fun `pull builds only the read-only pr view and pr diff, passing a pinned repo through`() {
+        val client = FakeGh(enabled = true, repo = "hevi-public/haip")
+        client.pull(42)
+        val heads = client.argvs.map { it.take(2) }
+        assertTrue(heads.contains(listOf("pr", "view")))
+        assertTrue(heads.contains(listOf("pr", "diff")))
+        assertEquals(2, client.argvs.size, "pull() makes exactly two reads — no version probe, no mutation")
+        // The PR number is positional; the pinned repo rides --repo on both reads.
+        assertTrue(client.argvs.first { it.take(2) == listOf("pr", "view") }.containsAll(listOf("42", "--repo", "hevi-public/haip")))
+        assertTrue(client.argvs.first { it.take(2) == listOf("pr", "diff") }.containsAll(listOf("42", "--repo", "hevi-public/haip")))
+    }
+
+    @Test
+    fun `pull when disabled returns Unavailable without ever spawning gh`() {
+        val client = FakeGh(enabled = false)
+        assertInstanceOf(PullResult.Unavailable::class.java, client.pull(42))
+        assertTrue(client.argvs.isEmpty(), "nothing should be spawned when disabled")
+    }
+
+    @Test
+    fun `a non-zero pr view exit surfaces as Unavailable carrying the gh error`() {
+        val result = FakeGh(enabled = true, repo = "o/r", pullViewExit = 1).pull(42)
+        val unavailable = assertInstanceOf(PullResult.Unavailable::class.java, result)
+        assertTrue(unavailable.reason.contains("404"), "reason should include gh's stderr line: ${unavailable.reason}")
+    }
+
+    @Test
+    fun `a failed pr diff is best-effort - the detail still returns with a blank diff`() {
+        val result = FakeGh(enabled = true, repo = "o/r", failDiffSpawn = true).pull(42)
+        val ok = assertInstanceOf(PullResult.Ok::class.java, result)
+        assertEquals("", ok.pull.diff, "a diff failure leaves the diff blank rather than failing the ingest")
+        assertEquals(1, ok.pull.changedFiles.size, "the changed-file stats still came through")
+    }
+
+    @Test
+    fun `a non-zero pr view exit logs a single WARN carrying the off-state reason and structured fields`() {
+        LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
+            FakeGh(enabled = true, repo = "o/r", pullViewExit = 1).pull(42)
+            val e = logs.withEvent("gh.pull.unavailable").single()
+            assertEquals(Level.WARN, e.level)
+            assertEquals("42", logs.keyValue(e, "number"))
+            assertTrue(logs.keyValue(e, "reason")!!.contains("404"))
+        }
+    }
+
+    @Test
+    fun `a best-effort pr diff failure logs the gh-pull-diff-failed event at DEBUG and never WARNs`() {
+        LogCapture.on(GhCliGitHubClient::class.java).use { logs ->
+            FakeGh(enabled = true, repo = "o/r", failDiffSpawn = true).pull(42)
+            assertTrue(logs.warns().isEmpty(), "a best-effort diff failure must not WARN; got: ${logs.warns()}")
+            val e = logs.withEvent("gh.pull.diff.failed").single()
+            assertEquals(Level.DEBUG, e.level)
+            assertEquals("42", logs.keyValue(e, "number"))
+        }
     }
 
     @Test

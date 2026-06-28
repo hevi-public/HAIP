@@ -70,4 +70,36 @@ class GitHubJsonTest {
         assertEquals(5, issues.first().number)
         assertEquals("hubot", issues.first().author)
     }
+
+    @Test
+    fun `parsePull pulls the description, refs, head sha and changed-file stats`() {
+        val json = """
+            {"number":42,"title":"Batch the comment query","author":{"login":"octocat"},
+             "url":"https://github.com/o/r/pull/42","state":"OPEN","isDraft":true,"body":"Fixes the N+1.",
+             "baseRefName":"main","headRefName":"feature","headRefOid":"deadbeef",
+             "files":[{"path":"src/CommentRepository.kt","additions":12,"deletions":3}]}
+        """.trimIndent()
+        val pull = GitHubJson.parsePull(json)
+        assertEquals(42, pull.number)
+        assertEquals("Batch the comment query", pull.title)
+        assertEquals("octocat", pull.author)
+        assertEquals("OPEN", pull.state)
+        assertTrue(pull.isDraft)
+        assertEquals("Fixes the N+1.", pull.body)
+        assertEquals("main", pull.baseRef)
+        assertEquals("feature", pull.headRef)
+        assertEquals("deadbeef", pull.headSha)
+        assertEquals(1, pull.changedFiles.size)
+        assertEquals("src/CommentRepository.kt", pull.changedFiles.first().path)
+        assertEquals(12, pull.changedFiles.first().additions)
+        assertEquals(3, pull.changedFiles.first().deletions)
+        assertEquals("", pull.diff, "the diff is filled by the client from `gh pr diff`, not parsed here")
+    }
+
+    @Test
+    fun `parsePull tolerates a missing author and empty file list`() {
+        val pull = GitHubJson.parsePull("""{"number":1,"title":"t","url":"u","state":"OPEN","body":""}""")
+        assertEquals("ghost", pull.author)
+        assertTrue(pull.changedFiles.isEmpty())
+    }
 }
