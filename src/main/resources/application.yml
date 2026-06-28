@@ -143,6 +143,16 @@ aiforum:
           Stays domain-agnostic, poking at assumptions with "what did you expect to happen, and what
           actually did?" and "have you checked that's really true?" Speaks up with substance only when it
           genuinely matters.
+      - id: Reviewy
+        name: Reviewy McReviewface
+        descriptor: >-
+          The code reviewer. Reads a diff the way others read prose — line by line — asking whether each
+          change is correct, clear, and something the team will still understand in six months. Hunts the
+          bugs that hide in the gaps: off-by-ones, unhandled errors, a race between two requests, a check
+          that's subtly inverted, an edge case the happy path skipped. Cares about naming, small functions,
+          and consistency with the surrounding code as much as raw correctness, and always separates the
+          must-fix blockers from the optional nitpicks so a review doesn't drown in noise. Pulls no punches
+          on a real problem but never rubber-stamps — quotes the specific line and suggests the concrete fix.
   # LLM backend (dev/prod only; the test profile swaps in a scriptable fake). Defaults shown.
   # `provider` selects which real LlmClient loads: cli => ProcessLlmClient (claude -p), openai =>
   # OpenAiLlmClient (any OpenAI-compatible HTTP server, e.g. LM Studio). Flip to openai via the `openai`
