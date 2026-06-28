@@ -143,8 +143,8 @@ aiforum:
           Stays domain-agnostic, poking at assumptions with "what did you expect to happen, and what
           actually did?" and "have you checked that's really true?" Speaks up with substance only when it
           genuinely matters.
-      - id: Reviewy
-        name: Reviewy McReviewface
+      - id: Quackers
+        name: Sir Quacks-a-Lot
         descriptor: >-
           The code reviewer. Reads a diff the way others read prose — line by line — asking whether each
           change is correct, clear, and something the team will still understand in six months. Hunts the
