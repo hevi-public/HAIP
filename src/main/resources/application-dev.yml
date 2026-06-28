@@ -14,6 +14,14 @@ spring:
     driver-class-name: org.sqlite.JDBC
     hikari:
       maximum-pool-size: 5
+  # The dev DB is a throwaway, project-local file that gets migrated across many branches — so it
+  # naturally accumulates Flyway checksum drift (e.g. a feature edits its own migration on its branch, or
+  # two branches add migrations in different orders). Strict validation would then refuse to boot, which is
+  # the recurring "can't test in a worktree" pain. Dev migrations still APPLY in order; we just skip the
+  # pre-migrate checksum check here. Prod (persistent real data) and test (fresh DB) keep STRICT validation,
+  # so a genuinely broken migration is still caught there — `./gradlew verifyAll` is the real gate.
+  flyway:
+    validate-on-migrate: false
   # Static assets (app.css, app.js, *.mjs) carry no fingerprint in their URLs, so a renamed CSS class
   # or changed script would otherwise be styled/run against a browser-cached copy until heuristic
   # freshness expires — e.g. all the delete-confirm panels falling open after .thread-row__delete-* was

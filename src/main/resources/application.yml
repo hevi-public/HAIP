@@ -80,9 +80,9 @@ aiforum:
   # off, /github shows a clear "not configured" state and nothing is ever spawned. This is the HUMAN-facing
   # path and does NOT use the gh-readonly MCP server (that one is for LLM tool-callers).
   github:
-    enabled: false             # true => fetch live data from `gh`; false => /github shows the off state
-    repo: ""                   # "OWNER/REPO" to pin (recommended — the app's working dir isn't a clone);
-                               # blank => let `gh` infer from the working directory
+    enabled: true              # true => fetch live data from `gh` (needs `gh` installed + `gh auth login`); false => off state
+    repo: "hevi-public/HAIP"   # "OWNER/REPO" pinned so it works regardless of cwd (a git worktree's .git is a
+                               # pointer file, so `gh` repo-inference there is unreliable); blank => infer from cwd
     command: gh                # the gh binary on PATH
     list-limit: 10             # max open PRs / issues to list (clamped 1..100)
     timeout-seconds: 20        # per-`gh`-invocation deadline
