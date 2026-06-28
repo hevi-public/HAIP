@@ -18,8 +18,11 @@ class DiagnosticsController(private val env: Environment) {
         "datasourceUrl" to env.getProperty("spring.datasource.url"),
         "backupsEnabled" to env.getProperty("aiforum.backups.enabled", Boolean::class.java),
         // Personas must never get network tools authorised under the test profile (see
-        // ProcessLlmClient --allowedTools); the rail below pins this default against drift.
+        // ProcessLlmClient --allowedTools); the rails below pin these defaults against drift. Both are the
+        // same risk class (untrusted content fetched from the host); the gh-readonly MCP is enabled in
+        // dev/prod but must stay off under test.
         "webFetchEnabled" to env.getProperty("aiforum.llm.web-fetch-enabled", Boolean::class.java, false),
+        "githubToolsEnabled" to env.getProperty("aiforum.llm.github-tools-enabled", Boolean::class.java, false),
         "activeProfiles" to env.activeProfiles.toList(),
     )
 }

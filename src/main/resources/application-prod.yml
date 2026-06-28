@@ -42,3 +42,10 @@ aiforum:
     # e.g. "news.ycombinator.com,github.com". See requirements §12 (status note) for the full caveat.
     web-fetch-enabled: true
     web-fetch-allowed-domains: ""   # ← blank = any host; tighten this in prod
+    # Read-only GitHub tools for personas (Option B): the in-repo gh-readonly MCP so a persona reviewing a
+    # PR thread can pull the FULL pull request + diff (the opening post embeds only a truncated excerpt).
+    # Inline MCP config so it's path-portable (${user.dir}=launch cwd, Spring-resolved like ${user.home}).
+    # Needs `gh` authed + `node` on PATH. ⚠ SECURITY: same untrusted-input / no-Docker-jail caveat as
+    # web-fetch above — the gh tools can reach any repo; tighten or disable if that surface matters.
+    github-tools-enabled: true
+    github-mcp-config: '{"mcpServers":{"gh-readonly":{"command":"node","args":["${user.dir}/mcp/gh-readonly/server.mjs"]}}}'

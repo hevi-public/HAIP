@@ -46,3 +46,12 @@ aiforum:
     # Dev dogfooding: let personas actually hit the web (e.g. "check HackerNews"). Leave the domain
     # allowlist blank for any host, or scope it (see application.yml) if you want to keep dev fetches tight.
     web-fetch-enabled: true
+    # Read-only GitHub tools for personas (Option B): mount the in-repo gh-readonly MCP so a persona
+    # reviewing a PR thread can pull the FULL pull request + diff (the opening post embeds only a truncated
+    # excerpt — see PrThreadFormat). Inline MCP config so it's path-portable: ${user.dir} (the bootRun cwd =
+    # repo root) is Spring-resolved, like ${user.home} elsewhere, so node gets an absolute path to the
+    # server (its relative `import` resolves from the module file). Each tool takes an OWNER/REPO arg, so no
+    # clone/cwd is needed. Needs `gh` authed + `node` on PATH. ⚠ SECURITY: PR content is untrusted input
+    # (prompt injection) and the Docker jail (§12) isn't built — same risk class as web-fetch above.
+    github-tools-enabled: true
+    github-mcp-config: '{"mcpServers":{"gh-readonly":{"command":"node","args":["${user.dir}/mcp/gh-readonly/server.mjs"]}}}'
