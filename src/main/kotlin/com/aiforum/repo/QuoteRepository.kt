@@ -42,10 +42,22 @@ class QuoteRepository(private val jdbc: JdbcTemplate, private val clock: Clock) 
      * made). src and target always share a thread (a quote is within a thread), so thread_id is exact.
      */
     fun bySource(threadId: String): Map<String, List<QuoteEdge>> =
+        edgesIn(threadId).groupBy { it.srcCommentId }
+
+    /**
+     * Every edge in [threadId] grouped by its `target` comment id — the backward direction the assembler
+     * folds into each node's "quoted by" backlinks (oldest first). Same single read as [bySource], grouped
+     * the other way.
+     */
+    fun byTarget(threadId: String): Map<String, List<QuoteEdge>> =
+        edgesIn(threadId).groupBy { it.targetCommentId }
+
+    // One ordered read of a thread's edges, shared by bySource/byTarget. rowid is the deterministic
+    // tiebreak after created_at: it increments with insertion (so it agrees with chronological order in
+    // prod) AND breaks ties when many edges share a timestamp — which they do under the fixed test clock,
+    // where created_at alone wouldn't be stable.
+    private fun edgesIn(threadId: String): List<QuoteEdge> =
         jdbc.query(
-            // rowid is the deterministic tiebreak after created_at: it increments with insertion (so it
-            // agrees with chronological order in prod) AND breaks ties when many edges share a timestamp
-            // — which they do under the fixed test clock, where created_at alone wouldn't be stable.
             """SELECT id, thread_id, src_comment_id, target_comment_id, quoted_text
                FROM comment_quote WHERE thread_id = ? ORDER BY created_at, rowid""",
             { rs, _ ->
@@ -55,5 +67,5 @@ class QuoteRepository(private val jdbc: JdbcTemplate, private val clock: Clock) 
                 )
             },
             threadId,
-        ).groupBy { it.srcCommentId }
+        )
 }

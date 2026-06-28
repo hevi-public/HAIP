@@ -165,29 +165,32 @@ manual blockquote into a linked quote, that's an affordance that *creates an edg
 
 ---
 
-## 6. Deferred: backward refs, coalescing, the selector cone
+## 6. Backward refs, coalescing, the selector cone — BUILT (second slice)
 
-The richer half of the original idea, deferred to a follow-up slice so the forward half can ship and
-prove the model:
+The richer half of the original idea. Built as a follow-up slice (see §9) after the forward half proved
+the model; **no new schema** — just `QuoteRepository.byTarget` mirroring `bySource`.
 
-- **Backlinks.** For each comment, the set of edges where it is the `target`. Surfaced minimally as a
-  "quoted by N" affordance even when the inline span can't be re-found (so it survives edits).
-- **Inline marker + coalescing.** Best-effort re-find each `quoted_text` in the rendered body, wrap it
-  in `<mark class="quoted">`. When several edges target the **same passage**, coalesce to a **single**
-  marker. Open question to settle when we build it: coalescing granularity —
-  - *per-comment* (simplest: the whole comment shows "quoted by N", one marker on a best-effort span),
-  - *per-exact-span* (coalesce only identical `quoted_text`),
-  - *per-overlapping-region* (merge overlapping spans into one union marker — richest, closest to the
-    original "all quoted sources should turn into one", hardest to do over rendered HTML).
-  Recommend starting per-exact-span and revisiting overlap merging only if real usage needs it.
-- **Selector cone.** Hovering a coalesced marker reveals a popover listing the quoters (author monogram
-  + snippet + jump link), clicking navigates. This reuses the existing popover idiom (slash palette /
-  @mention menu) and the branch-index rail's jump-link pattern. "Cone" = the fan-of-options affordance;
-  the exact visual (radial fan vs. simple list popover) is a UX call for that slice.
-- **Decorated blockquote.** Once the text-matching exists, the forward direction can decorate the inline
-  `<blockquote>` itself instead of (or in addition to) the separate strip.
-- **Admin / graph view.** A citation overview on `/admin` (most-quoted comments, dangling edges) is a
-  natural later read-only addition — all the data is in `comment_quote`.
+- **Backlinks.** ✅ For each comment, the edges where it is the `target`, surfaced as a server-rendered
+  "quoted by N" block (`.reply__quoted-by`) — the no-JS fallback *and* the data the client promotes. It
+  survives edits even when the inline span can't be re-found (the comment-level entry stays visible).
+- **Inline marker + coalescing.** ✅ `quote-backlinks.js` best-effort re-finds each `quoted_text` in the
+  rendered body (whitespace-tolerant, `quote-backlinks-core.matchPassage`) and wraps it in
+  `<mark class="quoted">` client-side (the server body HTML / XSS firewall stays untouched). Coalescing is
+  **per-exact-span** (the chosen granularity): identical `quoted_text` collapses to one mark + one cone;
+  distinct passages stay separate marks. *(Deferred refinement: per-overlapping-region union marks — the
+  hardest variant; revisit only if partial-overlap quotes prove common. Per-comment was rejected as too
+  coarse — it loses "the relevant section becomes a link".)*
+- **Selector cone.** ✅ Hovering/focusing a mark reveals a `.quote-cone` popover listing the quoters
+  (author + snippet + jump link), built from the SSR block; clicking a quoter navigates (single-quoter
+  click jumps directly). Implemented as a simple list popover in the slash/@mention palette idiom (not a
+  literal radial fan).
+- **Graceful degradation.** A passage the client can't re-find stays in the visible SSR fallback list, so
+  a backlink is never silently lost; if every passage is located inline, the fallback block hides.
+
+**Still deferred:** **decorated forward blockquote** (now that text-matching exists, the *forward*
+`<blockquote>` could also carry the source link inline, not just the strip); an **admin / graph view**
+(most-quoted comments, dangling edges — all data is in `comment_quote`); the robust `TextQuoteSelector`
+anchoring (§4); and quoting the **OP**.
 
 ---
 
@@ -232,8 +235,9 @@ A complete vertical slice that establishes the edge model and the forward direct
     browser-only interaction (selection, right-click menu, smart destination) is verified via the
     preview tooling, not the HTTP suite — the same split keyboard-nav uses.
 
-**Out of scope for this slice:** everything in §6 (backlinks, coalescing, selector cone, decorated
-blockquote, admin graph) and the robust text-selector anchoring in §4.
+**Out of scope for this (first) slice:** everything in §6 — now built as the **second slice** (see §9).
+The robust text-selector anchoring (§4), the decorated forward blockquote, an admin graph, and quoting
+the OP remain deferred.
 
 **Quoting the OP is deferred.** The opening post is the *thread* row (`thread.body`, id == threadId),
 not a `comment` row (see `haip-op-node-model`), so there is no comment id for an edge to target — the FK
@@ -253,3 +257,32 @@ addressable node or a special `target_thread_id` edge variant; left for later.
   other enrichment. No conflict beyond both touching `replyNode.kte`.
 - **Versioning / regenerate (V14).** Covered in §4 — the snapshot is exactly what makes the link robust
   to a source being regenerated or edited.
+
+---
+
+## 9. The second slice (backward / backlinks) — built
+
+Implements §6 over the first slice's edges, **no new schema**.
+
+**Server**
+- `QuoteRepository.byTarget(threadId)` — incoming edges grouped by quoted comment (shares one ordered
+  read, `edgesIn`, with `bySource`).
+- `ReplyView.quotedBy: List<QuoteBacklink>` enriched in `ReplyTreeAssembler`: incoming edges grouped by
+  exact `quoted_text` (**per-exact-span coalescing**), each `QuoteBacklink(text, quoters)` with
+  `QuoteQuoter(commentId, author, snippet-of-quoter-body)`.
+- `replyNode.kte` renders `.reply__quoted-by[data-quoted-by-count]` with a `.reply__backlink
+  [data-backlink-text]` per passage (full passage in the attribute for client matching; truncated label
+  shown) containing quoter `a[data-backlink-src]` links — the no-JS fallback + the JS data source.
+
+**Client**
+- `quote-backlinks-core.mjs` (pure, unit-tested): `matchPassage(haystack, needle, fromIndex)` —
+  whitespace-tolerant search returning offsets into the original text.
+- `quote-backlinks.js` (DOM glue, loaded in `layout.kte`): per comment, locate each passage in a body
+  text node and wrap it in `<mark class="quoted">`; hide that passage's SSR fallback entry; on
+  hover/focus build a `.quote-cone` popover from the SSR quoters (single-quoter click jumps directly).
+  Unlocated passages stay in the visible fallback. Re-runs on `htmx:afterSwap` (guarded per reply).
+
+**Tests:** tier1 `byTarget`; acceptance `comment_quote_backlinks.feature` (quoted-by count, per-exact-span
+coalescing, distinct passages, no-backlinks) — all on the SSR block, which is the no-JS contract; the
+inline mark + cone are preview-verified. JS `quote-backlinks-core.test.mjs`. `verifyAll` + `npm test`
+green; marks/coalescing/cone confirmed live.

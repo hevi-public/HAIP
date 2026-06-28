@@ -4,8 +4,11 @@ import com.aiforum.domain.Comment
 import com.aiforum.dto.AttachmentView
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
+import com.aiforum.dto.QuoteBacklink
+import com.aiforum.dto.QuoteQuoter
 import com.aiforum.dto.QuoteRef
 import com.aiforum.dto.ReplyView
+import com.aiforum.dto.Snippet
 import com.aiforum.repo.AttachmentRepository
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
@@ -39,9 +42,12 @@ class ReplyTreeAssembler(
         val revisionCounts = all.firstOrNull()?.let { comments.revisionCountsByComment(it.threadId) } ?: emptyMap()
         // One batch read for the whole tree's images (no per-node query), folded into each node below.
         val attByComment = attachments.forComments(all.map { it.id })
-        // One batch read for the thread's quote edges, grouped by the quoting (src) comment — folded into
-        // each node's forward "quotes" strip below. Empty thread => no edges.
-        val quotesBySrc = all.firstOrNull()?.let { quotes.bySource(it.threadId) } ?: emptyMap()
+        // One batch read for the thread's quote edges, grouped both ways: by the quoting (src) comment for
+        // each node's forward "quotes" strip, and by the quoted (target) comment for its "quoted by"
+        // backlinks. Empty thread => no edges. (edgesIn reads once; the two groupings are in-memory.)
+        val threadId = all.firstOrNull()?.threadId
+        val quotesBySrc = threadId?.let { quotes.bySource(it) } ?: emptyMap()
+        val quotesByTarget = threadId?.let { quotes.byTarget(it) } ?: emptyMap()
         // The "in reply to" anchor only earns its place when a reply is visually separated from the
         // comment it answers. A parent's FIRST child renders immediately under it (depth-first preorder),
         // so the quote would just echo the line above — redundant clutter. Later siblings get pushed
@@ -67,6 +73,23 @@ class ReplyTreeAssembler(
                         QuoteRef(t.id, t.authorId, QuoteRef.previewOf(edge.quotedText))
                     }
                 },
+                // Backward backlinks: incoming edges grouped by the exact quoted passage (per-exact-span
+                // coalescing), each carrying its quoters (resolved to author + a snippet of the quoter's
+                // own body). Group order follows edge order (oldest first); a quoter not in the tree is
+                // dropped, and a passage left with no quoters is dropped.
+                quotedBy = quotesByTarget[comment.id].orEmpty()
+                    .groupBy { it.quotedText }
+                    .map { (text, edges) ->
+                        QuoteBacklink(
+                            text,
+                            edges.mapNotNull { e ->
+                                byId[e.srcCommentId]?.let { s ->
+                                    QuoteQuoter(s.id, s.authorId, Snippet.oneLine(s.body, 80))
+                                }
+                            },
+                        )
+                    }
+                    .filter { it.quoters.isNotEmpty() },
             )
         // Top-level nodes answer the post, not a comment — treat them as direct so they carry no anchor.
         return childrenByParent[null].orEmpty().map { build(it, isDirect = true) }

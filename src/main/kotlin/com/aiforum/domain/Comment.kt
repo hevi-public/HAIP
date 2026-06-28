@@ -4,6 +4,7 @@ import com.aiforum.dto.AttachmentView
 import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
 import com.aiforum.dto.ParentRef
+import com.aiforum.dto.QuoteBacklink
 import com.aiforum.dto.QuoteRef
 import com.aiforum.dto.ReasoningLeak
 import com.aiforum.dto.ReplyView
@@ -53,6 +54,8 @@ data class Comment(
         // Forward quote anchors (the comments this reply cites); supplied by the assembler, which knows
         // the thread's quote edges. Defaulted so the bare toReplyView() calls (drafts, errors) carry none.
         quotes: List<QuoteRef> = emptyList(),
+        // Backward backlinks (the comments that cite this reply), grouped per distinct quoted passage.
+        quotedBy: List<QuoteBacklink> = emptyList(),
     ) = ReplyView(
         id = id,
         authorId = authorId,
@@ -76,6 +79,7 @@ data class Comment(
         regeneratable = regeneratable,
         parent = parent,
         quotes = quotes,
+        quotedBy = quotedBy,
         children = children,
         attachments = attachments,
     )

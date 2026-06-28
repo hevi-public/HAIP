@@ -56,6 +56,25 @@ class QuoteRepositoryTest {
     }
 
     @Test
+    fun `byTarget groups incoming edges by the quoted comment, oldest-first`() {
+        val thread = data.insertThread("Scaling SQLite")
+        val a = data.insertComment(thread, authorId = "sol", body = "Indexes help")
+        val b = data.insertComment(thread, authorId = "saul", body = "Use WAL")
+        val c = data.insertComment(thread, authorId = "owner", body = "good points")
+
+        // b then c both quote a (the backward direction's many-to-one); c also quotes b.
+        quotes.insert(thread, srcCommentId = b, targetCommentId = a, quotedText = "Indexes help")
+        quotes.insert(thread, srcCommentId = c, targetCommentId = a, quotedText = "Indexes help")
+        quotes.insert(thread, srcCommentId = c, targetCommentId = b, quotedText = "Use WAL")
+
+        val byTgt = quotes.byTarget(thread)
+
+        assertEquals(setOf(a, b), byTgt.keys, "only quoted comments appear as keys")
+        assertEquals(listOf(b, c), byTgt.getValue(a).map { it.srcCommentId }, "a's quoters, oldest first")
+        assertEquals(listOf(c), byTgt.getValue(b).map { it.srcCommentId })
+    }
+
+    @Test
     fun `bySource is scoped to the thread`() {
         val t1 = data.insertThread("One")
         val t2 = data.insertThread("Two")

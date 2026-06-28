@@ -117,6 +117,26 @@ object Html {
         return anchor.groupValues[1].replace(Regex("<[^>]*>"), "").trim()
     }
 
+    /** The "quoted by" count on [targetId]'s backward-backlink block (data-quoted-by-count), or 0 if the
+     *  comment carries no backlinks. Read from the comment's own content (its SSR .reply__quoted-by). */
+    fun quotedByCount(html: String, targetId: String): Int {
+        val span = ownContent(html, targetId) ?: return 0
+        return Regex("data-quoted-by-count=\"([0-9]+)\"").find(span)?.groupValues?.get(1)?.toInt() ?: 0
+    }
+
+    /** The src-comment ids of every quoter listed in [targetId]'s backlink block (data-backlink-src). */
+    fun backlinkQuoters(html: String, targetId: String): List<String> {
+        val span = ownContent(html, targetId) ?: return emptyList()
+        return Regex("data-backlink-src=\"([^\"]*)\"").findAll(span).map { it.groupValues[1] }.toList()
+    }
+
+    /** The distinct quoted passages in [targetId]'s backlink block (data-backlink-text) — one per
+     *  coalesced group, so the size is the number of distinct passages quoted. */
+    fun backlinkPassages(html: String, targetId: String): List<String> {
+        val span = ownContent(html, targetId) ?: return emptyList()
+        return Regex("data-backlink-text=\"([^\"]*)\"").findAll(span).map { it.groupValues[1] }.toList()
+    }
+
     /** The data-reply-id of the first <article> whose data-author == [author], or null. */
     fun replyIdWithAuthor(html: String, author: String): String? {
         val tag = Regex("<article\\b[^>]*data-author=\"${Regex.escape(author)}\"[^>]*>").find(html)?.value ?: return null

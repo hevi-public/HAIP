@@ -48,6 +48,10 @@
          a quote edge (the native right-click menu is left intact). No-ops where there are no comment
          bodies; with JS off a hand-typed `> ` blockquote still posts. --%>
     <script type="module" src="/quote.js"></script>
+    <%-- Quote BACKLINKS (plan_docs/comment-quotes.md §6). ES module → deferred; promotes each quoted
+         comment's SSR "quoted by" block into inline <mark>s with a hover "cone" of the quoting comments.
+         No-ops where nothing is quoted; with JS off the SSR list is the fallback. --%>
+    <script type="module" src="/quote-backlinks.js"></script>
     <%-- Click the bare header chrome to scroll to top (header is sticky on desktop, app.css). ES module
          → deferred; activates wherever [data-scroll-top] exists, no-ops elsewhere. --%>
     <script type="module" src="/header.js"></script>

@@ -5,6 +5,7 @@ import com.aiforum.acceptance.support.HttpClient
 import com.aiforum.acceptance.support.ScenarioWorld
 import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import tools.jackson.databind.ObjectMapper
@@ -73,6 +74,45 @@ class QuoteSteps(
         assertTrue(
             Html.quoteSources(body(), replyId(src)).isEmpty(),
             "expected NO forward quote anchors on ${src}'s reply in:\n${body()}",
+        )
+    }
+
+    // ---- backward direction: backlinks (the "quoted by" side) ----
+
+    // A second/anonymous quoting reply when the scenario only cares about the COUNT, not the quoter alias.
+    @When("a reply quoting {string} from {string}'s reply is posted")
+    fun aReplyQuoting(quoted: String, target: String) =
+        postQuoting("Citing this.", listOf(quote(target, quoted)))
+
+    @Then("{string}'s reply is quoted by {string}'s reply")
+    fun replyQuotedBy(target: String, quoter: String) {
+        assertTrue(
+            Html.backlinkQuoters(body(), replyId(target)).contains(replyId(quoter)),
+            "expected ${target}'s reply to be quoted by ${quoter}'s reply in:\n${body()}",
+        )
+    }
+
+    @Then("{string}'s reply shows it was quoted {int} times")
+    fun quotedNTimes(target: String, n: Int) {
+        assertEquals(
+            n, Html.quotedByCount(body(), replyId(target)),
+            "expected ${target}'s reply quoted-by count = $n in:\n${body()}",
+        )
+    }
+
+    @Then("{string}'s reply has {int} distinct quoted passages")
+    fun distinctPassages(target: String, n: Int) {
+        assertEquals(
+            n, Html.backlinkPassages(body(), replyId(target)).size,
+            "expected ${target}'s reply to have $n distinct quoted passages in:\n${body()}",
+        )
+    }
+
+    @Then("{string}'s reply has no backlinks")
+    fun noBacklinks(target: String) {
+        assertEquals(
+            0, Html.quotedByCount(body(), replyId(target)),
+            "expected NO backlinks on ${target}'s reply in:\n${body()}",
         )
     }
 }
