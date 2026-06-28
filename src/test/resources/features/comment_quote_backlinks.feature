@@ -32,3 +32,16 @@ Feature: A quoted comment shows who quoted it (backlinks)
   Scenario: A comment nobody has quoted has no backlinks
     When the owner views the thread page
     Then "sol"'s reply has no backlinks
+
+  Scenario: A typed or persona markdown blockquote counts as a quote
+    Given a posted reply from "saul" saying "> recursive CTE keeps the tree query"
+    When the owner views the thread page
+    Then "sol"'s reply is quoted by "saul"'s reply
+    And "sol"'s reply shows it was quoted 1 times
+
+  Scenario: A typed blockquote coalesces with a toolbar quote of the same passage
+    Given a posted reply from "saul" saying "> recursive CTE keeps the tree query"
+    When the owner posts a reply "Me too" quoting "recursive CTE keeps the tree query" from "sol"'s reply
+    And the owner views the thread page
+    Then "sol"'s reply shows it was quoted 2 times
+    And "sol"'s reply has 1 distinct quoted passages

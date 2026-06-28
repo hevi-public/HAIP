@@ -149,19 +149,37 @@ shatters on any edit/regenerate of the source — worst fit given V14.
 
 ---
 
-## 5. On "do we need a quote type?"
+## 5. On "do we need a quote type?" — and folding in manual / persona quotes
 
-No type discriminator. The meaningful distinction is **linked (has an edge) vs. plain blockquote (no
-edge)** — not manual-vs-menu:
+No type discriminator. The meaningful distinction is **linked vs. plain blockquote** — not manual-vs-menu.
+A toolbar quote creates a stored edge by construction; a `> blockquote` (hand-typed, or written by an LLM
+persona) carries none on its own. We don't persist a "manual"/"menu" flag — everything is derived from
+edge presence.
 
-- A **menu quote** creates an edge *by construction* (we know the source comment + the selected text).
-- A **manual `> blockquote`** is just markdown. We cannot reliably infer which comment it came from
-  (text alone is ambiguous / may be original prose), so it gets no edge and renders as a plain
-  blockquote.
+**But manual/persona blockquotes ARE now folded into the graph** (added after the toolbar shipped — an
+LLM persona quoting a passage was invisible to the backlinks, which is wrong; this was the original "manual
+quotes are a quote type" ask). `QuoteScanner` (Tier-0, `com.aiforum.markdown`) derives edges from
+blockquotes **at render time** in the assembler:
 
-So we don't persist a "manual"/"menu" flag. Everything is **derived from edge presence**: a blockquote
-with a matching edge is a linked quote; one without is plain. If we later want to let the owner promote a
-manual blockquote into a linked quote, that's an affordance that *creates an edge* — still no type field.
+- For each `> ` blockquote passage in a comment, find the **unique** other comment whose **prose** (its
+  body with blockquote lines stripped) contains that text, and link to it. Matching against *prose* is the
+  load-bearing trick: the same passage appears as a `> ` block in every *quoter* and as prose only in the
+  *original*, so it resolves to the source, not to sibling quoters.
+- Zero matches (external/paraphrased/OP quotes), several matches (ambiguous), or a too-short passage
+  (`< MIN_LEN`) are left **unlinked** — best-effort, consistent with snapshot anchoring (§4).
+- Derived edges are **de-duped against stored** ones (a toolbar quote's body also carries the inserted
+  blockquote, which must not count twice) and merged before grouping, so a typed quote and a toolbar quote
+  of the same passage **coalesce** into one backlink group.
+
+**Decision: derive at render (chosen)** — no schema, works **retroactively** on every existing
+persona/typed blockquote, and naturally covers both directions (the derived edge feeds the forward strip
+*and* the backward backlinks). **Alternative (documented, not built): persist derived edges.** Run the
+same matching at post time (hook the generation settle path for persona replies) + a one-time backfill,
+writing real `comment_quote` rows. That unifies storage and makes the graph queryable (e.g. an admin
+view) without re-scanning per render, at the cost of a write-path hook, a migration/backfill, and
+staleness when a source body is later edited (the derive-at-render pass always reflects current text). We
+chose derive-at-render for the PoC; persisting is the upgrade if the per-render scan ever costs too much
+or an offline graph query is needed.
 
 ---
 
@@ -266,7 +284,11 @@ Implements §6 over the first slice's edges, **no new schema**.
 
 **Server**
 - `QuoteRepository.byTarget(threadId)` — incoming edges grouped by quoted comment (shares one ordered
-  read, `edgesIn`, with `bySource`).
+  read, `edges`, with `bySource`).
+- `QuoteScanner` (Tier-0) + the assembler merge **derived** edges (from markdown blockquotes — §5) with the
+  stored toolbar edges, de-duped, before grouping — so persona/typed quotes join both directions and
+  coalesce with toolbar quotes of the same passage. Forward refs de-dupe by (target, normalized passage);
+  backlinks group by normalized passage and distinct quoter.
 - `ReplyView.quotedBy: List<QuoteBacklink>` enriched in `ReplyTreeAssembler`: incoming edges grouped by
   exact `quoted_text` (**per-exact-span coalescing**), each `QuoteBacklink(text, quoters)` with
   `QuoteQuoter(commentId, author, snippet-of-quoter-body)`.
