@@ -80,7 +80,7 @@ aiforum:
   # off, /github shows a clear "not configured" state and nothing is ever spawned. This is the HUMAN-facing
   # path and does NOT use the gh-readonly MCP server (that one is for LLM tool-callers).
   github:
-    enabled: false             # true => fetch live data from `gh`; false => /github shows the off state
+    enabled: true              # true => fetch live data from `gh`; false => /github shows the off state
     repo: ""                   # "OWNER/REPO" to pin (recommended — the app's working dir isn't a clone);
                                # blank => let `gh` infer from the working directory
     command: gh                # the gh binary on PATH

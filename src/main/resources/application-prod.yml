@@ -42,3 +42,5 @@ aiforum:
     # e.g. "news.ycombinator.com,github.com". See requirements §12 (status note) for the full caveat.
     web-fetch-enabled: true
     web-fetch-allowed-domains: ""   # ← blank = any host; tighten this in prod
+  github:
+    enabled: true
