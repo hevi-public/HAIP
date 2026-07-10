@@ -14,13 +14,13 @@ be built next.
 
 ---
 
-## 1. The numbers (verified 2026-07-10)
+## 1. The numbers (verified 2026-07-10; gate widened same day — see §6 item 2)
 
 | Metric | Value |
 |---|---|
-| Automated checks in the merge gate | **583** — 346 JUnit tests + 152 Gherkin scenarios + 85 JS tests |
+| Automated checks in the merge gate | **607** — 346 JUnit tests + 153 Gherkin scenarios + 85 JS tests + 23 MCP-server tests |
 | Tier 0 / Tier 1 / Tier 2 tests | 156 / 136 / 54 (21 / 17 / 9 classes) |
-| Acceptance spec | 44 `.feature` files, 152 scenarios (157 after outline expansion), 32 step-definition files |
+| Acceptance spec | 44 `.feature` files, 153 scenarios (158 after outline expansion), 32 step-definition files |
 | Mocking libraries (MockK, Mockito, …) | **0** — not even as a dependency |
 | Test : production code | 9,663 : 7,803 LOC (**1.24 : 1** — more test code than product code) |
 | Production source | 91 Kotlin files, 35 JTE templates, 19 Flyway migrations, 11 repositories |
@@ -57,18 +57,24 @@ Cucumber stack trace when a millisecond Tier-0 test already failed on the same l
 | **Tier 0** | Pure logic: state machine, context firewall, parsers, markdown, routing traits | everything | none | 156 |
 | **Tier 1** | The IO boundary itself: repositories vs **real SQLite**, `claude -p` adapter vs a real `/bin/sh` subprocess, HTTP adapter vs a real local socket, Flyway pipeline, backup | real DB, real subprocesses, real sockets | controlled sub-seam substitutes only (a shell script, `MockRestServiceServer`) | 136 |
 | **Tier 2** | Services/controllers as plain objects (no Spring): orchestration, fan-out, cancel, error taxonomy | real service + domain logic | hand-rolled scriptable `LlmClient`, in-memory repo fakes, fixed `Clock` | 54 |
-| **Acceptance** | Full stack over HTTP: one `@SpringBootTest(RANDOM_PORT)` context, real JTE SSR, real SQLite + Flyway | everything except IO ports | the four scriptable seam fakes + fixed Clock | 152 scenarios |
+| **Acceptance** | Full stack over HTTP: one `@SpringBootTest(RANDOM_PORT)` context, real JTE SSR, real SQLite + Flyway | everything except IO ports | the four scriptable seam fakes + fixed Clock | 153 scenarios |
 | **jsTest** | Pure JS cores (`*-core.mjs`: toast store, nav, quote scanner) via `node:test` | — | injected `now` | 85 |
+| **mcp gates** | The two `mcp/` servers: gh-readonly (node:test) and shortcut (tsc typecheck + node:test) | — | none | 23 |
 
 One command runs the ladder: `./gradlew verifyAll` (also wired into `check`; the default `test` task
 is disabled so there is no untiered side door). CI is deliberately a thin ~25-line workflow whose
-only build step is `docker compose run --rm build` — **the same command a developer runs locally**,
-so "passes locally, fails in CI" is structurally impossible for the Docker path.
+only build step is `docker compose run --rm build` — **the same command a developer runs locally**
+(compose no longer overrides the image's `verifyAll` default, so a gate added to `verifyAll` is in
+CI automatically), and "passes locally, fails in CI" is structurally impossible for the Docker path.
 
-Honest caveats, verified: tier ordering is advisory (`shouldRunAfter`), not a dependency chain; the
-merge gate is *convention* — there is currently no GitHub branch protection enforcing a green run;
-local `jsTest` shells out to `npm test` and silently requires Node ≥ 18; and the `mcp/` servers'
-tests sit outside every gate (see §6).
+Honest caveats, verified: tier ordering is advisory (`shouldRunAfter`), not a dependency chain; and
+the merge gate is *convention* — there is currently no GitHub branch protection enforcing a green
+run. The three former silent-green holes were closed 2026-07-10 (§6 item 2): the acceptance task now
+enforces a floor on *executed* scenarios read from cucumber's `report.json` (Gradle's
+`failOnNoDiscoveredTests` alone cannot catch a tag-filter regression — filtered scenarios still
+count as "discovered", reported skipped), `jsTest`'s Node ≥ 21 requirement is declared (`.nvmrc`,
+`engines`) and preflight-checked with an actionable failure, and both `mcp/` servers' tests run in
+the gate.
 
 ### 2.3 The seam doctrine — mock only at the IO boundary
 
@@ -151,12 +157,14 @@ Evidence, not vibes:
 | [`plan_docs/`](../plan_docs/) (20 files) | **Decide.** One doc per feature: status header, data model with the exact Flyway DDL, dated & locked "Decisions (owner)" blocks, slices, deferred items with promotion triggers, a tiered test plan. Rejected approaches are kept *with the why*. | Durable |
 | [`.claude/skills/`](../.claude/skills/) (4 skills) | **Encode how-to.** Wiring traps and conventions an agent can't derive from code (Spring Boot 4 removed TestRestTemplate; the Cucumber engine needs a classpath selector under Gradle). Auto-trigger on the relevant paths. Maintained as a release artifact — updating them was a numbered audit task with its own PR. | Durable, must track code |
 | [`src/test/resources/features/`](../src/test/resources/features/) | **Specify.** The executable spec — the only layer that can't silently lie, because it runs. | Durable, self-enforcing |
-| Session memory + [`HANDOVER.md`](../HANDOVER.md) | **Coordinate.** Cross-session state (maintainer's `~/.claude` memory) and agent-to-agent negotiation notes (HANDOVER.md brokered an `app.js` conflict between two live parallel branches). | Ephemeral by design |
+| [`how-we-work/context.md`](context.md) + session memory | **Coordinate.** Cross-session state: conventions, gotchas, the feature-state map. context.md is the on-repo record (added 2026-07-10 — private `~/.claude` memory may cache it but is never the only copy); a stale `HANDOVER.md` that once brokered an `app.js` conflict between two live parallel branches was deleted the same day. | context.md durable; memory ephemeral |
 
-There is deliberately **no CLAUDE.md, no issue tracker, and no coverage tooling**: README + skills +
-memory fill the first role, plan-doc status headers + the deferred-audit file (every deferral carries
-a concrete promotion trigger) fill the second, and "every behaviour gets a test at the lowest tier
-that proves it" substitutes for the third.
+There is a deliberately **thin [`CLAUDE.md`](../CLAUDE.md)** (added 2026-07-10, reversing the
+earlier deliberate omission once cross-session context moved on-repo): a router to the four layers
+plus the non-negotiables, not a doctrine dump. There is still **no issue tracker and no coverage
+tooling**: plan-doc status headers + the deferred-audit file (every deferral carries a concrete
+promotion trigger) fill the first role, and "every behaviour gets a test at the lowest tier that
+proves it" substitutes for the second.
 
 ### 3.2 The delivery loop
 
@@ -168,9 +176,13 @@ skills re-synced ◄── merge ◄── PR (persona-signed review: 🛠️ Fo
 ```
 
 - **Slices sized to one PR**, at high cadence (PRs #77–#90 in ~3 days at peak).
+- **Skills are a release artifact (T2.7)** — standing PR checkbox: *did this change invalidate a
+  skill snippet, and was the skill re-synced in the same PR?* The recurring prose-vs-code audit is a
+  written work order at [`plan_docs/docs-drift-audit.md`](../plan_docs/docs-drift-audit.md).
 - **Parallel agents coordinate through documents**: migration numbers are pre-claimed in plan docs
-  (the V18/V19 collision between two live branches was avoided by convention), and HANDOVER.md is a
-  written negotiation between sessions.
+  (the V18/V19 collision between two live branches was avoided by convention), and cross-session
+  handovers land in [`context.md`](context.md) and PR descriptions (the ad-hoc root `HANDOVER.md`
+  pattern was retired 2026-07-10 after going stale).
 - **The audit as a work order**: `audit-remediation-tier1-tier2.md` encodes a supervisor/worker
   protocol — decision gates, per-task definition-of-done — and git history shows it executed to the
   letter: 11 `claude/audit-t*` branches, PRs #77–#87, skills-update last as ordered.
@@ -190,27 +202,34 @@ skills re-synced ◄── merge ◄── PR (persona-signed review: 🛠️ Fo
    millisecond test, not a full-stack trace.
 2. **No mock DSL to learn.** Every double is ordinary Kotlin you can step through; failure injection
    reads as a Gherkin one-liner.
-3. **The spec is readable.** 44 feature files teach the product; plan docs preserve decisions *and
-   rejected paths* with dates — rare solo-repo gold for a joining teammate.
-4. **Redesigns are cheap.** The `data-*` contract means restyling can't break 152 scenarios — proven
+3. **The spec teaches the product.** 44 feature files teach it directly; plan docs preserve
+   decisions *and rejected paths* with dates — rare solo-repo gold for a joining teammate.
+4. **Redesigns are cheap.** The `data-*` contract means restyling can't break 153 scenarios — proven
    three times in one review cycle.
 5. **CI == local.** One Docker command, no matrix, no cache config to understand.
 
 **Cons**
 
-1. **Doctrine docs drift.** The skills say "exactly one seam" while reality is four; the two testing
-   skills disagree on the acceptance engine; sketches diverge from code. A human copying a skill
-   snippet verbatim writes wrong wiring (see §6, item 7).
-2. **Critical context lives outside the repo** in the maintainer's private session memory — the
-   clearest human-convenience-for-AI-convenience trade. A second human can't read it.
-3. **A green build can lie in three places**: acceptance passes even if it discovers zero scenarios
-   (`failOnNoDiscoveredTests = false`), `jsTest` needs an undeclared Node ≥ 18, and `mcp/` tests run
-   in no gate at all.
+1. **Doctrine docs can drift** — and had: five live drifts ("exactly one seam" vs four ports, two
+   skills disagreeing on the acceptance engine, `TestRestTemplate`, a wrong starter version, stale
+   sketches) were found 2026-07-10 and fixed the same day. The *mechanism* remains a risk; the
+   counter is the standing audit work order (`plan_docs/docs-drift-audit.md`) plus sketches that now
+   point at their source-of-truth files. A human copying a skill snippet is safe only as long as
+   that loop keeps running.
+2. **Cross-session context now lives on-repo** ([`context.md`](context.md) + a thin `CLAUDE.md`,
+   added 2026-07-10) — a second human can read it. Residual: it's a copy the maintainer's private
+   memory must keep feeding; the contract header says durable learnings land here first, but
+   nothing enforces it.
+3. **A green build used to be able to lie in three places** — all closed 2026-07-10 (§2.2, §6
+   item 2): acceptance now enforces an executed-scenario floor from `report.json`, `jsTest`
+   preflights Node ≥ 21 (declared in `.nvmrc`/`engines`), and both `mcp/` servers' tests are in
+   `verifyAll` (which CI now runs verbatim). Residual: the merge gate is still convention — no
+   branch protection.
 4. **Untyped step glue.** Acceptance steps POST raw `Map`s (so specs compile before controllers
    exist) — great for red-first agents, but it costs IDE navigation and rename safety across 32
    step files.
-5. **History archaeology is confusing**: persona-signed reviews under one identity, and a stale
-   HANDOVER.md at maximum visibility.
+5. **History archaeology is confusing**: persona-signed reviews under one identity (the stale
+   HANDOVER.md that compounded this was deleted 2026-07-10).
 
 ### For an AI agent
 
@@ -238,8 +257,11 @@ skills re-synced ◄── merge ◄── PR (persona-signed review: 🛠️ Fo
 3. **Tier discipline is honor-system.** Tier membership is a `@Tag` the author picks; tolerated
    exceptions (`ContextLoadsTest` — a `@SpringBootTest` tagged tier2; `Clock.systemUTC()` inside
    tier-2 fakes) are precedents agents will pattern-match on.
-4. **The silent-pass holes are agent-widenable**: a session that breaks the Cucumber suite selector
-   greens the build with all 152 scenarios unrun, and nothing red tells it so.
+4. **Silent-pass holes were agent-widenable** — a session that broke the Cucumber suite selector
+   used to green the build with all 153 scenarios unrun. Closed 2026-07-10: zero executed scenarios
+   now fails the task with an explicit message (and the count is printed on every run, so gradual
+   `@wip` creep stays visible). The lesson generalises: any *new* gate an agent adds needs its own
+   "would red actually show?" check.
 5. **Duplicated FK-safe wipe lists** (`DatabaseResetHooks` wipes 11 tables; tier-1 classes curate
    their own shorter lists) are a per-migration landmine — it has already caused one cross-class
    leak flake (`68a0748`).
@@ -258,9 +280,9 @@ agent work possible.
 
 | Risk | Now | Trigger | Cheapest counter |
 |---|---|---|---|
-| Acceptance wall-clock (serial by design: one context, per-scenario 11-table wipe, settle polling) | Medium | scenario growth; docs' own ceiling: "fine at ~63… becomes the thing nobody runs past a few hundred" — 157 executed today | enforce "one journey per feature, enumeration at Tier 0/2"; surface scenario count + runtime per PR |
-| Silent-zero acceptance pass (`failOnNoDiscoveredTests = false`) | Medium | any Gradle/Cucumber/JUnit bump or runner refactor | delete the flag or assert ≥N scenarios in `report.json` — one line |
-| Skill/doc drift | Medium | more parallel sessions; drift compounds by imitation | keep T2.7 ("skills as release artifact") as a standing PR checkbox; make skills point at real files instead of embedding sketches; delete stale HANDOVER.md |
+| Acceptance wall-clock (serial by design: one context, per-scenario 11-table wipe, settle polling) | Medium | scenario growth; docs' own ceiling: "fine at ~63… becomes the thing nobody runs past a few hundred" — 158 executed today (now printed on every acceptance run) | enforce "one journey per feature, enumeration at Tier 0/2"; surface scenario count + runtime per PR |
+| Silent-zero acceptance pass | ✅ Closed 2026-07-10 (executed-scenario floor from `report.json`; count printed per run) | a runner refactor that stops cucumber writing `report.json` would resurface it — the `doFirst` delete makes that red, not green | keep the floor beside the task; raise it if `@wip` creep ever matters |
+| Skill/doc drift | Low–Med (five drifts fixed 2026-07-10; audit work order standing) | more parallel sessions; drift compounds by imitation | run `plan_docs/docs-drift-audit.md` quarterly; keep T2.7 as a standing PR checkbox; sketches carry source-of-truth pointers |
 | Duplicated DB-wipe lists | Medium | every new migration (V20+) | one shared `wipeAll()` + a guard test diffing the list against `sqlite_master` |
 | Flyway numbering under concurrent agents | Low–Med | 3+ concurrent branches needing migrations | a duplicate-V-number build check; keep the plan-doc reservation convention |
 | Worktree/Gradle cache contamination (stale JTE served from shared `~/.gradle`) | Low–Med | more concurrent builds | encode `--no-build-cache` for JTE generation in build.gradle.kts instead of in one person's memory |
@@ -279,8 +301,14 @@ seam class.
    half wasn't sanitized. Fixed with `sanitizeUrls` + an `http/https/mailto` allowlist, pinned by
    Tier-0 hostile-scheme cases and an acceptance scenario — see `plan_docs/markdown-rendering.md`
    §Security for the convention.
-2. **Close the silent-green holes (S).** Drop `failOnNoDiscoveredTests = false` (or assert a minimum
-   scenario count) and wire `mcp/`'s `npm run test:mcp` into `verifyAll` beside `jsTest`.
+2. **Close the silent-green holes (S).** ✅ **Done — 2026-07-10.** Acceptance enforces an
+   executed-scenario floor read from cucumber's `report.json` (with a `doFirst` delete so a stale
+   report can't fake a pass — Gradle's `failOnNoDiscoveredTests` alone cannot catch a tag-filter
+   regression since filtered scenarios still count as "discovered"); `jsTest` and the mcp tasks
+   preflight Node ≥ 21 (`.nvmrc` pins 22, root `engines` declares it); both `mcp/` servers' tests
+   run in `verifyAll` (`mcpGhTest`, `mcpShortcutInstall` + `mcpShortcutTest` — `npm ci` keyed on the
+   lockfile); and compose no longer overrides the image's `verifyAll` command, so the CI stage list
+   can't drift from the gate. Every guard was proven to go red before landing.
 3. **Centralise DB reset/seeding in `testsupport/` (S).** One canonical FK-safe table registry +
    `wipeAll()` used by hooks and every Tier-1 class, plus a guard test against `sqlite_master`.
 4. **Opt-in LLM provider contract task (M).** The one thing the hermetic suite cannot prove is that
@@ -293,9 +321,11 @@ seam class.
 6. **A prod-error surface (S–M).** Structured event-id logging is built and tested but nothing
    consumes it. Persist ERROR events to SQLite and render on `/admin/stats` — the first consumer,
    needed the day the first outside user hits a bug the owner didn't witness.
-7. **Recurring docs-drift audit (S).** Five live drifts exist despite T2.7. Prose-vs-code diffing is
-   an LLM job and this repo's workforce is LLMs: rerun the audit-work-order format on the skills
-   quarterly.
+7. **Recurring docs-drift audit (S).** ✅ **Done — 2026-07-10.** The five live drifts were fixed and
+   the audit is now a standing, re-runnable work order at
+   [`plan_docs/docs-drift-audit.md`](../plan_docs/docs-drift-audit.md) (claims → verify against the
+   tree → drift table → fix; first run logged as the worked example). Rerun quarterly or after any
+   build-wiring/doctrine refactor.
 8. **Scoped mutation testing (M).** PIT on tiers 0+2 only (plain junit-jupiter — the recorded
    PIT/Cucumber blocker doesn't apply), on-demand, as the gate proving an assertion migrated safely
    out of acceptance.

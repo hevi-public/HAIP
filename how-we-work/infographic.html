@@ -307,8 +307,8 @@
   <section class="kpis" aria-label="headline numbers">
     <div class="tile">
       <div class="label">Automated checks in the gate</div>
-      <div class="value">583</div>
-      <div class="sub">346 JUnit · 152 scenarios · 85 JS</div>
+      <div class="value">607</div>
+      <div class="sub">346 JUnit · 153 scenarios · 85 JS · 23 MCP</div>
     </div>
     <div class="tile">
       <div class="label">Mocking libraries</div>
@@ -338,7 +338,7 @@
           <div class="rung">
             <div class="swatch" style="background: var(--tacc)"></div>
             <div class="body">
-              <h3>Acceptance <span class="count">· 152 scenarios / 44 features</span></h3>
+              <h3>Acceptance <span class="count">· 153 scenarios / 44 features</span></h3>
               <p>Full stack over HTTP — one Spring context, real JTE SSR, real SQLite + Flyway.</p>
               <div class="facts">fakes: the 4 IO seams + fixed Clock · Cucumber, <span class="mono">not @wip</span></div>
             </div>
@@ -375,19 +375,28 @@
               <div class="facts">node:test · glue asserted at acceptance</div>
             </div>
           </div>
+          <div class="rung">
+            <div class="swatch" style="background: var(--tjs)"></div>
+            <div class="body">
+              <h3>mcp gates <span class="count">· 23 tests</span></h3>
+              <p>The two <span class="mono">mcp/</span> servers — gh-readonly (node:test) and shortcut (tsc typecheck + node:test), in the gate since 2026-07-10.</p>
+              <div class="facts">npm ci keyed on the lockfile · Node ≥ 21 preflighted</div>
+            </div>
+          </div>
         </div>
         <div class="gut up" aria-hidden="true"><div class="line"></div><div class="lbl">run: cheapest first</div><div class="cap">▲</div></div>
       </div>
 
       <div>
-        <div class="chart" role="img" aria-label="Checks per tier: Tier 0 156, Tier 1 136, Tier 2 54, Acceptance 152 scenarios, JS 85">
+        <div class="chart" role="img" aria-label="Checks per tier: Tier 0 156, Tier 1 136, Tier 2 54, Acceptance 153 scenarios, JS 85, MCP 23">
           <div class="sec-title" style="margin-bottom:10px">Checks per tier</div>
           <div class="row" title="Tier 0 — 156 test methods"><div class="name">Tier 0</div><div class="track"><div class="bar" style="width:100%; background: var(--t0)"></div><span class="val">156</span></div></div>
           <div class="row" title="Tier 1 — 136 test methods"><div class="name">Tier 1</div><div class="track"><div class="bar" style="width:87%; background: var(--t1)"></div><span class="val">136</span></div></div>
           <div class="row" title="Tier 2 — 54 test methods"><div class="name">Tier 2</div><div class="track"><div class="bar" style="width:35%; background: var(--t2)"></div><span class="val">54</span></div></div>
-          <div class="row" title="Acceptance — 152 Gherkin scenarios"><div class="name">Acceptance</div><div class="track"><div class="bar" style="width:97%; background: var(--tacc)"></div><span class="val">152</span></div></div>
+          <div class="row" title="Acceptance — 153 Gherkin scenarios"><div class="name">Acceptance</div><div class="track"><div class="bar" style="width:98%; background: var(--tacc)"></div><span class="val">153</span></div></div>
           <div class="row" title="jsTest — 85 node:test cases"><div class="name">JS</div><div class="track"><div class="bar" style="width:54%; background: var(--tjs)"></div><span class="val">85</span></div></div>
-          <div class="chart-note">Acceptance counts Gherkin scenarios (157 after outline expansion); other rows count test methods.</div>
+          <div class="row" title="MCP servers — 23 tests (gh-readonly + shortcut)"><div class="name">MCP</div><div class="track"><div class="bar" style="width:15%; background: var(--tjs)"></div><span class="val">23</span></div></div>
+          <div class="chart-note">Acceptance counts Gherkin scenarios (158 after outline expansion, printed on every run); other rows count test methods.</div>
         </div>
         <hr class="hairline">
         <p style="font-size:13px; color:var(--ink2)">
@@ -443,9 +452,9 @@
     <div class="sec-head">One gate command — and CI is the same command</div>
     <div class="flow" aria-label="build pipeline">
       <span class="step">docker compose run --rm build</span><span class="arrow">→</span>
-      <span class="step">generateJte</span><span class="arrow">→</span>
-      <span class="step">compileKotlin</span><span class="arrow">→</span>
+      <span class="step">verifyAll</span><span class="arrow">→</span>
       <span class="step tiered">jsTest</span><span class="arrow">→</span>
+      <span class="step tiered">mcp gates</span><span class="arrow">→</span>
       <span class="step tiered">tier0</span><span class="arrow">→</span>
       <span class="step tiered">tier1</span><span class="arrow">→</span>
       <span class="step tiered">tier2</span><span class="arrow">→</span>
@@ -462,9 +471,11 @@
       </div>
     </div>
     <p class="foot">
-      Honest print: <span class="mono">./gradlew verifyAll</span> is also wired into <span class="mono">check</span> and the default
-      <span class="mono">test</span> task is disabled — but the merge gate is convention (no branch protection yet), tier ordering is
-      advisory, and the <span class="mono">mcp/</span> servers’ tests currently run in no gate at all.
+      Honest print: <span class="mono">./gradlew verifyAll</span> is also wired into <span class="mono">check</span>, the default
+      <span class="mono">test</span> task is disabled, and since 2026-07-10 compose runs the image’s <span class="mono">verifyAll</span>
+      default (no stage list to drift), acceptance enforces an executed-scenario floor from <span class="mono">report.json</span>,
+      and Node ≥ 21 is declared + preflighted. Still true: the merge gate is convention (no branch protection yet) and
+      tier ordering is advisory.
     </p>
   </section>
 
@@ -489,13 +500,13 @@
         <div class="verb">Specify</div>
         <h4>features/</h4>
         <p>The executable spec. Declarative Gherkin citing the requirements §s — the one documentation layer that cannot silently lie, because it runs.</p>
-        <div class="stat">44 files · 152 scenarios · all green</div>
+        <div class="stat">44 files · 153 scenarios · all green</div>
       </div>
       <div class="layer">
         <div class="verb">Coordinate</div>
-        <h4>memory + HANDOVER.md</h4>
-        <p>Cross-session state in the owner’s Claude memory; agent-to-agent negotiation notes for parallel branches (one brokered an <span class="mono">app.js</span> conflict between two live sessions).</p>
-        <div class="stat">ephemeral by design</div>
+        <h4>context.md + memory</h4>
+        <p>Cross-session state — conventions, gotchas, the feature-state map — recorded on-repo in <span class="mono">how-we-work/context.md</span> (plus a thin router <span class="mono">CLAUDE.md</span>); private session memory is a cache, never the only copy.</p>
+        <div class="stat">on-repo since 2026-07-10</div>
       </div>
     </div>
     <hr class="hairline">
@@ -524,10 +535,10 @@
           <li><span class="badge pro" title="pro">✓</span><p><strong>Failures self-localise.</strong> The lowest tier that fails names the broken layer — debugging starts at a millisecond test.</p></li>
           <li><span class="badge pro" title="pro">✓</span><p><strong>No mock DSL to learn.</strong> Every double is ordinary Kotlin you can step through; failure injection is a Gherkin one-liner.</p></li>
           <li><span class="badge pro" title="pro">✓</span><p><strong>The spec teaches the product.</strong> Feature files + dated decision blocks beat most staffed teams’ onboarding docs.</p></li>
-          <li><span class="badge pro" title="pro">✓</span><p><strong>Redesigns are cheap.</strong> Restyling can’t break 152 scenarios — proven three times in one review cycle.</p></li>
-          <li><span class="badge con" title="con">✗</span><p><strong>Doctrine docs drift.</strong> Skills say “one seam” while reality is four; two skills disagree on the acceptance engine.</p></li>
-          <li><span class="badge con" title="con">✗</span><p><strong>Key context is off-repo.</strong> Cross-session state lives in the owner’s private Claude memory — a second human can’t read it.</p></li>
-          <li><span class="badge con" title="con">✗</span><p><strong>Green can lie in three places.</strong> Zero-scenario acceptance still passes; jsTest needs an undeclared Node ≥ 18; <span class="mono">mcp/</span> is ungated.</p></li>
+          <li><span class="badge pro" title="pro">✓</span><p><strong>Redesigns are cheap.</strong> Restyling can’t break 153 scenarios — proven three times in one review cycle.</p></li>
+          <li><span class="badge con" title="con">✗</span><p><strong>Doctrine docs can drift.</strong> Five live drifts fixed 2026-07-10; safe only while the standing audit (<span class="mono">plan_docs/docs-drift-audit.md</span>) keeps running.</p></li>
+          <li><span class="badge con" title="con">✗</span><p><strong>On-repo context needs feeding.</strong> Cross-session state now lives in <span class="mono">context.md</span> (2026-07-10), but nothing enforces that sessions keep it current.</p></li>
+          <li><span class="badge con" title="con">✗</span><p><strong>Green could lie in three places</strong> — all closed 2026-07-10 (scenario floor, Node ≥ 21 preflight, <span class="mono">mcp/</span> gated). Residual: the merge gate is still convention, no branch protection.</p></li>
         </ul>
       </div>
       <div class="card">
@@ -559,9 +570,9 @@
         </ul>
       </div>
       <div>
-        <div class="risk"><span class="sev med"><i></i>Med</span><span><span class="what">Acceptance wall-clock.</span> Serial by design (one context, 11-table wipe per scenario); the docs’ own ceiling is “a few hundred” — 157 run today. <span class="fix">Counter: one journey per feature; enumeration lives at Tier 0/2.</span></span></div>
-        <div class="risk"><span class="sev med"><i></i>Med</span><span><span class="what">Silent-zero acceptance pass.</span> <span class="mono">failOnNoDiscoveredTests=false</span> means a broken suite selector greens the build with nothing run. <span class="fix">Counter: one-line fix or assert ≥N scenarios.</span></span></div>
-        <div class="risk"><span class="sev med"><i></i>Med</span><span><span class="what">Skill/doc drift.</span> Five live drifts found; agents execute stale snippets and drift compounds by imitation. <span class="fix">Counter: skills-update as a standing PR checkbox; point at files, don’t embed sketches.</span></span></div>
+        <div class="risk"><span class="sev med"><i></i>Med</span><span><span class="what">Acceptance wall-clock.</span> Serial by design (one context, 11-table wipe per scenario); the docs’ own ceiling is “a few hundred” — 158 run today, count printed per run. <span class="fix">Counter: one journey per feature; enumeration lives at Tier 0/2.</span></span></div>
+        <div class="risk"><span class="sev low"><i></i>Low</span><span><span class="what">Silent-zero acceptance pass.</span> ✅ Closed 2026-07-10: an executed-scenario floor read from <span class="mono">report.json</span> (stale report deleted first). <span class="fix">Watch: a runner refactor that stops the json plugin writing goes red, not green.</span></span></div>
+        <div class="risk"><span class="sev low"><i></i>Low</span><span><span class="what">Skill/doc drift.</span> Five live drifts fixed 2026-07-10; drift still compounds by imitation if unchecked. <span class="fix">Counter: run <span class="mono">plan_docs/docs-drift-audit.md</span> quarterly; sketches carry source-of-truth pointers.</span></span></div>
         <div class="risk"><span class="sev med"><i></i>Med</span><span><span class="what">Duplicated DB-wipe lists.</span> Hooks wipe 11 tables, tier-1 classes fewer — already caused one run-order flake. <span class="fix">Counter: one shared <span class="mono">wipeAll()</span> + a guard test vs <span class="mono">sqlite_master</span>.</span></span></div>
         <div class="risk"><span class="sev low"><i></i>Low</span><span><span class="what">Flyway numbering &amp; worktree cache contamination</span> under concurrent agents. <span class="fix">Counter: duplicate-V build check; encode the JTE <span class="mono">--no-build-cache</span> fix in Gradle, not in memory.</span></span></div>
         <div class="risk"><span class="sev low"><i></i>Low</span><span><span class="what">SQLite single-writer</span> — correct PoC posture; flips to High on multi-user deploy. <span class="fix">Counter: the Tier-1 repo suite is the pre-built Postgres migration harness.</span></span></div>
@@ -575,12 +586,12 @@
     <div class="sec-head">What else is needed — ranked</div>
     <ol>
       <li><p><strong>Markdown link-URL sanitization + tests</strong><span class="eff">S</span> — the link-destination half of the XSS firewall was missing. ✅ Fixed same-day in PR #92 (<span class="mono">sanitizeUrls</span> + scheme allowlist, tier-0 + acceptance pins).</p></li>
-      <li><p><strong>Close the silent-green holes</strong><span class="eff">S</span> — drop <span class="mono">failOnNoDiscoveredTests=false</span>; wire <span class="mono">mcp/</span> tests into <span class="mono">verifyAll</span>.</p></li>
+      <li><p><strong>Close the silent-green holes</strong><span class="eff">S</span> — ✅ Done 2026-07-10: executed-scenario floor from <span class="mono">report.json</span>, Node ≥ 21 declared + preflighted, both <span class="mono">mcp/</span> servers’ tests in <span class="mono">verifyAll</span>, compose runs <span class="mono">verifyAll</span> (no stage list to drift). Every guard proven red before landing.</p></li>
       <li><p><strong>Centralise DB reset/seeding</strong><span class="eff">S</span> — one FK-safe table registry + <span class="mono">wipeAll()</span>, guarded against <span class="mono">sqlite_master</span>.</p></li>
       <li><p><strong>LLM provider contract task</strong><span class="eff">M</span> — non-gating run of the real adapters; envelope drift is a proven incident class here.</p></li>
       <li><p><strong>Konsist architecture tests</strong><span class="eff">S–M</span> — mechanise the prose rules (no <span class="mono">Instant.now()</span> mid-stack, tier 2 Spring-free, doubles at ports only) as Tier-0 JUnit.</p></li>
       <li><p><strong>A prod-error surface</strong><span class="eff">S–M</span> — persist the tested structured log events to SQLite, render on <span class="mono">/admin/stats</span>; the first consumer for the logging contract.</p></li>
-      <li><p><strong>Recurring docs-drift audit</strong><span class="eff">S</span> — an LLM job in a repo staffed by LLMs; rerun the audit-work-order format on the skills quarterly.</p></li>
+      <li><p><strong>Recurring docs-drift audit</strong><span class="eff">S</span> — ✅ Done 2026-07-10: five drifts fixed; standing work order at <span class="mono">plan_docs/docs-drift-audit.md</span>, rerun quarterly.</p></li>
       <li><p><strong>Scoped mutation testing</strong><span class="eff">M</span> — PIT on tiers 0+2 only, on-demand: the gate proving an assertion migrated safely out of acceptance.</p></li>
     </ol>
     <p class="rejected">
