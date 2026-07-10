@@ -4,7 +4,8 @@
 > independently re-derived by a second pass; claims that didn't survive adversarial verification were
 > corrected before landing here.
 >
-> 🖼 **The one-page version:** open [`infographic.html`](infographic.html) in a browser.
+> 🖼 **The one-page version:** open [`infographic.html`](infographic.html) in a browser. It doubles
+> as a slide deck — hit **Present** (or `P`) and flip through with ←/→/Space; `Esc` exits.
 
 This document explains the project's two load-bearing systems — the **tiered, one-seam test
 architecture** and the **docs-as-infrastructure organisation** — and then evaluates them honestly:

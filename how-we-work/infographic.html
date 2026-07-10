@@ -240,6 +240,52 @@
   .rejected { margin-top: 16px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--grid); padding-top: 12px; }
 
   footer { margin-top: 36px; font-size: 12px; color: var(--muted); max-width: 84ch; }
+
+  /* ---------- presentation mode ---------- */
+  .present-btn {
+    position: fixed; top: 14px; right: 14px; z-index: 40;
+    border: 1px solid var(--border); border-radius: 999px;
+    background: var(--surface); color: var(--ink2);
+    font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 8px 14px; cursor: pointer;
+  }
+  .present-btn:hover { color: var(--ink); border-color: var(--accent); }
+  body.presenting .present-btn { display: none; }
+
+  body.presenting { padding: 0; overflow: hidden; }
+  body.presenting .wrap {
+    max-width: none; height: 100dvh; overflow-y: auto;
+    display: flex; flex-direction: column;
+    padding: 56px clamp(20px, 5vw, 72px);
+    scrollbar-width: thin;
+  }
+  body.presenting .wrap:focus { outline: none; }
+  body.presenting .wrap > :not(.slide-active) { display: none; }
+  body.presenting .wrap > .slide-active { margin: auto; width: min(1060px, 100%); }
+  body.presenting footer.slide-active { font-size: 15px; line-height: 1.7; }
+
+  .hud, .progress { display: none; }
+  body.presenting .hud {
+    position: fixed; right: 16px; bottom: 16px; z-index: 40;
+    display: flex; align-items: center; gap: 2px;
+    border: 1px solid var(--border); border-radius: 999px;
+    background: var(--surface); padding: 4px 6px;
+    font-size: 12.5px; color: var(--ink2);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .12);
+  }
+  .hud button {
+    border: 0; background: none; color: var(--ink2); cursor: pointer;
+    font: inherit; font-size: 15px; line-height: 1; padding: 6px 9px; border-radius: 999px;
+  }
+  .hud button:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+  .hud button:disabled { opacity: .35; cursor: default; }
+  .hud .count { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
+  .hud .exit { font-size: 13px; }
+  body.presenting .progress {
+    display: block; position: fixed; top: 0; left: 0; height: 3px; width: 0; z-index: 40;
+    background: var(--accent); transition: width .18s ease;
+  }
+  @media print { .present-btn, .hud, .progress { display: none !important; } }
 </style>
 </head>
 <body>
@@ -553,5 +599,77 @@
     qualified or refuted. Like everything else in this repo: it drifts — re-verify before quoting.
   </footer>
 </div>
+
+<!-- ===================== presentation mode ===================== -->
+<button class="present-btn" type="button" title="Flip through as slides (P)">▶&#xFE0E; Present</button>
+<div class="progress" aria-hidden="true"></div>
+<div class="hud" role="toolbar" aria-label="Slide navigation">
+  <button class="prev" type="button" aria-label="Previous slide (←)">‹</button>
+  <span class="count">1 / 1</span>
+  <button class="next" type="button" aria-label="Next slide (→ or Space)">›</button>
+  <button class="exit" type="button" aria-label="Exit presentation (Esc)">✕</button>
+</div>
+
+<script>
+(() => {
+  const wrap = document.querySelector('.wrap');
+  const slides = Array.from(wrap.children);
+  const hud = document.querySelector('.hud');
+  const progress = document.querySelector('.progress');
+  const count = hud.querySelector('.count');
+  const prevBtn = hud.querySelector('.prev');
+  const nextBtn = hud.querySelector('.next');
+  let idx = 0, presenting = false;
+
+  function show(i) {
+    idx = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach((el, j) => el.classList.toggle('slide-active', j === idx));
+    count.textContent = (idx + 1) + ' / ' + slides.length;
+    progress.style.width = ((idx + 1) / slides.length * 100) + '%';
+    prevBtn.disabled = idx === 0;
+    nextBtn.disabled = idx === slides.length - 1;
+    wrap.scrollTop = 0;
+    if (presenting) history.replaceState(null, '', '#slide-' + (idx + 1));
+  }
+
+  function setPresenting(on, i) {
+    presenting = on;
+    document.body.classList.toggle('presenting', on);
+    if (on) {
+      wrap.setAttribute('tabindex', '-1');
+      show(i ?? idx);
+      wrap.focus({ preventScroll: true }); // so ↑/↓ scroll a too-tall slide
+    } else {
+      slides.forEach(el => el.classList.remove('slide-active'));
+      wrap.removeAttribute('tabindex');
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  }
+
+  document.querySelector('.present-btn').addEventListener('click', () => setPresenting(true, 0));
+  hud.querySelector('.exit').addEventListener('click', () => setPresenting(false));
+  prevBtn.addEventListener('click', () => show(idx - 1));
+  nextBtn.addEventListener('click', () => show(idx + 1));
+
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!presenting) {
+      if (e.key === 'p' || e.key === 'P') { e.preventDefault(); setPresenting(true, 0); }
+      return;
+    }
+    switch (e.key) {
+      case 'ArrowRight': case 'PageDown': e.preventDefault(); show(idx + 1); break;
+      case 'ArrowLeft': case 'PageUp': e.preventDefault(); show(idx - 1); break;
+      case ' ': e.preventDefault(); show(idx + (e.shiftKey ? -1 : 1)); break;
+      case 'Home': e.preventDefault(); show(0); break;
+      case 'End': e.preventDefault(); show(slides.length - 1); break;
+      case 'Escape': setPresenting(false); break;
+    }
+  });
+
+  const m = location.hash.match(/^#slide-(\d+)$/);
+  if (m) setPresenting(true, parseInt(m[1], 10) - 1);
+})();
+</script>
 </body>
 </html>
