@@ -1,4 +1,4 @@
-package com.aiforum.tier1
+package com.aiforum.tier1.infra
 
 import com.aiforum.backup.SqliteBackup
 import org.junit.jupiter.api.Assertions.assertEquals

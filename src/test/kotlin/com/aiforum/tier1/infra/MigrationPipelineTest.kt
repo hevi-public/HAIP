@@ -1,4 +1,4 @@
-package com.aiforum.tier1
+package com.aiforum.tier1.infra
 
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.MigrationVersion

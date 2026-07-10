@@ -1,4 +1,4 @@
-package com.aiforum.tier1
+package com.aiforum.tier1.client
 
 import ch.qos.logback.classic.Level
 import com.aiforum.github.GhCliGitHubClient

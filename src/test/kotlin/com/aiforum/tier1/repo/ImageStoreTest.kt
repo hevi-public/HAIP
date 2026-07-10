@@ -1,4 +1,4 @@
-package com.aiforum.tier2
+package com.aiforum.tier1.repo
 
 import com.aiforum.images.ImageStore
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -13,11 +13,12 @@ import java.nio.file.Path
 import java.util.Base64
 
 /**
- * Tier-2: ImageStore against a real temp dir (no Spring). Pins the security-relevant behaviour — type is
- * decided by magic bytes (not the caller), non-images are rejected, oversize is rejected, and identical
+ * Tier-1: ImageStore against a real temp dir (no Spring) — nothing is faked above it; this IS the IO
+ * boundary, the same way the repository tests are for SQLite. Pins the security-relevant behaviour — type
+ * is decided by magic bytes (not the caller), non-images are rejected, oversize is rejected, and identical
  * bytes dedup to one content-addressed file.
  */
-@Tag("tier2")
+@Tag("tier1")
 class ImageStoreTest {
 
     @TempDir
