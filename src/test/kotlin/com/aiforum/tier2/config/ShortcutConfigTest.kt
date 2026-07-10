@@ -1,4 +1,4 @@
-package com.aiforum.tier2
+package com.aiforum.tier2.config
 
 import com.aiforum.markdown.MarkdownRenderer
 import com.aiforum.shortcut.ShortcutConfig

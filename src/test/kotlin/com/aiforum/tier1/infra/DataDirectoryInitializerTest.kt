@@ -1,4 +1,4 @@
-package com.aiforum.tier1
+package com.aiforum.tier1.infra
 
 import com.aiforum.config.DataDirectoryInitializer
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow

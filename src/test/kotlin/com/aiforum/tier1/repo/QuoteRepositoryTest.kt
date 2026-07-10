@@ -1,4 +1,4 @@
-package com.aiforum.tier1
+package com.aiforum.tier1.repo
 
 import com.aiforum.acceptance.support.TestData
 import com.aiforum.repo.QuoteRepository

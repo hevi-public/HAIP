@@ -1,4 +1,4 @@
-package com.aiforum.tier2
+package com.aiforum.tier2.service
 
 import com.aiforum.images.ImageStore
 import org.junit.jupiter.api.Assertions.assertEquals

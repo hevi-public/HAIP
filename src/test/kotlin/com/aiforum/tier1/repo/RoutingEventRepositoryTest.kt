@@ -1,4 +1,4 @@
-package com.aiforum.tier1
+package com.aiforum.tier1.repo
 
 import com.aiforum.dto.ScopeMode
 import com.aiforum.repo.RoutingEventRepository

@@ -1,4 +1,4 @@
-package com.aiforum.tier2
+package com.aiforum.tier2.service
 
 import com.aiforum.shortcut.ShortcutClient
 import com.aiforum.shortcut.ShortcutProperties

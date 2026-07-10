@@ -1,4 +1,4 @@
-package com.aiforum.tier2
+package com.aiforum.tier2.controller
 
 import com.aiforum.github.GitHubClient
 import com.aiforum.github.GitHubOverview
