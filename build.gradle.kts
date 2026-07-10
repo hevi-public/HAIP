@@ -44,8 +44,9 @@ dependencies {
 
     // --- markdown rendering: commonmark + GFM tables, with server-side syntax highlighting ---
     // commonmark parses reply/post bodies to HTML. escapeHtml(true) at the renderer makes raw HTML in a
-    // body inert (LLM output is untrusted — prompt-injection XSS), so tables come via the GFM extension,
-    // not raw <table>. See MarkdownRenderer.
+    // body inert and sanitizeUrls(true) strips script-scheme link/image destinations (LLM output is
+    // untrusted — prompt-injection XSS), so tables come via the GFM extension, not raw <table>.
+    // See MarkdownRenderer.
     implementation("org.commonmark:commonmark:$commonmarkVersion")
     implementation("org.commonmark:commonmark-ext-gfm-tables:$commonmarkVersion")
     // GraalJS (Truffle) runs highlight.js' core highlight() — string in, <span class=hljs-*> HTML out, no
