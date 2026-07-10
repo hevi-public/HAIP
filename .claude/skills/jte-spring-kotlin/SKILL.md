@@ -297,6 +297,20 @@ $unsafe{expr}                  <%-- raw, only for trusted HTML --%>
 
 Null-safety is Kotlin's: use `?.`, `?:`, and the elvis fallback inside `${}`.
 
+### `$unsafe{}` and untrusted bodies — the two-half firewall
+
+The only untrusted HTML that may reach `$unsafe{}` is `bodyHtml` (and `captionHtml`), and only because
+`MarkdownRenderer` enforces **both** halves of the XSS firewall: `escapeHtml(true)` (raw HTML inert) **and**
+`sanitizeUrls(true)` with a custom `http/https/mailto` allowlist (hostile `javascript:`/`data:` link/image
+destinations emptied). Traps if you touch this:
+
+- `escapeHtml` alone is NOT enough — it never touches link *destinations* (that hole shipped for 3 weeks).
+- commonmark's *default* URL-sanitizer allowlist includes `data:` — keep the custom allowlist, `data:text/html`
+  is script execution.
+- `sanitizeUrls` stamps `rel="nofollow"` on every anchor — tests pinning exact anchor markup must expect it.
+- Never route new untrusted content through `$unsafe{}` directly; render it through `MarkdownRenderer` (or
+  `${}`-escape it). Details: `plan_docs/markdown-rendering.md` §Security; code: `markdown/MarkdownRenderer.kt`.
+
 ## Wiring a controller to a view
 
 With `jte-spring-boot-starter-3`, return the template name (path under `src/main/jte`, no extension)

@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HAIP — how we test &amp; organise</title>
+<style>
+  :root {
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11, 11, 11, .10);
+    --accent: #2a78d6;
+    /* ordinal ramp (blue, validated for light surface, tiers are ordered) */
+    --t0: #86b6ef;
+    --t1: #5598e7;
+    --t2: #2a78d6;
+    --tacc: #1c5cab;
+    --tjs: #898781;
+    /* status (icon + label always, never color alone) */
+    --good: #0ca30c;
+    --good-text: #006300;
+    --warning: #fab219;
+    --serious: #ec835a;
+    --critical: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255, 255, 255, .10);
+      --accent: #3987e5;
+      --t0: #184f95;
+      --t1: #256abf;
+      --t2: #3987e5;
+      --tacc: #6da7ec;
+      --tjs: #898781;
+      --good-text: #0ca30c;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--page); }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink);
+    background: var(--page);
+    line-height: 1.5;
+    padding: 48px 20px 64px;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; }
+  a { color: var(--accent); }
+
+  /* ---------- masthead ---------- */
+  .kicker {
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 10px;
+  }
+  h1 { font-size: clamp(28px, 4.5vw, 40px); line-height: 1.15; font-weight: 650; letter-spacing: -.01em; }
+  .lede { margin-top: 12px; max-width: 72ch; color: var(--ink2); font-size: 16px; }
+  .meta { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+
+  /* ---------- generic card & section chrome ---------- */
+  section { margin-top: 28px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .sec-title {
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 4px;
+  }
+  .sec-head { font-size: 19px; font-weight: 650; margin-bottom: 14px; }
+  .foot { margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+  .hairline { border: 0; border-top: 1px solid var(--grid); margin: 16px 0; }
+  code, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .92em;
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
+    border-radius: 4px; padding: 1px 5px;
+  }
+
+  /* ---------- KPI row ---------- */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 14px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .tile .label { font-size: 13px; color: var(--ink2); }
+  .tile .value { font-size: 34px; font-weight: 650; margin: 2px 0; letter-spacing: -.01em; }
+  .tile .sub { font-size: 12px; color: var(--muted); }
+
+  /* ---------- tier ladder ---------- */
+  .ladder-grid { display: grid; grid-template-columns: minmax(300px, 1.15fr) minmax(280px, 1fr); gap: 28px; }
+  @media (max-width: 780px) { .ladder-grid { grid-template-columns: 1fr; } }
+  .ladder { display: grid; grid-template-columns: 22px 1fr 22px; gap: 0 10px; }
+  .rungs { display: flex; flex-direction: column; gap: 8px; }
+  .rung {
+    display: flex; gap: 12px; align-items: stretch;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: color-mix(in srgb, var(--surface) 60%, var(--page));
+    padding: 10px 14px 10px 0; overflow: hidden;
+  }
+  .rung .swatch { width: 8px; flex: 0 0 8px; border-radius: 8px 0 0 8px; margin-right: 2px; }
+  .rung .body { flex: 1; min-width: 0; }
+  .rung h3 { font-size: 14.5px; font-weight: 650; }
+  .rung h3 .count { color: var(--ink2); font-weight: 500; font-size: 13px; }
+  .rung p { font-size: 12.5px; color: var(--ink2); margin-top: 1px; }
+  .rung .facts { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .gut { position: relative; }
+  .gut .line { position: absolute; top: 8px; bottom: 8px; left: 50%; width: 1px; background: var(--baseline); }
+  .gut .cap { position: absolute; left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 12px; }
+  .gut.down .cap { bottom: -2px; }
+  .gut.up .cap { top: -2px; }
+  .gut .lbl {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(180deg);
+    writing-mode: vertical-rl; white-space: nowrap;
+    font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); background: var(--surface); padding: 6px 0;
+  }
+  .gut.up .lbl { transform: translate(-50%, -50%); }
+
+  /* bar chart */
+  .chart { margin-top: 4px; }
+  .chart .row { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-radius: 6px; }
+  .chart .row:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+  .chart .name { flex: 0 0 88px; text-align: right; font-size: 12.5px; color: var(--ink2); }
+  .chart .track { flex: 1; display: flex; align-items: center; gap: 8px; }
+  .chart .bar { height: 18px; border-radius: 0 4px 4px 0; }
+  .chart .val { font-size: 12.5px; color: var(--ink2); }
+  .chart-note { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--ink2); margin-top: 10px; }
+  .legend .key { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  /* ---------- seam ---------- */
+  .seam { display: grid; grid-template-columns: 1fr 84px 1fr; gap: 0; align-items: stretch; }
+  @media (max-width: 720px) { .seam { grid-template-columns: 1fr; } .seam-mid { min-height: 64px; } .seam-mid .lbl { writing-mode: horizontal-tb !important; transform: translate(-50%, -50%) !important; } }
+  .seam-col h3 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .seam-col ul { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .seam-col li {
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+    font-size: 13.5px; background: color-mix(in srgb, var(--surface) 55%, var(--page));
+  }
+  .seam-col li small { display: block; color: var(--muted); font-size: 11.5px; }
+  .seam-col.real li { border-left: 3px solid var(--accent); }
+  .seam-col.fake li { border-left: 3px solid var(--baseline); }
+  .seam-mid { position: relative; }
+  .seam-mid .line { position: absolute; top: 26px; bottom: 4px; left: 50%; width: 1px; background: var(--baseline); }
+  .seam-mid .lbl {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(180deg);
+    writing-mode: vertical-rl; white-space: nowrap; font-size: 10.5px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted); background: var(--surface); padding: 8px 0;
+  }
+
+  /* ---------- gate flow ---------- */
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+  .flow .step {
+    border: 1px solid var(--border); border-radius: 999px; padding: 5px 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px;
+    background: color-mix(in srgb, var(--surface) 55%, var(--page)); white-space: nowrap;
+  }
+  .flow .step.tiered::before {
+    content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 2px;
+    background: var(--accent); margin-right: 8px;
+  }
+  .flow .arrow { color: var(--muted); font-size: 13px; }
+  .duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 16px; }
+  .mini { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; background: color-mix(in srgb, var(--surface) 55%, var(--page)); }
+  .mini h4 { font-size: 13.5px; font-weight: 650; margin-bottom: 4px; }
+  .mini p { font-size: 12.5px; color: var(--ink2); }
+
+  /* ---------- org layers ---------- */
+  .layers { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .layer { border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; background: color-mix(in srgb, var(--surface) 55%, var(--page)); }
+  .layer .verb { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); font-weight: 650; }
+  .layer h4 { font-size: 15px; font-weight: 650; margin: 2px 0 4px; }
+  .layer p { font-size: 12.5px; color: var(--ink2); }
+  .layer .stat { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+
+  /* ---------- pros / cons ---------- */
+  .pc { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .pc .card h3 { font-size: 16px; font-weight: 650; margin-bottom: 12px; }
+  .pc ul { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .pc li { display: flex; gap: 10px; font-size: 13.5px; }
+  .pc li p { color: var(--ink2); }
+  .pc li strong { color: var(--ink); font-weight: 600; }
+  .badge {
+    flex: 0 0 auto; margin-top: 1px; width: 20px; height: 20px; border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #fff;
+  }
+  .badge.pro { background: var(--good); }
+  .badge.con { background: var(--serious); }
+
+  /* ---------- scale ---------- */
+  .scale-grid { display: grid; grid-template-columns: minmax(260px, .9fr) minmax(300px, 1.3fr); gap: 24px; }
+  @media (max-width: 780px) { .scale-grid { grid-template-columns: 1fr; } }
+  .holds li { display: flex; gap: 9px; font-size: 13.5px; margin-bottom: 9px; color: var(--ink2); }
+  .holds li strong { color: var(--ink); font-weight: 600; }
+  .holds ul { list-style: none; }
+  .risk { display: flex; gap: 10px; align-items: baseline; padding: 9px 0; border-top: 1px solid var(--grid); font-size: 13px; }
+  .risk:first-of-type { border-top: 0; padding-top: 0; }
+  .sev {
+    flex: 0 0 auto; font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
+    border-radius: 4px; padding: 2px 7px; text-transform: uppercase; color: var(--ink);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .sev i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .sev.med { background: color-mix(in srgb, var(--warning) 18%, transparent); }
+  .sev.med i { background: var(--warning); }
+  .sev.low { background: color-mix(in srgb, var(--muted) 16%, transparent); }
+  .sev.low i { background: var(--muted); }
+  .risk .what { color: var(--ink); font-weight: 600; }
+  .risk .fix { color: var(--muted); }
+
+  /* ---------- next ---------- */
+  .next ol { list-style: none; counter-reset: n; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 22px; }
+  .next li { counter-increment: n; display: flex; gap: 12px; font-size: 13.5px; }
+  .next li::before {
+    content: counter(n);
+    flex: 0 0 24px; height: 24px; border-radius: 50%;
+    background: var(--accent); color: #fff; font-size: 12.5px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center; margin-top: 1px;
+  }
+  .next li p { color: var(--ink2); }
+  .next li strong { color: var(--ink); font-weight: 600; }
+  .eff {
+    display: inline-block; font-size: 10.5px; font-weight: 700; border: 1px solid var(--border);
+    border-radius: 4px; padding: 0 5px; color: var(--muted); vertical-align: 1px; margin-left: 4px;
+  }
+  .rejected { margin-top: 16px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--grid); padding-top: 12px; }
+
+  footer { margin-top: 36px; font-size: 12px; color: var(--muted); max-width: 84ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===================== masthead ===================== -->
+  <header>
+    <div class="kicker">HAIP · AI Forum — engineering approach</div>
+    <h1>Tested by contract, organised for agents</h1>
+    <p class="lede">
+      A solo-owner project built at multi-agent speed: an executable Gherkin spec written before the
+      code, a four-tier test ladder with hand-rolled doubles at the IO boundary only, and a
+      documentation stack that works as coordination infrastructure for parallel AI sessions.
+    </p>
+    <p class="meta">Numbers grep-derived and independently re-verified · 2026-07-10 · details in <span class="mono">how-we-work/README.md</span></p>
+  </header>
+
+  <!-- ===================== KPI row ===================== -->
+  <section class="kpis" aria-label="headline numbers">
+    <div class="tile">
+      <div class="label">Automated checks in the gate</div>
+      <div class="value">583</div>
+      <div class="sub">346 JUnit · 152 scenarios · 85 JS</div>
+    </div>
+    <div class="tile">
+      <div class="label">Mocking libraries</div>
+      <div class="value">0</div>
+      <div class="sub">every double is plain Kotlin at an IO port</div>
+    </div>
+    <div class="tile">
+      <div class="label">Test : production code</div>
+      <div class="value">1.24 : 1</div>
+      <div class="sub">9,663 vs 7,803 lines of Kotlin</div>
+    </div>
+    <div class="tile">
+      <div class="label">UI redesigns survived on green</div>
+      <div class="value">3</div>
+      <div class="sub">acceptance asserts <span class="mono">data-*</span> hooks, never CSS</div>
+    </div>
+  </section>
+
+  <!-- ===================== tier ladder ===================== -->
+  <section class="card">
+    <div class="sec-title">Testing</div>
+    <div class="sec-head">The tier ladder — built top-down, run bottom-up</div>
+    <div class="ladder-grid">
+      <div class="ladder">
+        <div class="gut down" aria-hidden="true"><div class="line"></div><div class="lbl">built: spec first</div><div class="cap">▼</div></div>
+        <div class="rungs">
+          <div class="rung">
+            <div class="swatch" style="background: var(--tacc)"></div>
+            <div class="body">
+              <h3>Acceptance <span class="count">· 152 scenarios / 44 features</span></h3>
+              <p>Full stack over HTTP — one Spring context, real JTE SSR, real SQLite + Flyway.</p>
+              <div class="facts">fakes: the 4 IO seams + fixed Clock · Cucumber, <span class="mono">not @wip</span></div>
+            </div>
+          </div>
+          <div class="rung">
+            <div class="swatch" style="background: var(--t2)"></div>
+            <div class="body">
+              <h3>Tier 2 <span class="count">· 54 tests</span></h3>
+              <p>Services &amp; controllers as plain objects — orchestration, fan-out, cancel, error taxonomy.</p>
+              <div class="facts">no Spring, no DB · scriptable LlmClient + in-memory repo fakes (the DB is IO too)</div>
+            </div>
+          </div>
+          <div class="rung">
+            <div class="swatch" style="background: var(--t1)"></div>
+            <div class="body">
+              <h3>Tier 1 <span class="count">· 136 tests</span></h3>
+              <p>The IO boundary itself — repositories vs <em>real</em> SQLite, the <span class="mono">claude&nbsp;-p</span> adapter vs a real <span class="mono">/bin/sh</span> subprocess, HTTP vs a real socket.</p>
+              <div class="facts">real DB, real processes, real Flyway · seconds</div>
+            </div>
+          </div>
+          <div class="rung">
+            <div class="swatch" style="background: var(--t0)"></div>
+            <div class="body">
+              <h3>Tier 0 <span class="count">· 156 tests</span></h3>
+              <p>Pure logic — state machine, context firewall, response parsers, markdown, routing.</p>
+              <div class="facts">no doubles at all · milliseconds</div>
+            </div>
+          </div>
+          <div class="rung">
+            <div class="swatch" style="background: var(--tjs)"></div>
+            <div class="body">
+              <h3>jsTest <span class="count">· 85 tests</span></h3>
+              <p>Pure JS cores (<span class="mono">*-core.mjs</span>) under the same tiered idea — deterministic via an injected <span class="mono">now</span>.</p>
+              <div class="facts">node:test · glue asserted at acceptance</div>
+            </div>
+          </div>
+        </div>
+        <div class="gut up" aria-hidden="true"><div class="line"></div><div class="lbl">run: cheapest first</div><div class="cap">▲</div></div>
+      </div>
+
+      <div>
+        <div class="chart" role="img" aria-label="Checks per tier: Tier 0 156, Tier 1 136, Tier 2 54, Acceptance 152 scenarios, JS 85">
+          <div class="sec-title" style="margin-bottom:10px">Checks per tier</div>
+          <div class="row" title="Tier 0 — 156 test methods"><div class="name">Tier 0</div><div class="track"><div class="bar" style="width:100%; background: var(--t0)"></div><span class="val">156</span></div></div>
+          <div class="row" title="Tier 1 — 136 test methods"><div class="name">Tier 1</div><div class="track"><div class="bar" style="width:87%; background: var(--t1)"></div><span class="val">136</span></div></div>
+          <div class="row" title="Tier 2 — 54 test methods"><div class="name">Tier 2</div><div class="track"><div class="bar" style="width:35%; background: var(--t2)"></div><span class="val">54</span></div></div>
+          <div class="row" title="Acceptance — 152 Gherkin scenarios"><div class="name">Acceptance</div><div class="track"><div class="bar" style="width:97%; background: var(--tacc)"></div><span class="val">152</span></div></div>
+          <div class="row" title="jsTest — 85 node:test cases"><div class="name">JS</div><div class="track"><div class="bar" style="width:54%; background: var(--tjs)"></div><span class="val">85</span></div></div>
+          <div class="chart-note">Acceptance counts Gherkin scenarios (157 after outline expansion); other rows count test methods.</div>
+        </div>
+        <hr class="hairline">
+        <p style="font-size:13px; color:var(--ink2)">
+          <strong style="color:var(--ink)">Why the two directions matter:</strong> the spec is written
+          first against mockups (outside-in TDD), so implementation happens behind a frozen contract.
+          But the suite <em>runs</em> lowest-first, so when something breaks, the cheapest tier that
+          fails names the culprit layer — you never start from a full-stack stack trace.
+        </p>
+        <p class="foot">The first feature commit in the repo's history (day&nbsp;2) was the acceptance layer itself — 13 feature files before most production code existed.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== the seam ===================== -->
+  <section class="card">
+    <div class="sec-title">Testing</div>
+    <div class="sec-head">One class of seam — everything else runs real</div>
+    <div class="seam">
+      <div class="seam-col real">
+        <h3>Runs real</h3>
+        <ul>
+          <li>Cucumber scenarios over real HTTP <small>one <span class="mono">@SpringBootTest(RANDOM_PORT)</span> context</small></li>
+          <li>JTE server-side rendering <small>35 templates, precompiled &amp; typed against DTOs — view bugs fail the build</small></li>
+          <li>Controllers, services, domain logic <small>real orchestration, real state machine</small></li>
+          <li>SQLite + Flyway <small>real file DB in Tier 1 &amp; acceptance · 19 migrations, recursive CTEs</small></li>
+        </ul>
+      </div>
+      <div class="seam-mid" aria-hidden="true">
+        <div class="line"></div>
+        <div class="lbl">constructor-injected io ports</div>
+      </div>
+      <div class="seam-col fake">
+        <h3>Scriptable stand-ins <span style="text-transform:none; letter-spacing:0">(<span class="mono">@Primary @Profile("test")</span>)</span></h3>
+        <ul>
+          <li>ScriptableLlmClient <small>the LLM — scripted from Gherkin, with a spy asserting what the model was <em>not</em> shown</small></li>
+          <li>ScriptableImageDescriber <small>vision captions</small></li>
+          <li>ScriptableShortcutClient <small>Shortcut API</small></li>
+          <li>ScriptableGitHubClient <small>the <span class="mono">gh</span> CLI</small></li>
+          <li>Fixed Clock &amp; FailingCommentRepository <small>frozen time · one-shot fault injection over the <em>real</em> repo</small></li>
+        </ul>
+      </div>
+    </div>
+    <p class="foot">
+      No MockK, no Mockito — not even as a dependency. A test that seems to need a second seam class is
+      treated as “a design smell to discuss, not to push through.” The pattern extended cleanly three
+      times (vision → Shortcut → GitHub), each landing behind its own port on the same template.
+    </p>
+  </section>
+
+  <!-- ===================== the gate ===================== -->
+  <section class="card">
+    <div class="sec-title">Testing</div>
+    <div class="sec-head">One gate command — and CI is the same command</div>
+    <div class="flow" aria-label="build pipeline">
+      <span class="step">docker compose run --rm build</span><span class="arrow">→</span>
+      <span class="step">generateJte</span><span class="arrow">→</span>
+      <span class="step">compileKotlin</span><span class="arrow">→</span>
+      <span class="step tiered">jsTest</span><span class="arrow">→</span>
+      <span class="step tiered">tier0</span><span class="arrow">→</span>
+      <span class="step tiered">tier1</span><span class="arrow">→</span>
+      <span class="step tiered">tier2</span><span class="arrow">→</span>
+      <span class="step tiered">acceptance</span>
+    </div>
+    <div class="duo">
+      <div class="mini">
+        <h4>CI == local</h4>
+        <p>The GitHub Actions workflow is ~25 lines and its only build step is the same Docker command a developer runs. No matrix, no cache config — “passes locally, fails in CI” is structurally impossible for the Docker path.</p>
+      </div>
+      <div class="mini">
+        <h4>Red-first machinery</h4>
+        <p>Specs can land ahead of code tagged <span class="mono">@wip</span> (filtered from the gate); discovery mode (<span class="mono">-Pdiscovery=true</span>) lets a sea of red run without aborting while scaffolding. Today: zero <span class="mono">@wip</span> tags — the spec is fully green.</p>
+      </div>
+    </div>
+    <p class="foot">
+      Honest print: <span class="mono">./gradlew verifyAll</span> is also wired into <span class="mono">check</span> and the default
+      <span class="mono">test</span> task is disabled — but the merge gate is convention (no branch protection yet), tier ordering is
+      advisory, and the <span class="mono">mcp/</span> servers’ tests currently run in no gate at all.
+    </p>
+  </section>
+
+  <!-- ===================== organisation ===================== -->
+  <section class="card">
+    <div class="sec-title">Organisation</div>
+    <div class="sec-head">Documents are the infrastructure</div>
+    <div class="layers">
+      <div class="layer">
+        <div class="verb">Decide</div>
+        <h4>plan_docs/</h4>
+        <p>One design doc per feature: locked “Decisions (owner, date)” blocks, exact Flyway DDL, slices, deferrals with promotion triggers — rejected approaches kept <em>with the why</em>.</p>
+        <div class="stat">20 docs · doubles as the backlog (no issue tracker)</div>
+      </div>
+      <div class="layer">
+        <div class="verb">Encode</div>
+        <h4>.claude/skills/</h4>
+        <p>How-to conventions an agent can’t derive from code — wiring traps, doctrine, gotchas. Auto-trigger by path; updated as a numbered release task.</p>
+        <div class="stat">4 skills · 333–407 lines each</div>
+      </div>
+      <div class="layer">
+        <div class="verb">Specify</div>
+        <h4>features/</h4>
+        <p>The executable spec. Declarative Gherkin citing the requirements §s — the one documentation layer that cannot silently lie, because it runs.</p>
+        <div class="stat">44 files · 152 scenarios · all green</div>
+      </div>
+      <div class="layer">
+        <div class="verb">Coordinate</div>
+        <h4>memory + HANDOVER.md</h4>
+        <p>Cross-session state in the owner’s Claude memory; agent-to-agent negotiation notes for parallel branches (one brokered an <span class="mono">app.js</span> conflict between two live sessions).</p>
+        <div class="stat">ephemeral by design</div>
+      </div>
+    </div>
+    <hr class="hairline">
+    <div class="flow" aria-label="delivery loop">
+      <span class="step">plan doc</span><span class="arrow">→</span>
+      <span class="step">slices</span><span class="arrow">→</span>
+      <span class="step">worktree per agent session</span><span class="arrow">→</span>
+      <span class="step">PR · 🛠️ Forge builds, ⚖️ Assay reviews</span><span class="arrow">→</span>
+      <span class="step">merge</span><span class="arrow">→</span>
+      <span class="step">skills re-synced</span>
+    </div>
+    <p class="foot">
+      Peak cadence: PRs #77–#90 in ~3 days across 11 parallel branches — coordinated by documents
+      (migration numbers pre-claimed in plan docs; the V18/V19 collision never happened). The persona
+      reviewers have real process force but one shared GitHub identity — discipline aid, not
+      independent review.
+    </p>
+  </section>
+
+  <!-- ===================== pros / cons ===================== -->
+  <section>
+    <div class="pc">
+      <div class="card">
+        <h3>For a human</h3>
+        <ul>
+          <li><span class="badge pro" title="pro">✓</span><p><strong>Failures self-localise.</strong> The lowest tier that fails names the broken layer — debugging starts at a millisecond test.</p></li>
+          <li><span class="badge pro" title="pro">✓</span><p><strong>No mock DSL to learn.</strong> Every double is ordinary Kotlin you can step through; failure injection is a Gherkin one-liner.</p></li>
+          <li><span class="badge pro" title="pro">✓</span><p><strong>The spec teaches the product.</strong> Feature files + dated decision blocks beat most staffed teams’ onboarding docs.</p></li>
+          <li><span class="badge pro" title="pro">✓</span><p><strong>Redesigns are cheap.</strong> Restyling can’t break 152 scenarios — proven three times in one review cycle.</p></li>
+          <li><span class="badge con" title="con">✗</span><p><strong>Doctrine docs drift.</strong> Skills say “one seam” while reality is four; two skills disagree on the acceptance engine.</p></li>
+          <li><span class="badge con" title="con">✗</span><p><strong>Key context is off-repo.</strong> Cross-session state lives in the owner’s private Claude memory — a second human can’t read it.</p></li>
+          <li><span class="badge con" title="con">✗</span><p><strong>Green can lie in three places.</strong> Zero-scenario acceptance still passes; jsTest needs an undeclared Node ≥ 18; <span class="mono">mcp/</span> is ungated.</p></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>For an AI agent</h3>
+        <ul>
+          <li><span class="badge pro" title="pro">✓</span><p><strong>Ground truth beats hallucination.</strong> The executable spec pins even invisible contracts — “the model’s context contained no vote signal.”</p></li>
+          <li><span class="badge pro" title="pro">✓</span><p><strong>A verification gradient</strong> sized to the iterate loop: ms → s → one Spring context. The deterministic LLM double makes an LLM app hermetically checkable.</p></li>
+          <li><span class="badge pro" title="pro">✓</span><p><strong>Skills = retrieval-free context</strong> for exactly the knowledge code can’t reveal, auto-loaded at the right path.</p></li>
+          <li><span class="badge pro" title="pro">✓</span><p><strong>Plan docs = cross-session memory.</strong> A fresh session resumes from the status header; parallel sessions pre-claim resources in writing.</p></li>
+          <li><span class="badge con" title="con">✗</span><p><strong>Convention volume taxes context.</strong> Touching acceptance can mean two ~350-line skills + feature file + plan doc + requirements §.</p></li>
+          <li><span class="badge con" title="con">✗</span><p><strong>Stale snippets breed confident mistakes</strong> — an agent reproduces the deprecated pattern, and the next agent copies it.</p></li>
+          <li><span class="badge con" title="con">✗</span><p><strong>Tier discipline is honor-system.</strong> Membership is a <span class="mono">@Tag</span>; every tolerated exception becomes a precedent to pattern-match.</p></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== scale ===================== -->
+  <section class="card">
+    <div class="sec-title">Scale</div>
+    <div class="sec-head">What holds at 10× — and what to watch</div>
+    <div class="scale-grid">
+      <div class="holds">
+        <ul>
+          <li><span class="badge pro" title="scales">✓</span><p><strong>The ladder itself</strong> — growth lands where it’s cheap; tiers 0+2 grew to 210 tests with zero slow-suite pressure.</p></li>
+          <li><span class="badge pro" title="scales">✓</span><p><strong>The seam pattern</strong> — three new integrations landed on the paved road without doctrine breakage.</p></li>
+          <li><span class="badge pro" title="scales">✓</span><p><strong>The <span class="mono">data-*</span> + typed-template contract</strong> — redesign-proof tests, compile-time view checks.</p></li>
+          <li><span class="badge pro" title="scales">✓</span><p><strong>The plan-doc protocol</strong> — it already carried 11-branch parallel agent work.</p></li>
+        </ul>
+      </div>
+      <div>
+        <div class="risk"><span class="sev med"><i></i>Med</span><span><span class="what">Acceptance wall-clock.</span> Serial by design (one context, 11-table wipe per scenario); the docs’ own ceiling is “a few hundred” — 157 run today. <span class="fix">Counter: one journey per feature; enumeration lives at Tier 0/2.</span></span></div>
+        <div class="risk"><span class="sev med"><i></i>Med</span><span><span class="what">Silent-zero acceptance pass.</span> <span class="mono">failOnNoDiscoveredTests=false</span> means a broken suite selector greens the build with nothing run. <span class="fix">Counter: one-line fix or assert ≥N scenarios.</span></span></div>
+        <div class="risk"><span class="sev med"><i></i>Med</span><span><span class="what">Skill/doc drift.</span> Five live drifts found; agents execute stale snippets and drift compounds by imitation. <span class="fix">Counter: skills-update as a standing PR checkbox; point at files, don’t embed sketches.</span></span></div>
+        <div class="risk"><span class="sev med"><i></i>Med</span><span><span class="what">Duplicated DB-wipe lists.</span> Hooks wipe 11 tables, tier-1 classes fewer — already caused one run-order flake. <span class="fix">Counter: one shared <span class="mono">wipeAll()</span> + a guard test vs <span class="mono">sqlite_master</span>.</span></span></div>
+        <div class="risk"><span class="sev low"><i></i>Low</span><span><span class="what">Flyway numbering &amp; worktree cache contamination</span> under concurrent agents. <span class="fix">Counter: duplicate-V build check; encode the JTE <span class="mono">--no-build-cache</span> fix in Gradle, not in memory.</span></span></div>
+        <div class="risk"><span class="sev low"><i></i>Low</span><span><span class="what">SQLite single-writer</span> — correct PoC posture; flips to High on multi-user deploy. <span class="fix">Counter: the Tier-1 repo suite is the pre-built Postgres migration harness.</span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== what's next ===================== -->
+  <section class="card next">
+    <div class="sec-title">Roadmap</div>
+    <div class="sec-head">What else is needed — ranked</div>
+    <ol>
+      <li><p><strong>Markdown link-URL sanitization + tests</strong><span class="eff">S</span> — the link-destination half of the XSS firewall was missing. ✅ Fixed same-day in PR #92 (<span class="mono">sanitizeUrls</span> + scheme allowlist, tier-0 + acceptance pins).</p></li>
+      <li><p><strong>Close the silent-green holes</strong><span class="eff">S</span> — drop <span class="mono">failOnNoDiscoveredTests=false</span>; wire <span class="mono">mcp/</span> tests into <span class="mono">verifyAll</span>.</p></li>
+      <li><p><strong>Centralise DB reset/seeding</strong><span class="eff">S</span> — one FK-safe table registry + <span class="mono">wipeAll()</span>, guarded against <span class="mono">sqlite_master</span>.</p></li>
+      <li><p><strong>LLM provider contract task</strong><span class="eff">M</span> — non-gating run of the real adapters; envelope drift is a proven incident class here.</p></li>
+      <li><p><strong>Konsist architecture tests</strong><span class="eff">S–M</span> — mechanise the prose rules (no <span class="mono">Instant.now()</span> mid-stack, tier 2 Spring-free, doubles at ports only) as Tier-0 JUnit.</p></li>
+      <li><p><strong>A prod-error surface</strong><span class="eff">S–M</span> — persist the tested structured log events to SQLite, render on <span class="mono">/admin/stats</span>; the first consumer for the logging contract.</p></li>
+      <li><p><strong>Recurring docs-drift audit</strong><span class="eff">S</span> — an LLM job in a repo staffed by LLMs; rerun the audit-work-order format on the skills quarterly.</p></li>
+      <li><p><strong>Scoped mutation testing</strong><span class="eff">M</span> — PIT on tiers 0+2 only, on-demand: the gate proving an assertion migrated safely out of acceptance.</p></li>
+    </ol>
+    <p class="rejected">
+      <strong style="color:var(--ink2)">Considered &amp; rejected (with re-open triggers):</strong>
+      coverage % (first external contributor → diff-coverage only) · load testing (multi-user deploy) ·
+      a11y automation (when a Playwright layer exists anyway) · visual regression (permanently — it opposes the
+      <span class="mono">data-*</span> redesign contract) · flaky quarantine (permanently — fix flakes by design) ·
+      dependency automation (deferred with trigger; security-only alerts are free — flip them on).
+    </p>
+  </section>
+
+  <footer>
+    Produced 2026-07-10 by a 12-agent research workflow — 4 mappers, 4 critique lenses (human, AI,
+    scale, gaps), 3 adversarial verifiers, 1 completeness critic. Two headline numbers failed
+    independent re-derivation and were corrected before publication; three folklore claims were
+    qualified or refuted. Like everything else in this repo: it drifts — re-verify before quoting.
+  </footer>
+</div>
+</body>
+</html>
