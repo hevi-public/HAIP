@@ -1,6 +1,6 @@
 ---
 name: jte-spring-kotlin
-description: Server-side rendering with JTE templates in the AI Forum Spring Boot + Kotlin app — the gg.jte Gradle plugin and precompile config, jte-spring-boot-starter-3 wiring, .kte Kotlin templates taking typed DTO params, calling sub-template fragments, and the stable data-* semantic-hook convention the acceptance tests assert against. Use this whenever creating or editing .kte templates, wiring a controller to a view, configuring JTE in build.gradle.kts, or debugging a template/DTO mismatch. Reach for it before touching anything under src/main/jte so templates compile at build time and stay assertable.
+description: Server-side rendering with JTE templates in the AI Forum Spring Boot + Kotlin app — the gg.jte Gradle plugin and precompile config, jte-spring-boot-starter-4 wiring, .kte Kotlin templates taking typed DTO params, calling sub-template fragments, and the stable data-* semantic-hook convention the acceptance tests assert against. Use this whenever creating or editing .kte templates, wiring a controller to a view, configuring JTE in build.gradle.kts, or debugging a template/DTO mismatch. Reach for it before touching anything under src/main/jte so templates compile at build time and stay assertable.
 ---
 
 # JTE + Spring Boot + Kotlin (SSR) for AI Forum
@@ -313,7 +313,7 @@ destinations emptied). Traps if you touch this:
 
 ## Wiring a controller to a view
 
-With `jte-spring-boot-starter-3`, return the template name (path under `src/main/jte`, no extension)
+With `jte-spring-boot-starter-4`, return the template name (path under `src/main/jte`, no extension)
 and put the DTO on the model under the param name:
 
 ```kotlin
