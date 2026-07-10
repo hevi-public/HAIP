@@ -46,6 +46,37 @@ class MarkdownRendererTest {
     }
 
     @Test
+    fun `a link with a script-scheme destination is neutralized (URL half of the firewall)`() {
+        // Mixed case included: scheme matching must be case-insensitive or it's a trivial bypass.
+        for (dest in listOf("javascript:alert('x')", "data:text/html;base64,PHNjcmlwdD4=", "vbscript:msgbox", "JaVaScRiPt:alert(1)")) {
+            val html = MarkdownRenderer.render("[click me]($dest)")
+            val scheme = dest.substringBefore(':')
+            assertFalse(html.contains("$scheme:", ignoreCase = true), "hostile $scheme: href must not survive:\n$html")
+            assertTrue(html.contains("href=\"\""), "destination should be emptied, not the link dropped:\n$html")
+            assertTrue(html.contains("click me"), "link text must still render:\n$html")
+        }
+    }
+
+    @Test
+    fun `an image with a script-scheme destination is neutralized`() {
+        for (dest in listOf("javascript:alert('x')", "data:text/html;base64,PHNjcmlwdD4=", "vbscript:msgbox")) {
+            val html = MarkdownRenderer.render("![pic]($dest)")
+            val scheme = dest.substringBefore(':')
+            assertFalse(html.contains("$scheme:", ignoreCase = true), "hostile $scheme: src must not survive:\n$html")
+            assertTrue(html.contains("src=\"\""), "destination should be emptied:\n$html")
+        }
+    }
+
+    @Test
+    fun `safe https and relative link destinations survive sanitization`() {
+        val https = MarkdownRenderer.render("[docs](https://example.com/docs)")
+        assertTrue(https.contains("href=\"https://example.com/docs\""), https)
+        // Internal links (quote backlinks, story refs) are relative — sanitization must not eat them.
+        val relative = MarkdownRenderer.render("[a thread](/threads/1)")
+        assertTrue(relative.contains("href=\"/threads/1\""), relative)
+    }
+
+    @Test
     fun `GFM pipe tables render to a real table`() {
         val md = """
             | Component | Status |
