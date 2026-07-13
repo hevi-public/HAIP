@@ -382,9 +382,12 @@ class GenerationController(
     // threadId=null, so no composer/rail wiring — a drafting node has nothing to reply to or index.
     private fun renderNode(model: Model, reply: ReplyView, threadId: String?): String {
         model.addAttribute("reply", reply)
+        // Personas ALWAYS ride along: the monogram hue resolves through the persona's stored colour slot
+        // (AuthorColor), and a poll re-render without the roster fell back to the hashed hue — the
+        // drafting avatar visibly changed colour for a second, then changed back on settle.
+        model.addAttribute("personas", personaViews())
         if (threadId != null) {
             model.addAttribute("threadId", threadId)
-            model.addAttribute("personas", personaViews())
             model.addAttribute("branchIndex", branchIndex.forThread(threadId))
         }
         return "fragments/replyNode"

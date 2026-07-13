@@ -9,6 +9,13 @@
       "autoPort": false
     },
     {
+      "name": "haip-stub",
+      "runtimeExecutable": "./gradlew",
+      "runtimeArgs": ["bootRun", "--args=--spring.profiles.active=dev,stub"],
+      "port": 8081,
+      "autoPort": false
+    },
+    {
       "name": "haip-8081",
       "runtimeExecutable": "./gradlew",
       "runtimeArgs": ["bootRun", "--args=--server.port=8081"],

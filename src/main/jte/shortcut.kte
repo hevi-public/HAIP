@@ -8,7 +8,7 @@
 @param result: ShortcutResult
 @param enabled: Boolean
 
-@template.layout(title = "Shortcut", activeNav = "shortcut", content = @`
+@template.layout(title = "Shortcut · AI Forum", activeNav = "shortcut", content = @`
     <div class="shortcut-page" data-page="shortcut">
         <h1 class="home__title">Shortcut stories</h1>
         @if(!enabled)

@@ -27,8 +27,9 @@ import java.util.concurrent.TimeUnit
  */
 @Component
 @Profile("!test")
-// One of the two real LlmClients loads, chosen by `aiforum.llm.provider`: cli (this, the default) vs
-// openai ([OpenAiLlmClient]). matchIfMissing keeps `claude -p` the default when the key is absent.
+// Exactly one LlmClient loads, chosen by `aiforum.llm.provider`: cli (this, the default) vs openai
+// ([OpenAiLlmClient]) vs stub ([StubLlmClient], canned replies for demos/UI work). matchIfMissing keeps
+// `claude -p` the default when the key is absent.
 @ConditionalOnProperty(prefix = "aiforum.llm", name = ["provider"], havingValue = "cli", matchIfMissing = true)
 open class ProcessLlmClient(
     @Value("\${aiforum.llm.command:claude}") private val command: String,

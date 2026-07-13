@@ -3,7 +3,7 @@
 @param sections: List<StarredThreadSection>
 @param isEmpty: Boolean
 
-@template.layout(title = "Starred", content = @`
+@template.layout(title = "Starred · AI Forum", content = @`
     <div class="starred" data-page="starred">
         <h1 class="starred__title">Starred</h1>
         @if(isEmpty)
@@ -17,7 +17,7 @@
                     <ul class="starred__items">
                         @for(item in section.items)
                             <li class="starred__item" data-starred-item="${item.id}">
-                                <a class="starred__quote" href="/threads/${section.threadId}#reply-${item.id}">"${item.snippet}"</a>
+                                <a class="starred__quote" href="/threads/${section.threadId}#reply-${item.id}">“${item.snippet}”</a>
                                 <div class="starred__meta">${item.authorId} · ${item.ago}</div>
                             </li>
                         @endfor

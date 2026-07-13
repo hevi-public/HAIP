@@ -9,6 +9,10 @@
     <div data-page="members">
         <h1 class="home__title">Members</h1>
         <div class="thread-index">
+            @if(personas.isEmpty())
+                <%-- With every persona deleted the card was an empty border; keep the layout, say why. --%>
+                <div data-empty-state="no-members">No members yet — summon one below.</div>
+            @endif
             @for(persona in personas)
                 <div class="member-row" data-persona-id="${persona.id}" data-persona-name="${persona.name}">
                     <span class="monogram" aria-hidden="true" style="--mono-h: ${Avatar.hueForIndex(persona.colorIndex)}">${persona.name.take(2).uppercase()}</span>

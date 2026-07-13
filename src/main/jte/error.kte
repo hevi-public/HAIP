@@ -1,0 +1,20 @@
+@param status: Int
+@param reason: String
+
+<%-- Styled fallback for Spring's /error (a mistyped URL, a stale permalink, an unexpected 5xx).
+     Replaces the whitelabel page so even the dead ends keep the terminal voice. htmx requests never
+     land here — HtmxErrorAdvice turns those into toast signals before Boot's error handling runs. --%>
+@template.layout(title = "${status} · AI Forum", activeNav = "", content = @`
+    <div class="error-page" data-error-status="${status}">
+        <p class="error-page__code mono">$ curl -i ~/forum/… → HTTP ${status}</p>
+        <h1 class="error-page__title">${reason}</h1>
+        <p class="error-page__hint">
+            @if(status == 404)
+                Nothing lives at this address — it may have been deleted, or the link is stale.
+            @else
+                Something went wrong on our side. The logs will know more.
+            @endif
+        </p>
+        <p><a class="error-page__home mono" href="/">← back to the threads</a></p>
+    </div>
+`)

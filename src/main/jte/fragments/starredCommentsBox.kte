@@ -14,11 +14,13 @@
             @for(item in starred)
                 <li class="recent-comments__row">
                     <a class="recent-comments__quote" href="/threads/${item.threadId}#reply-${item.id}"
-                       data-starred-comment="${item.id}">"${item.snippet}"</a>
+                       data-starred-comment="${item.id}">“${item.snippet}”</a>
                     <div class="recent-comments__meta">${item.threadTitle} · ${item.author}</div>
                 </li>
             @endfor
         </ul>
     @endif
-    <a class="rail-box__footer-link" href="/starred">See all starred →</a>
+    <%-- .rail-box__more so this matches the Shortcut box's "View all ▸" treatment (it had a class with
+         no rules behind it and rendered as a bare default link). --%>
+    <a class="rail-box__more" href="/starred">See all starred ▸</a>
 </section>

@@ -1,7 +1,7 @@
 @import com.aiforum.dto.ForumStats
 @param stats: ForumStats
 
-@template.layout(title = "Admin", activeNav = "admin", content = @`
+@template.layout(title = "Admin · AI Forum", activeNav = "admin", content = @`
     <div class="admin" data-admin-page>
         <h1 class="admin__title">Admin · statistics</h1>
         <p class="admin__lede">A read-only snapshot of the forum. Each figure links to the items behind it.</p>
