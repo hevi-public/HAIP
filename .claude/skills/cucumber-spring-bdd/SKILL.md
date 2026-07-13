@@ -1,11 +1,12 @@
 ---
 name: cucumber-spring-bdd
-description: Wiring Cucumber-JVM HTTP-level acceptance tests into a Spring Boot + Kotlin app for the AI Forum project. Use this whenever adding or fixing acceptance tests — the JUnit Platform Suite runner, the single @CucumberContextConfiguration + @SpringBootTest(RANDOM_PORT) class, step-definition layout and Spring bean injection, per-scenario state via @ScenarioScope, @Before/@After reset hooks, custom @ParameterType, TestRestTemplate usage, or programming the LlmClient test double. Reach for it before touching anything under src/test/.../acceptance or any .feature wiring, so the suite boots one context and scenarios stay isolated.
+description: Wiring Cucumber-JVM HTTP-level acceptance tests into a Spring Boot + Kotlin app for the AI Forum project. Use this whenever adding or fixing acceptance tests — the JUnit Platform Suite runner, the single @CucumberContextConfiguration + @SpringBootTest(RANDOM_PORT) class, step-definition layout and Spring bean injection, per-scenario state via @ScenarioScope, @Before/@After reset hooks, custom @ParameterType, the HttpClient support wrapper, or programming the scriptable IO-port doubles. Reach for it before touching anything under src/test/.../acceptance or any .feature wiring, so the suite boots one context and scenarios stay isolated.
 ---
 
 # Cucumber-JVM + Spring Boot (HTTP-level) for AI Forum
 
-Acceptance tests drive the app over HTTP — `@SpringBootTest(RANDOM_PORT)` + `TestRestTemplate`, no
+Acceptance tests drive the app over HTTP — `@SpringBootTest(RANDOM_PORT)` + the `HttpClient` support
+wrapper over the production `RestClient` (Spring Boot 4 removed `TestRestTemplate`), no
 browser, no DOM. Step definitions speak HTTP and assert on status, response bodies/DTOs, and stable
 `data-*` semantic hooks in rendered HTML. Keeping Gherkin DOM-agnostic means the same `.feature`
 files can later be re-pointed at a Playwright step layer for SPA E2E without rewriting scenarios.
@@ -18,7 +19,7 @@ skill is the concrete wiring.
 JUnit and the suite engine come managed by the Spring Boot BOM; pin only Cucumber.
 
 ```kotlin
-testImplementation("org.springframework.boot:spring-boot-starter-test") // TestRestTemplate, JUnit 6
+testImplementation("org.springframework.boot:spring-boot-starter-test") // assertions, JUnit 6 (no TestRestTemplate in SB 4)
 testImplementation("org.junit.platform:junit-platform-suite")           // version via SB 4.1 BOM
 testImplementation("io.cucumber:cucumber-java:7.34.3")
 testImplementation("io.cucumber:cucumber-spring:7.34.3")
@@ -122,8 +123,9 @@ old `com.fasterxml.jackson.module:jackson-module-kotlin` is the Jackson 2 module
 under Spring Boot 4. Without the right module, an omitted non-null `Boolean` field 400s with "Cannot
 map null into type boolean" (the symptom that reveals the wrong/missing module).
 
-Inject `TestRestTemplate` directly (it's auto-configured under `@SpringBootTest(RANDOM_PORT)`). Wrap
-raw HTTP calls in a small `support/HttpClient.kt` so a future Playwright swap touches one file.
+Wrap raw HTTP calls in the small `support/HttpClient.kt` (a `RestClient` wrapper that reads the
+random port lazily) so a future Playwright swap touches one file — never inject a raw HTTP client
+into step classes directly.
 
 ## Per-scenario state: @ScenarioScope, never step fields
 
@@ -176,7 +178,10 @@ actual datasource + recursive-CTE wiring — see [[sqlite-spring-jdbc]].
 
 ## The Tier-1 LlmClient seam and its test double
 
-The single IO seam for generation. The production impl wraps `claude -p` via `ProcessBuilder`; under
+The IO port for generation — one of **four** sibling ports faked the same way in
+`acceptance/config/TestBeans.kt` (`ScriptableLlmClient`, `ScriptableImageDescriber`,
+`ScriptableShortcutClient`, `ScriptableGitHubClient`; see [[bdd-tiered-testing]] for the port
+doctrine). The production impl wraps `claude -p` via `ProcessBuilder`; under
 `test` a `@Primary` scriptable fake stands in. The fake does two jobs: return scripted
 output/failures, and **spy** on what it received (used to prove the `+1` firewall — the owner's vote
 and identity must be absent from the `PromptContext`).
@@ -291,7 +296,7 @@ hook any more.) The acceptance wiring has three moving parts, all reusing existi
   identical to `postForm` but adding `.header("HX-Request", "true")` — and the same endpoint is hit with
   plain `postForm` to exercise the non-htmx branch. One header is the whole difference between the two
   paths; keep the helper that thin so a future Playwright swap touches one file.
-- **Program the failure at the single LLM seam — no second mock.** The surface is the persona
+- **Program the failure at the LLM port — no mock above the port line.** The surface is the persona
   prompt-compose **preview** (`POST /personas/compose`), whose synchronous `llm.generate` is unguarded
   by design, so an enqueued failure escapes uncaught to the `@ControllerAdvice`. Reuse the existing
   `Given the LLM will fail with a {failureMode}` step (`ScriptableLlmClient`) — the htmx steps only
