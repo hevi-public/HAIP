@@ -152,9 +152,9 @@ Mirrors the tiered paradigm ([bdd-tiered-testing]); the only spec-coupled test i
 - `tier0/StreamingSeamDefaultTest` — the seam default degrades a non-streaming reply to one delta; failure → RunError.
 - `tier0/ClaudeStreamParserTest`, `tier0/OpenAiStreamParserTest`, `tier0/OpenCodeStreamParserTest` — pure
   NDJSON / SSE-chunk / opencode-NDJSON normalisation (incl. opencode's cumulative→suffix delta extraction).
-- `tier1/ProcessLlmClientStreamTest`, `tier1/OpenAiLlmClientStreamTest`, `tier1/OpenCodeLlmClientStreamTest` —
+- `tier1/client/ProcessLlmClientStreamTest`, `tier1/client/OpenAiLlmClientStreamTest`, `tier1/client/OpenCodeLlmClientStreamTest` —
   the streaming overloads end-to-end against canned native streams (`/bin/sh` NDJSON; `MockRestServiceServer` SSE).
-- `tier2/InFlightChannelTest` — channel replay / terminal-complete / unknown-fallback / cancel.
+- `tier2/service/InFlightChannelTest` — channel replay / terminal-complete / unknown-fallback / cancel.
 - `features/generation_streaming.feature` — HTTP-level SSE: a run's buffered events replay as real frames;
   an unknown run completes empty (poll fallback). `ScriptableLlmClient` gains `Behavior.Stream`.
 

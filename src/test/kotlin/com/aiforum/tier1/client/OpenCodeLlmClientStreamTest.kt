@@ -1,4 +1,4 @@
-package com.aiforum.tier1
+package com.aiforum.tier1.client
 
 import com.aiforum.agui.AguiEvent
 import com.aiforum.agui.AguiEventSink

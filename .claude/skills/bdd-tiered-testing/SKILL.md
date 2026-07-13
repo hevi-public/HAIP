@@ -80,9 +80,9 @@ class GenerationService {
 If you see `Instant.now()`, `Math.random()`, `new`/direct construction of an IO type, or a static
 file/network read mid-stack, that's a yellow flag — route it through an injected dependency.
 
-## Testing the production adapter — the real code that IS the seam
+## Testing the production adapter — the real code behind the port
 
-Everything above tests code *above* the seam against the fake. But the `@Profile("!test")` adapters
+Everything above tests code *above* the port line against the fake. But the `@Profile("!test")` adapters
 are real code too — `LlmClient` has **two** production adapters (`ProcessLlmClient` shelling to
 `claude -p`, and `OpenAiLlmClient` speaking the OpenAI-compatible HTTP API for local models), and
 `ImageDescriber` has `OpenAiImageDescriber`; the read-only `GhCliGitHubClient` and `HttpShortcutClient`
@@ -112,9 +112,9 @@ Keep the loop runaway-proof while you're here (it runs on a remote box with no m
 monotonic deadline, a floored poll interval, force-kill + reap, bounded stream joins. See
 [[haip-stack-gotchas]] for the `claude -p` envelope shape these tests pin.
 
-### Streaming is a second method on the SAME seam, not a second seam
+### Streaming is a second method on the SAME port, not a second port
 
-The IO seam carries a streaming overload — `LlmClient.generate(request, cancellation, sink)` — alongside the
+The `LlmClient` port carries a streaming overload — `LlmClient.generate(request, cancellation, sink)` — alongside the
 blocking one (live token streaming; see `plan_docs/streaming-agui.md`). It does **not** add a second mock
 level: the overload ships a **default** that wraps the blocking `generate` and emits the whole reply as one
 delta, so a backend (or the scriptable fake) that implements only the blocking method still satisfies the
