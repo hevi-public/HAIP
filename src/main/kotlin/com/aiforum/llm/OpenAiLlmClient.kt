@@ -1,8 +1,11 @@
 package com.aiforum.llm
 
+import com.aiforum.agui.AguiEvent
+import com.aiforum.agui.AguiEventSink
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import org.slf4j.LoggerFactory
+import tools.jackson.module.kotlin.jacksonMapperBuilder
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -84,6 +87,8 @@ open class OpenAiLlmClient(
     // a baseUrl that itself has a path (".../v1") would resolve to ".../chat/completions" and drop the /v1.
     private val completionsUrl = baseUrl.trimEnd('/') + "/chat/completions"
     private val http: RestClient = restClientBuilder.build()
+    // Serialises the synthetic envelope the streaming path hands to OpenAiResponseParser (see syntheticEnvelope).
+    private val mapper = jacksonMapperBuilder().build()
 
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
         // The persona's pinned model wins; a blank one falls back to the configured default. Sent as-is
@@ -120,16 +125,116 @@ open class OpenAiLlmClient(
     }
 
     /**
+     * Streaming variant: send `stream: true` and read the SSE body line by line, emitting a TextDelta per
+     * content chunk via [OpenAiStreamParser] so text appears live. The accumulated content/reasoning/
+     * finish-reason are folded back into a SYNTHETIC non-streamed envelope that [OpenAiResponseParser]
+     * classifies — so empty/length/reasoning-leak handling is identical to the non-streaming path, and the
+     * returned (persisted) [LlmResponse] matches. Reuses the SAME [awaitWithin] deadline/cancel loop.
+     */
+    override fun generate(request: LlmRequest, cancellation: CancellationToken, sink: AguiEventSink): LlmResponse {
+        sink.emit(AguiEvent.RunStarted(request.runId))
+        try {
+            val model = request.persona.model.ifBlank { defaultModel }
+            val payload = ChatRequest(
+                model = model,
+                messages = listOf(
+                    ChatMessage("system", request.context.personaSystemPrompt),
+                    ChatMessage("user", PromptRenderer.renderTask(request.context, request.persona.name)),
+                ),
+                temperature = temperature,
+                maxTokens = maxTokens,
+                stream = true,
+                chatTemplateKwargs = if (disableThinking) mapOf("enable_thinking" to false) else null,
+            )
+
+            // The worker reads the SSE stream and emits deltas as they arrive; the poll loop enforces the
+            // deadline/cancellation exactly as in the blocking path. Visibility of `out` is established by
+            // the FutureTask.get inside awaitWithin (happens-before).
+            val task = FutureTask { streamOnce(payload, request.runId, sink) }
+            Thread(task).apply { isDaemon = true; name = "openai-llm-stream" }.start()
+            val out = awaitWithin(task, request.timeout, cancellation)
+
+            // A non-2xx never starts an SSE body — classify the error body exactly like the blocking path
+            // (this throws RateLimited/ProcessError, surfaced below as RunError).
+            if (out.status !in 200..299) {
+                OpenAiResponseParser.parse(out.status, out.errorBody, out.retryAfter, Duration.ofSeconds(rateLimitRetryAfterSeconds))
+            }
+            val response = OpenAiResponseParser.parse(
+                200,
+                syntheticEnvelope(out.text.toString(), out.reasoning.toString(), out.finishReason),
+                null,
+                Duration.ofSeconds(rateLimitRetryAfterSeconds),
+            )
+            sink.emit(AguiEvent.RunFinished(request.runId))
+            return response
+        } catch (e: Throwable) {
+            sink.emit(AguiEvent.RunError(request.runId, e.message ?: "generation failed"))
+            throw e
+        }
+    }
+
+    /** One streaming POST: read SSE `data:` lines, emit a TextDelta per content chunk, accumulate the rest. */
+    private fun streamOnce(payload: ChatRequest, runId: String, sink: AguiEventSink): StreamOutcome {
+        val out = StreamOutcome()
+        http.post()
+            .uri(completionsUrl)
+            .headers { headers -> if (apiKey.isNotBlank()) headers.setBearerAuth(apiKey) }
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(payload)
+            .exchange { _, response ->
+                out.status = response.statusCode.value()
+                out.retryAfter = response.headers.getFirst("Retry-After")
+                if (out.status !in 200..299) {
+                    out.errorBody = runCatching { response.body.bufferedReader(Charsets.UTF_8).readText() }.getOrDefault("")
+                    return@exchange
+                }
+                response.body.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                    for (raw in lines) {
+                        if (!raw.startsWith("data:")) continue // ignore SSE comments/blank separators
+                        val delta = OpenAiStreamParser.parseData(raw.substring(5)) ?: continue // null = [DONE]/unparseable
+                        delta.content?.takeIf { it.isNotEmpty() }?.let {
+                            out.text.append(it)
+                            sink.emit(AguiEvent.TextDelta(runId, it))
+                        }
+                        delta.reasoning?.let { out.reasoning.append(it) }
+                        delta.finishReason?.let { out.finishReason = it }
+                    }
+                }
+            }
+        return out
+    }
+
+    /** Fold the streamed pieces back into a non-streamed Chat Completions envelope for [OpenAiResponseParser]. */
+    private fun syntheticEnvelope(content: String, reasoning: String, finishReason: String?): String {
+        val message = LinkedHashMap<String, Any?>()
+        message["content"] = content
+        if (reasoning.isNotEmpty()) message["reasoning_content"] = reasoning
+        val choice = LinkedHashMap<String, Any?>()
+        choice["message"] = message
+        choice["finish_reason"] = finishReason
+        return mapper.writeValueAsString(mapOf("choices" to listOf(choice)))
+    }
+
+    private class StreamOutcome {
+        var status = 0
+        var errorBody = ""
+        var retryAfter: String? = null
+        var finishReason: String? = null
+        val text = StringBuilder()
+        val reasoning = StringBuilder()
+    }
+
+    /**
      * Wait for the HTTP worker, bounded by [timeout] and cooperatively cancellable — the same runaway-proof
      * loop as ProcessLlmClient: each iteration blocks at most `pollMs`, and the only exits are the call
      * finishing, the token tripping, or the monotonic deadline firing (nanoTime subtraction is
      * wraparound-safe; the poll interval is floored at 1ms so a misconfigured 0 can't busy-spin).
      */
-    private fun awaitWithin(
-        task: FutureTask<HttpResult>,
+    private fun <T> awaitWithin(
+        task: FutureTask<T>,
         timeout: Duration,
         cancellation: CancellationToken,
-    ): HttpResult {
+    ): T {
         val pollMs = pollMillis.coerceAtLeast(1)
         val timeoutNanos = timeout.toNanos().coerceAtLeast(0)
         val start = System.nanoTime()

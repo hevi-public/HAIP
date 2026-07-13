@@ -217,6 +217,17 @@ flag that a thin repo wrapper reads to throw on the next write — never by mock
 Cancel is simulated with `HangThenCancel` plus a step that POSTs the cancel endpoint to trip the
 token; in prod the same token drives `process.destroyForcibly()`.
 
+**Streaming (AG-UI) at this seam.** The fake also implements the streaming overload
+`generate(req, cancel, sink)` and gains a `Behavior.Stream(deltas)` that emits each chunk as an
+`AguiEvent.TextDelta` (framed by RunStarted/RunFinished); every other behaviour frames its aggregate as
+one delta, matching the real `LlmClient` default. So scenarios drive the live event path through the same
+scripted seam. Acceptance asserts the **transport** over real HTTP — `GET /replies/{id}/stream` — without
+racing a live generation: a step populates the per-run channel (`InFlightGenerations`) with a terminal
+buffer, then the SSE response replays it as complete frames the step can match. (The production
+settle→publish path and per-backend normalisation are proven in the tier-1/2 tests; see
+[[bdd-tiered-testing]] and `plan_docs/streaming-agui.md`.) Remember to `reset()` any new recorder in the
+ordered `@Before` hooks alongside the other fakes.
+
 ## Custom @ParameterType for failure modes
 
 Map Gherkin words to `LlmException` factories so the sad-path Scenario Outline reads cleanly:
