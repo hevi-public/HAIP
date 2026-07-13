@@ -1,6 +1,6 @@
 # GitHub PR → forum thread ("Discuss this PR")
 
-> **Status:** ✅ Slice 1 built (2026-06-28) · Slice 2 (discussion ingest) pending · **Owner:** Hevi · **Created:** 2026-06-28
+> **Status:** ✅ Slice 1 (PR #90) + Slice 2 (discussion ingest) both built 2026-06-28 · **Owner:** Hevi · **Created:** 2026-06-28
 > Turn a GitHub pull request into a forum thread so the room (the hand-authored personas) summarises
 > *what changed* and discusses it. Builds directly on the read-only GitHub seam from
 > `plan_docs/github-integration.md` and the create-time "Whole Topic + Anyone" auto-summon
@@ -82,10 +82,13 @@ Everything hangs off patterns already in the tree:
 - **Slice 1 ✅ (built 2026-06-28): PR → thread.** Seam `pull()`, `PrThreadFormat`, V19 + repo, ingestion
   service, the Discuss/View-thread button, auto-summon. The OP carries description + changed files + diff.
   No comments yet.
-- **Slice 2: review & comment discussion.** Extend `pull()` with `comments`/`reviews` (same `gh pr view`
-  call); post each as a node authored by `gh:<login>` (a non-persona author, rendered like `owner`/`system`
-  with a per-login monogram hue) under the OP, inserted before the summon. Adds the "team-mate discussion"
-  the owner asked for.
+- **Slice 2 ✅ (built 2026-06-28): review & comment discussion.** `pull()` now also fetches
+  `comments`/`reviews` (same `gh pr view` call); `GhAuthor` namespaces each as `gh:<login>`;
+  `GitHubPrIngestionService` posts them as top-level POSTED nodes (stamped with their real GitHub time via
+  `CommentRepository.insertAt`) **before** the summon, so the room reads the discussion. `web.AuthorLabel`
+  renders a gh author as `@login` with its own monogram (hue already came free from `Avatar.reservedHue`'s
+  hash), applied across the reply node, branch index, rails, and admin lists. `PrThreadFormat.commentBody`
+  folds a review verdict (Approved / Requested changes / Dismissed) into the node body.
 
 ## Deferred (designed, not built)
 

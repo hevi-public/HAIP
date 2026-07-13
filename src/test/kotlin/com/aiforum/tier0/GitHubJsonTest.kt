@@ -101,5 +101,28 @@ class GitHubJsonTest {
         val pull = GitHubJson.parsePull("""{"number":1,"title":"t","url":"u","state":"OPEN","body":""}""")
         assertEquals("ghost", pull.author)
         assertTrue(pull.changedFiles.isEmpty())
+        assertTrue(pull.comments.isEmpty())
+    }
+
+    @Test
+    fun `parsePull merges issue comments and reviews into one chronological discussion, dropping noise`() {
+        val json = """
+            {"number":1,"title":"t","url":"u","state":"OPEN","body":"",
+             "comments":[{"author":{"login":"dana"},"body":"nice work","createdAt":"2026-06-25T10:00:00Z"}],
+             "reviews":[
+               {"author":{"login":"paul"},"body":"fix the empty case","state":"CHANGES_REQUESTED","submittedAt":"2026-06-25T09:00:00Z"},
+               {"author":{"login":"sol"},"body":"","state":"APPROVED","submittedAt":"2026-06-25T11:00:00Z"},
+               {"author":{"login":"noise"},"body":"","state":"COMMENTED","submittedAt":"2026-06-25T08:00:00Z"},
+               {"author":{"login":"pend"},"body":"draft note","state":"PENDING","submittedAt":"2026-06-25T07:00:00Z"}
+             ]}
+        """.trimIndent()
+        val d = GitHubJson.parsePull(json)
+        // Sorted by time: paul 09:00, dana 10:00, sol 11:00. The bodyless COMMENTED review (inline-only) and
+        // the PENDING (unsubmitted) review are dropped.
+        assertEquals(listOf("paul", "dana", "sol"), d.comments.map { it.author })
+        assertEquals("comment", d.comments.first { it.author == "dana" }.kind)
+        assertEquals("review", d.comments.first { it.author == "paul" }.kind)
+        assertEquals("CHANGES_REQUESTED", d.comments.first { it.author == "paul" }.reviewState)
+        assertEquals("APPROVED", d.comments.first { it.author == "sol" }.reviewState)
     }
 }

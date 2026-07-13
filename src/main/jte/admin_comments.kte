@@ -1,4 +1,5 @@
 @import com.aiforum.web.AdminCommentView
+@import com.aiforum.web.AuthorLabel
 @param listTitle: String
 @param rows: List<AdminCommentView>
 @param capped: Boolean
@@ -20,7 +21,7 @@
                         <a class="admin-list__link" href="/threads/${row.threadId}#reply-${row.id}">
                             <span class="admin-list__snippet">"${row.snippet}"</span>
                             <span class="admin-list__meta">
-                                <span class="admin-list__author">${row.authorId}</span>
+                                <span class="admin-list__author">${AuthorLabel.display(row.authorId)}</span>
                                 <span class="admin-list__sep">·</span>
                                 <span class="admin-list__state">${row.state}</span>
                                 @if(row.votes > 0)

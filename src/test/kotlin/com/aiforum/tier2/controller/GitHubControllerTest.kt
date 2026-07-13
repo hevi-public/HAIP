@@ -61,10 +61,12 @@ class GitHubControllerTest {
     private fun ingestionWith(existing: Map<Int, String>) = GitHubPrIngestionService(
         StubClient(GitHubResult.Unavailable("x")),
         ThreadRepository(JdbcTemplate(), clock),
+        CommentRepository(JdbcTemplate(), clock),
         object : GitHubPrThreadRepository(JdbcTemplate(), clock) {
             override fun threadIdsByNumbers(repo: String, numbers: List<Int>) = existing
         },
         genStub,
+        clock,
         "",
     )
 

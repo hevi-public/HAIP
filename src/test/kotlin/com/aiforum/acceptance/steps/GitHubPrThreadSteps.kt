@@ -6,7 +6,9 @@ import com.aiforum.acceptance.support.Html
 import com.aiforum.acceptance.support.HttpClient
 import com.aiforum.acceptance.support.ScenarioWorld
 import com.aiforum.github.ChangedFile
+import com.aiforum.github.PrComment
 import com.aiforum.github.PullDetail
+import io.cucumber.datatable.DataTable
 import io.cucumber.java.en.Given
 import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
@@ -41,6 +43,22 @@ class GitHubPrThreadSteps(
         )
     }
 
+    @Given("pull request #{int} has the discussion:")
+    fun prHasDiscussion(number: Int, table: DataTable) {
+        val existing = github.pullDetails[number] ?: error("program pull request #$number first")
+        // Stamp increasing timestamps (all before the fixed test clock, 12:00) so the nodes order
+        // chronologically and sit before the persona summary that settles at clock time.
+        val discussion = table.asMaps().mapIndexed { i, row ->
+            PrComment(
+                author = row.getValue("author"),
+                body = row.getValue("body"),
+                createdAt = "2026-01-01T0$i:00:00Z",
+                kind = "comment",
+            )
+        }
+        github.pullDetails[number] = existing.copy(comments = discussion)
+    }
+
     @When("the owner clicks Discuss on pull request #{int}")
     fun discuss(number: Int) {
         discussOnce(number)
@@ -69,6 +87,17 @@ class GitHubPrThreadSteps(
         settle.awaitAllSettled(settle.awaitRoomDrafts(world.threadId ?: ""))
         val body = http.get("/threads/${world.threadId}").body ?: ""
         assertTrue(Html.contains(body, text), "expected a reply reading \"$text\" in:\n$body")
+    }
+
+    @Then("the thread shows a comment by {string} reading {string}")
+    fun threadShowsGhComment(login: String, text: String) {
+        // The PR's discussion is posted synchronously during ingest (before the async summon), so it's on
+        // the page straight after the discuss POST — no settle needed. The node carries data-author="gh:login"
+        // (raw id, the firewall hook) and renders the name as @login.
+        val body = http.get("/threads/${world.threadId}").body ?: ""
+        assertTrue(Html.hasAttr(body, "data-author", "gh:$login"), "expected a node authored gh:$login in:\n$body")
+        assertTrue(Html.contains(body, "@$login"), "expected the @-handle @$login visible in:\n$body")
+        assertTrue(Html.contains(body, text), "expected the comment body \"$text\" in:\n$body")
     }
 
     @Then("both discussions opened the same thread")

@@ -86,6 +86,10 @@ class ProcessLlmClientTest {
     private fun mcpConfigArg(argv: List<String>): String? =
         argv.indexOf("--mcp-config").takeIf { it >= 0 }?.let { argv.getOrNull(it + 1) }
 
+    /** The flag value that follows `--system-prompt` in argv, or null when the flag is absent. */
+    private fun systemPromptArg(argv: List<String>): String? =
+        argv.indexOf("--system-prompt").takeIf { it >= 0 }?.let { argv.getOrNull(it + 1) }
+
     @Test
     fun `a persona's pinned model is passed as --model and wins over the configured default`() {
         val client = CapturingClient(defaultModel = "sonnet")
@@ -179,6 +183,50 @@ class ProcessLlmClientTest {
         )
         client.generate(request(Duration.ofSeconds(10)), CancellationToken())
         assertEquals("WebFetch,mcp__gh-readonly", allowedToolsArg(client.argv))
+    }
+
+    @Test
+    fun `with github tools active the system prompt gains the pull-the-PR guidance`() {
+        val client = CapturingClient(defaultModel = "", githubToolsEnabled = true, githubMcpConfig = "/repo/.mcp.json")
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        val sys = systemPromptArg(client.argv)!!
+        assertTrue(sys.startsWith("you are sol"), "keeps the persona's own system prompt first:\n$sys")
+        assertTrue(sys.contains("read-only GitHub tools"), "tells the persona the tools exist:\n$sys")
+        assertTrue(sys.contains("pull the complete change"), "directs it to pull the full PR:\n$sys")
+        assertTrue(sys.contains("untrusted text"), "carries the prompt-injection guard:\n$sys")
+    }
+
+    @Test
+    fun `with github tools off the system prompt is untouched - no guidance about absent tools`() {
+        val client = CapturingClient(defaultModel = "", githubToolsEnabled = false)
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals("you are sol", systemPromptArg(client.argv))
+    }
+
+    @Test
+    fun `github tools enabled but blank config leaves the system prompt untouched`() {
+        // The guidance tracks whether the tools are actually MOUNTED, not just the flag — a blank config is inert.
+        val client = CapturingClient(defaultModel = "", githubToolsEnabled = true, githubMcpConfig = "")
+        client.generate(request(Duration.ofSeconds(10)), CancellationToken())
+        assertEquals("you are sol", systemPromptArg(client.argv))
+    }
+
+    @Test
+    fun `startup logs the github-tools event at INFO carrying the resolved config when mounted`() {
+        LogCapture.on(ProcessLlmClient::class.java).use { logs ->
+            CapturingClient(defaultModel = "", githubToolsEnabled = true, githubMcpConfig = "/repo/.mcp.json").logStartupTools()
+            val e = logs.withEvent("llm.github.tools").single()
+            assertEquals(Level.INFO, e.level)
+            assertEquals("/repo/.mcp.json", logs.keyValue(e, "config"))
+        }
+    }
+
+    @Test
+    fun `startup stays silent about github tools when they are off`() {
+        LogCapture.on(ProcessLlmClient::class.java).use { logs ->
+            CapturingClient(defaultModel = "", githubToolsEnabled = false).logStartupTools()
+            assertTrue(logs.events.isEmpty(), "a disabled gh-tools integration must stay silent at startup; got: ${logs.events}")
+        }
     }
 
     @Test

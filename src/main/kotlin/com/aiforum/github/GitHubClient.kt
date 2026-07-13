@@ -80,10 +80,26 @@ data class ChangedFile(
 )
 
 /**
+ * One entry in a PR's discussion (from `gh pr view --json comments,reviews`): an issue-level comment
+ * (`kind = "comment"`) or a submitted review (`kind = "review"`, `reviewState` carries APPROVED /
+ * CHANGES_REQUESTED / COMMENTED / DISMISSED). `author` is the GitHub login; `createdAt` is the raw ISO
+ * instant it was posted, used to order the thread chronologically. Untrusted external input.
+ */
+data class PrComment(
+    val author: String,
+    val body: String,
+    val createdAt: String,
+    val kind: String,
+    val reviewState: String? = null,
+)
+
+/**
  * One pull request fetched in depth (from `gh pr view --json …` + `gh pr diff`), enough to seed a forum
  * thread. `body` is the PR description markdown (may be blank); `diff` is the raw unified diff (best-effort
  * — blank when `gh pr diff` couldn't be captured); `headSha` is stored on the thread mapping for a future
- * "PR got new commits" re-sync. Untrusted external input — rendered through the escaping MarkdownRenderer.
+ * "PR got new commits" re-sync. `comments` is the PR's review/issue discussion in chronological order (the
+ * team-mate discussion ingested as nodes, Slice 2). Untrusted external input — rendered through the escaping
+ * MarkdownRenderer.
  */
 data class PullDetail(
     val number: Int,
@@ -98,6 +114,7 @@ data class PullDetail(
     val headSha: String,
     val changedFiles: List<ChangedFile>,
     val diff: String,
+    val comments: List<PrComment> = emptyList(),
 )
 
 /**

@@ -77,7 +77,15 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
         )
     }
 
-    fun insert(c: Comment) {
+    fun insert(c: Comment) = insertAt(c, clock.instant())
+
+    /**
+     * Insert with an explicit `created_at`, instead of stamping "now". Lets a batch ingest (a PR's
+     * discussion, plan_docs/github-pr-threads.md) preserve each comment's real timestamp so the nodes order
+     * chronologically — distinct times even when inserted within one clock tick. [insert] is just this with
+     * the current instant.
+     */
+    fun insertAt(c: Comment, createdAt: Instant) {
         jdbc.update(
             """INSERT INTO comment(id, thread_id, parent_id, author_id, body, state, failure_category,
                                    reason, retry_after_seconds, depth, depth_budget, starred,
@@ -85,7 +93,7 @@ class CommentRepository(private val jdbc: JdbcTemplate, private val clock: Clock
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             c.id, c.threadId, c.parentId, c.authorId, c.body, c.state.name, c.failureCategory?.name,
             c.reason, c.retryAfterSeconds, c.depth, c.depthBudget, if (c.starred) 1 else 0,
-            c.reasoningLeak?.name, clock.instant().toString(),
+            c.reasoningLeak?.name, createdAt.toString(),
         )
     }
 
