@@ -1,0 +1,18 @@
+# Provider overlay: generate with the in-process StubLlmClient — deterministic canned markdown, no
+# model, no network, no quota. For demos, UI polish work, and manually walking the failure taxonomy
+# (put [stub:fail] / [stub:timeout] / [stub:rate] / [stub:empty] / [stub:malformed] / [stub:hang] /
+# [stub:slow] / [stub:leak] anywhere in a comment body and every persona summoned to it hits that path).
+#
+# This is NOT the test double (the `test` profile's ScriptableLlmClient is programmed per scenario);
+# the stub self-drives. Like `openai`, run it as an OVERLAY on a base profile (later profile wins):
+#
+#   SPRING_PROFILES_ACTIVE=dev,stub ./gradlew bootRun
+#
+# => provider=stub with the datasource/port from dev. Vision is stubbed too (StubImageDescriber), so
+# "Describe" returns a canned caption instead of requiring a local vision model.
+aiforum:
+  llm:
+    provider: stub
+    stub:
+      delay-millis: 1500   # per-reply think time, so the DRAFTING placeholder is observable; cancellation
+                           # is checked every 50ms throughout, so Stop stays snappy

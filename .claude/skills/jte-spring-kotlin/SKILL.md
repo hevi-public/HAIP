@@ -1,6 +1,6 @@
 ---
 name: jte-spring-kotlin
-description: Server-side rendering with JTE templates in the AI Forum Spring Boot + Kotlin app — the gg.jte Gradle plugin and precompile config, jte-spring-boot-starter-3 wiring, .kte Kotlin templates taking typed DTO params, calling sub-template fragments, and the stable data-* semantic-hook convention the acceptance tests assert against. Use this whenever creating or editing .kte templates, wiring a controller to a view, configuring JTE in build.gradle.kts, or debugging a template/DTO mismatch. Reach for it before touching anything under src/main/jte so templates compile at build time and stay assertable.
+description: Server-side rendering with JTE templates in the AI Forum Spring Boot + Kotlin app — the gg.jte Gradle plugin and precompile config, jte-spring-boot-starter-4 wiring, .kte Kotlin templates taking typed DTO params, calling sub-template fragments, and the stable data-* semantic-hook convention the acceptance tests assert against. Use this whenever creating or editing .kte templates, wiring a controller to a view, configuring JTE in build.gradle.kts, or debugging a template/DTO mismatch. Reach for it before touching anything under src/main/jte so templates compile at build time and stay assertable.
 ---
 
 # JTE + Spring Boot + Kotlin (SSR) for AI Forum
@@ -247,6 +247,10 @@ step, no framework. Spring Boot serves `src/main/resources/static/**` at the web
 - `layout.kte` links them in `<head>` (`<link rel="stylesheet" href="/app.css">`,
   `<script src="/app.js" defer>`); every full page inherits them through the shell.
 - `app.js` re-binds on `htmx:afterSwap` so behaviour (composer auto-grow) survives htmx swaps.
+- `stream.js` (live AG-UI generation streaming — see `plan_docs/streaming-agui.md`) likewise keys off the
+  `data-*` hooks: it opens an `EventSource` on each `article.reply[data-state="drafting"]` node, keyed by
+  `data-reply-id`, appends text live, then lets the server-rendered fragment swap in. So those two hooks are
+  load-bearing for the SSE client as well as the acceptance probe — another reason not to rename them.
 
 **Style with `class=`, never with `data-*`.** The probe (`Html.kt`) reads attributes by **regex off the
 single opening tag** and substring-matches text, so when styling templates:
@@ -297,9 +301,23 @@ $unsafe{expr}                  <%-- raw, only for trusted HTML --%>
 
 Null-safety is Kotlin's: use `?.`, `?:`, and the elvis fallback inside `${}`.
 
+### `$unsafe{}` and untrusted bodies — the two-half firewall
+
+The only untrusted HTML that may reach `$unsafe{}` is `bodyHtml` (and `captionHtml`), and only because
+`MarkdownRenderer` enforces **both** halves of the XSS firewall: `escapeHtml(true)` (raw HTML inert) **and**
+`sanitizeUrls(true)` with a custom `http/https/mailto` allowlist (hostile `javascript:`/`data:` link/image
+destinations emptied). Traps if you touch this:
+
+- `escapeHtml` alone is NOT enough — it never touches link *destinations* (that hole shipped for 3 weeks).
+- commonmark's *default* URL-sanitizer allowlist includes `data:` — keep the custom allowlist, `data:text/html`
+  is script execution.
+- `sanitizeUrls` stamps `rel="nofollow"` on every anchor — tests pinning exact anchor markup must expect it.
+- Never route new untrusted content through `$unsafe{}` directly; render it through `MarkdownRenderer` (or
+  `${}`-escape it). Details: `plan_docs/markdown-rendering.md` §Security; code: `markdown/MarkdownRenderer.kt`.
+
 ## Wiring a controller to a view
 
-With `jte-spring-boot-starter-3`, return the template name (path under `src/main/jte`, no extension)
+With `jte-spring-boot-starter-4`, return the template name (path under `src/main/jte`, no extension)
 and put the DTO on the model under the param name:
 
 ```kotlin

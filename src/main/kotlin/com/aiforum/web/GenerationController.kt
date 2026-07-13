@@ -1,5 +1,8 @@
 package com.aiforum.web
 
+import com.aiforum.agui.AguiEvent
+import com.aiforum.agui.AguiEventListener
+import com.aiforum.agui.AguiWire
 import com.aiforum.domain.Comment
 import com.aiforum.domain.budget.DepthBudget
 import com.aiforum.dto.AttachmentView
@@ -21,7 +24,9 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.ResponseBody
 import org.springframework.web.multipart.MultipartFile
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
 import java.util.UUID
@@ -366,6 +371,45 @@ class GenerationController(
     }
 
     /**
+     * Stream a drafting node's generation as AG-UI events (Server-Sent Events). The client (stream.js)
+     * appends TextDelta text live, shows tool-call status, and on the terminal RUN_FINISHED/RUN_ERROR
+     * re-fetches the server-rendered fragment via the poll endpoint. Each event is sent with its AG-UI
+     * type as the SSE `event:` name and [AguiWire]-encoded JSON as the data.
+     *
+     * Additive, not a replacement: if the node isn't in flight (unknown or already settled/evicted), the
+     * emitter completes at once and the client falls back to the existing `every 1s` poll, which serves the
+     * settled row. So this never has to be reached for correctness — it's purely for liveness.
+     */
+    @GetMapping("/replies/{id}/stream", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    @ResponseBody
+    fun stream(@PathVariable id: String): SseEmitter {
+        val emitter = SseEmitter(STREAM_TIMEOUT_MS)
+        val subscription = generation.subscribeEvents(id, object : AguiEventListener {
+            override fun onEvent(event: AguiEvent) {
+                try {
+                    emitter.send(SseEmitter.event().name(AguiWire.type(event)).data(AguiWire.encode(event)))
+                } catch (e: Exception) {
+                    // Client gone mid-stream — finish the emitter; onCompletion below detaches the listener.
+                    runCatching { emitter.completeWithError(e) }
+                }
+            }
+
+            override fun onComplete() {
+                runCatching { emitter.complete() }
+            }
+        })
+        // Unknown/evicted run: nothing to stream, complete so the browser drops to the poll.
+        if (subscription == null) {
+            emitter.complete()
+            return emitter
+        }
+        emitter.onCompletion { subscription.cancel() }
+        emitter.onTimeout { subscription.cancel(); emitter.complete() }
+        emitter.onError { subscription.cancel() }
+        return emitter
+    }
+
+    /**
      * Cancel an in-flight draft (§4): trip the shared token and wait for the worker to settle the node to
      * CANCELLED, then render the now-persisted row. A no-op (renders the current state) if the node is
      * unknown or already settled.
@@ -382,9 +426,12 @@ class GenerationController(
     // threadId=null, so no composer/rail wiring — a drafting node has nothing to reply to or index.
     private fun renderNode(model: Model, reply: ReplyView, threadId: String?): String {
         model.addAttribute("reply", reply)
+        // Personas ALWAYS ride along: the monogram hue resolves through the persona's stored colour slot
+        // (AuthorColor), and a poll re-render without the roster fell back to the hashed hue — the
+        // drafting avatar visibly changed colour for a second, then changed back on settle.
+        model.addAttribute("personas", personaViews())
         if (threadId != null) {
             model.addAttribute("threadId", threadId)
-            model.addAttribute("personas", personaViews())
             model.addAttribute("branchIndex", branchIndex.forThread(threadId))
         }
         return "fragments/replyNode"
@@ -407,5 +454,11 @@ class GenerationController(
     private fun emptyNode(model: Model): String {
         model.addAttribute("replies", emptyList<ReplyView>())
         return "fragments/replyList"
+    }
+
+    private companion object {
+        // Comfortably above the 120s generation timeout so the SSE doesn't lapse mid-generation; on timeout
+        // the client still has the poll fallback. The emitter completes earlier on the terminal event.
+        const val STREAM_TIMEOUT_MS = 300_000L
     }
 }

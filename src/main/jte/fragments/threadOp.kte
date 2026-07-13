@@ -35,8 +35,10 @@
               hx-target="#reply-${threadId}"
               hx-swap="outerHTML"
               hx-disabled-elt="find button[type='submit']">
+            <%-- required: the server drops the WHOLE edit (body changes included) on a blank title —
+                 let the browser catch it before submit instead of silently losing the user's edits. --%>
             <input type="text" name="title" class="thread__op-edit-title" value="${title}"
-                   aria-label="Post title">
+                   aria-label="Post title" required>
             <div class="composer__editor">
                 <textarea name="text" class="reply__edit-text" data-edit-text
                           placeholder="Opening post (optional)">${body}</textarea>

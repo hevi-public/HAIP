@@ -70,12 +70,14 @@ Profiles compose as **overlays** — the later one wins, and `SPRING_PROFILES_AC
 | `prod` | base | Production datasource, web-fetch on |
 | `test` | base | Separate DB, backups off, `@Primary` scriptable `LlmClient` fake (no real IO) |
 | `openai` | overlay | Switch generation to an **OpenAI-compatible** server (e.g. LM Studio) instead of `claude -p` ([`application-openai.yml`](src/main/resources/application-openai.yml)) |
+| `stub` | overlay | Switch generation to **canned in-process replies** — no model, no network. For demos and UI work; `[stub:fail]`-style comment triggers walk the failure taxonomy ([`application-stub.yml`](src/main/resources/application-stub.yml)) |
 | `debug` | overlay | DEBUG-log the **raw** LLM HTTP body, to inspect a model's reasoning shape ([`application-debug.yml`](src/main/resources/application-debug.yml)) |
 
 ```bash
 ./gradlew bootRun                                            # dev + claude -p (default)
 SPRING_PROFILES_ACTIVE=dev,openai ./gradlew bootRun          # dev datasource, generate via LM Studio
 SPRING_PROFILES_ACTIVE=dev,openai,debug ./gradlew bootRun    # + raw-response logging
+SPRING_PROFILES_ACTIVE=dev,stub ./gradlew bootRun            # no model needed: canned replies
 ```
 
 ### Running against a local model (LM Studio)

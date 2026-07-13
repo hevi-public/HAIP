@@ -21,7 +21,7 @@
 @param shortcut: com.aiforum.shortcut.ShortcutResult = com.aiforum.shortcut.ShortcutResult.DISABLED
 @param opAttachments: List<AttachmentView> = java.util.Collections.emptyList()
 
-@template.layout(title = title, activeNav = "threads", content = @`
+@template.layout(title = title + " · AI Forum", activeNav = "threads", content = @`
     <div class="thread" data-thread-id="${threadId}" data-thread-title="${title}">
       <div class="thread__main">
         @template.fragments.wideToggle()
@@ -31,11 +31,18 @@
         @if(summoning && replies.isEmpty())
             <%-- The create-time summon is still routing (the dispatcher's "who replies" call runs on a
                  worker), so there are no drafts yet. Poll /threads/{id}/room until they land; htmx then
-                 swaps this poller for the drafts, which each self-poll to settle. --%>
-            @template.fragments.roomPoller(threadId = threadId, summoning = true)
+                 swaps this poller for the drafts, which each self-poll to settle. The poller lives INSIDE
+                 a .reply-list wrapper so the bottom composer's hx-target=".reply-list" always resolves —
+                 without it, a note posted while summoning (or after a draftless summon) hits
+                 htmx:targetError and silently does nothing. --%>
+            <div class="reply-list">
+                @template.fragments.roomPoller(threadId = threadId, summoning = true)
+            </div>
         @else
             @if(waitingOnRoom)
-                <div data-empty-state="waiting">Waiting on the room…</div>
+                <%-- The chip (::before) already reads "waiting on the room" — the body text points at the
+                     way OUT of the wait instead of saying the same thing twice. --%>
+                <div data-empty-state="waiting">No replies yet — summon someone from the composer below.</div>
             @endif
             @template.fragments.replyList(replies = replies, threadId = threadId, personas = personas)
         @endif
@@ -43,8 +50,12 @@
              budget. Appends the newly-grown nodes to the reply list (same pattern as the bottom
              composer). The endpoint is synchronous; no poll needed. --%>
         <div class="thread__controls">
+            <%-- hx-swap="none": the response (a full reply-list fragment) is not swapped anywhere — without
+                 it, htmx's default innerHTML swap briefly dumps the grown HTML INSIDE this button before
+                 the reload wipes it. The reload is still what renders the grown branches in place. --%>
             <button type="button" class="btn btn--ghost"
                     hx-post="/threads/${threadId}/auto-grow"
+                    hx-swap="none"
                     hx-disabled-elt="this"
                     hx-indicator=".auto-grow-spinner"
                     hx-on::after-request="if(event.detail.successful){window.location.reload()}">Auto-grow</button>

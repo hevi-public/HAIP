@@ -29,6 +29,12 @@
                 <option value="claude-sonnet-4-6" selected="${persona.model == "claude-sonnet-4-6"}">Sonnet 4.6</option>
                 <option value="claude-opus-4-8" selected="${persona.model == "claude-opus-4-8"}">Opus 4.8</option>
                 <option value="claude-fable-5" selected="${persona.model == "claude-fable-5"}">Fable 5</option>
+                <%-- A model pinned outside the list above (e.g. a local id set while running the openai
+                     provider) must keep an option, or the browser falls back to "default model" and Save
+                     silently WIPES the pin. --%>
+                @if(persona.model.isNotEmpty() && persona.model !in listOf("claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-8", "claude-fable-5"))
+                    <option value="${persona.model}" selected="${true}">${persona.model} (custom)</option>
+                @endif
             </select>
             <%-- Prefilled with the current prompt. "Regenerate" re-composes from the (edited) inputs
                  against the previous values, swapping the result in; Save persists exactly what's shown.

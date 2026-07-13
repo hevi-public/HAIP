@@ -5,7 +5,7 @@
 @param capped: Boolean
 @param cap: Int
 
-@template.layout(title = "Admin · " + listTitle, activeNav = "admin", content = @`
+@template.layout(title = "Admin · " + listTitle + " · AI Forum", activeNav = "admin", content = @`
     <div class="admin-list" data-admin-list="comments">
         <p class="admin-list__back"><a href="/admin">← Admin</a></p>
         <h1 class="admin-list__title">${listTitle}</h1>

@@ -154,19 +154,25 @@ aiforum:
           must-fix blockers from the optional nitpicks so a review doesn't drown in noise. Pulls no punches
           on a real problem but never rubber-stamps — quotes the specific line and suggests the concrete fix.
   # LLM backend (dev/prod only; the test profile swaps in a scriptable fake). Defaults shown.
-  # `provider` selects which real LlmClient loads: cli => ProcessLlmClient (claude -p), openai =>
-  # OpenAiLlmClient (any OpenAI-compatible HTTP server, e.g. LM Studio). Flip to openai via the `openai`
-  # profile (application-openai.yml), an OVERLAY run alongside a base profile, e.g.
-  # SPRING_PROFILES_ACTIVE=dev,openai. The command/working-dir/web-fetch-* keys are cli-only; the
-  # openai: block is openai-only; default-model is shared (the per-provider model fallback).
+  # `provider` selects which LlmClient loads: cli => ProcessLlmClient (claude -p), openai =>
+  # OpenAiLlmClient (any OpenAI-compatible HTTP server, e.g. LM Studio), opencode => OpenCodeLlmClient
+  # (the opencode agent CLI), stub => StubLlmClient (canned in-process replies — demos/UI work, no
+  # model). Flip via the `openai`/`stub` OVERLAY profiles (application-openai.yml /
+  # application-stub.yml) run alongside a base profile, e.g. SPRING_PROFILES_ACTIVE=dev,openai. The
+  # command/working-dir/web-fetch-* keys are cli-only; the openai:/opencode: blocks are provider-only;
+  # default-model is shared (the per-provider model fallback).
   llm:
     provider: cli              # cli (claude -p, default) | openai (OpenAI-compatible HTTP, e.g. LM Studio)
+                               # | opencode (agent CLI) | stub (canned in-process replies; see application-stub.yml)
     command: claude            # the CLI binary on PATH
     default-model: ""          # fallback model used when a persona doesn't pin its own (persona.model,
                                # V4); blank => the CLI's default model. e.g. "opus" to pin one fleet-wide.
     working-dir: ""            # blank => system temp, so the project CLAUDE.md doesn't leak into personas
     rate-limit-retry-after-seconds: 300
     poll-millis: 100           # how often the wait loop checks the deadline and cancellation token
+    stream-partial-messages: true   # cli-only: spawn `claude -p` with --include-partial-messages so it
+                                    # streams token deltas (not just whole messages). Off => coarser
+                                    # whole-message streaming, still normalised by ClaudeStreamParser.
     # Headless `claude -p` can't prompt for tool permission, so WebFetch is denied unless pre-authorised
     # here (a persona asked to check the web otherwise just reports it can't reach the network). Off by
     # default; turned on per-profile (dev + prod on — see application-dev.yml / application-prod.yml).
@@ -198,3 +204,13 @@ aiforum:
       disable-thinking: false  # send chat_template_kwargs.enable_thinking=false to turn reasoning off at
                                # generation time. Only honoured by models with a thinking switch in their
                                # chat template (Qwen3, vLLM/SGLang); a no-op for Gemma. Off by default.
+    # OpenCodeLlmClient (provider: opencode only). Wraps the `opencode run --format json` agent CLI as a
+    # streaming text backend. opencode has NO inline system prompt, so the persona's system prompt is folded
+    # into the message; the model reuses `default-model` above (and per-persona PersonaRef.model) but MUST be
+    # in opencode's `provider/model` form, e.g. "lmstudio/qwen/qwen3.5-9b" or "anthropic/claude-…". opencode
+    # itself must have that provider configured/authed (its own config); point `working-dir` at a dir holding
+    # an opencode.json when the provider is configured project-locally. ⚠ Heavy: opencode is a full agent
+    # (spins a server per run) — use sparingly.
+    opencode:
+      command: opencode        # the opencode binary on PATH
+      agent: ""                # optional opencode agent (its own prompt/tools); blank => opencode's default

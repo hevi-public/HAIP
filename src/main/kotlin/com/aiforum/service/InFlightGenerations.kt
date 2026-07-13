@@ -1,5 +1,8 @@
 package com.aiforum.service
 
+import com.aiforum.agui.AguiEvent
+import com.aiforum.agui.AguiEventListener
+import com.aiforum.agui.AguiSubscription
 import com.aiforum.dto.ReplyView
 import com.aiforum.llm.CancellationToken
 import jakarta.annotation.PreDestroy
@@ -32,7 +35,14 @@ class InFlightGenerations {
         @Volatile var view: ReplyView,
         val token: CancellationToken,
         val done: CountDownLatch = CountDownLatch(1),
-    )
+    ) {
+        // The AG-UI event stream for this run: every event buffered (so a late subscriber replays the
+        // whole thing — replies are short, so memory is a non-issue) plus the live subscribers. All three
+        // are guarded by `synchronized(this)`; see [publish]/[subscribe].
+        val events = ArrayList<AguiEvent>()
+        val listeners = ArrayList<AguiEventListener>()
+        var terminal = false
+    }
 
     private val inFlight = ConcurrentHashMap<String, Holder>()
 
@@ -91,6 +101,46 @@ class InFlightGenerations {
      */
     fun viewsFor(threadId: String): List<ReplyView> =
         inFlight.values.filter { it.threadId == threadId }.map { it.view }
+
+    /**
+     * Publish an [AguiEvent] for run [id] to its buffer and any live subscribers (the SSE clients).
+     * A no-op when [id] isn't in flight (the synchronous generate/autoGrow paths register no holder, and
+     * an evicted run has nothing to stream — the settled DB row serves those). The generation worker is
+     * the SOLE publisher per run, so events stay in order; the lock only guards against a concurrent
+     * [subscribe]. Delivery happens under the lock so a joiner can't miss the gap between replay and
+     * register — fine here because there's one publisher and a single-user UI; a listener that fails its
+     * send cancels itself, so we iterate a copy.
+     */
+    fun publish(id: String, event: AguiEvent) {
+        val holder = inFlight[id] ?: return
+        synchronized(holder) {
+            holder.events.add(event)
+            if (event.isTerminal) holder.terminal = true
+            holder.listeners.toList().forEach { l ->
+                l.onEvent(event)
+                if (event.isTerminal) l.onComplete()
+            }
+        }
+    }
+
+    /**
+     * Subscribe to run [id]'s event stream: replay everything buffered so far, then receive live events
+     * until the terminal one. Returns null when [id] is unknown or already evicted — the caller falls back
+     * to the poll, since the settled row exists. If the run already finished (terminal but not yet
+     * evicted), the listener is replayed, completed, and handed a no-op subscription.
+     */
+    fun subscribe(id: String, listener: AguiEventListener): AguiSubscription? {
+        val holder = inFlight[id] ?: return null
+        synchronized(holder) {
+            holder.events.forEach { listener.onEvent(it) }
+            if (holder.terminal) {
+                listener.onComplete()
+                return AguiSubscription { }
+            }
+            holder.listeners.add(listener)
+        }
+        return AguiSubscription { synchronized(holder) { holder.listeners.remove(listener) } }
+    }
 
     /**
      * Settle [id]: release any cancel waiter, then evict. Called from the worker's `finally`, so it runs

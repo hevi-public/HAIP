@@ -49,3 +49,5 @@ aiforum:
     # web-fetch above — the gh tools can reach any repo; tighten or disable if that surface matters.
     github-tools-enabled: true
     github-mcp-config: '{"mcpServers":{"gh-readonly":{"command":"node","args":["${user.dir}/mcp/gh-readonly/server.mjs"]}}}'
+  github:
+    enabled: true

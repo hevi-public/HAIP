@@ -1,6 +1,6 @@
 ---
 name: bdd-tiered-testing
-description: The AI Forum project's BDD/TDD testing philosophy and tiered test architecture. Use this whenever writing or organizing tests in this Kotlin/Spring Boot codebase — deciding what to mock, where a test belongs (Tier 0/1/2/acceptance), wiring constructor injection for the IO seam, adding Gradle test tasks, setting up the discovery-mode build gate, or covering generation error scenarios. Consult it before adding any new test so the suite stays a trustworthy executable spec and the "mock only at one seam" guarantee holds.
+description: The AI Forum project's BDD/TDD testing philosophy and tiered test architecture. Use this whenever writing or organizing tests in this Kotlin/Spring Boot codebase — deciding what to mock, where a test belongs (Tier 0/1/2/acceptance), wiring constructor injection for the IO-port seams, adding Gradle test tasks, setting up the discovery-mode build gate, or covering generation error scenarios. Consult it before adding any new test so the suite stays a trustworthy executable spec and the "fakes only at the IO ports" guarantee holds.
 ---
 
 # BDD/TDD tiered testing for AI Forum
@@ -12,9 +12,23 @@ mock), and the place a test lives tells you what it actually exercises.
 
 ## The one load-bearing rule: mock only at Tier 1
 
-There is exactly **one** seam where we substitute fakes: the IO boundary. Everything above it runs
-**real** code against that single fake. If you find yourself mocking a service to test a controller,
-or stubbing an internal method, stop — that hides the very integration the test exists to prove.
+There is exactly one **class** of seam where we substitute fakes: the IO boundary — the
+constructor-injected ports to the outside world. That is currently **four port interfaces**, each
+with a scriptable `@Primary @Profile("test")` fake in `src/test/.../acceptance/config/TestBeans.kt`:
+
+| Port | Abstracts | Test double |
+|------|-----------|-------------|
+| `LlmClient` | text generation (`claude -p` / OpenAI-compatible HTTP) | `ScriptableLlmClient` |
+| `ImageDescriber` | vision captioning | `ScriptableImageDescriber` |
+| `ShortcutClient` | the Shortcut PM API (read-only) | `ScriptableShortcutClient` |
+| `GitHubClient` | the `gh` CLI (read-only) | `ScriptableGitHubClient` |
+
+Alongside them sit a fixed `Clock` and the fault-injection repo wrappers (`FailingCommentRepository`,
+`FailingJdbcTemplate`) — stand-ins at the same IO edge, not mocks above it. Everything above the port
+line runs **real** code against those fakes. If you find yourself mocking a service to test a
+controller, or stubbing an internal method, stop — that hides the very integration the test exists to
+prove. A new external dependency gets a new port + scriptable fake (the pattern has been extended
+three times: vision → Shortcut → GitHub); it never gets mocked mid-stack.
 
 Why this matters: a suite that mocks internally can stay green while the wired-together system is
 broken. By allowing fakes at only the IO edge, a green higher-tier test means the real domain +
@@ -26,8 +40,8 @@ controller + view actually compose correctly.
 |------|---------------|-------|---------|
 | **Tier 0** | Pure functions / logic, no side effects | none | `DepthBudget.isExhausted()`, `ContextAssembler` firewalling `+1`, `GenerationStateMachine` transitions; also the JS pure-core `htmx-error-core.mjs` (toast store + `ageLabel`, deterministic via an injected `now`, jsTest) |
 | **Tier 1** | The IO boundary itself | nothing above it; this *is* the seam | `JdbcCommentRepository` against a real test SQLite DB; the `LlmClient` fake's own behaviour |
-| **Tier 2+** | Controllers / domain orchestration | the single Tier-1 fake (`LlmClient`, `Clock`, a repo fake) | `GenerationService` running real Tier-0 logic, calling the scripted `LlmClient` |
-| **Acceptance / E2E** | Full stack over HTTP | only the `LlmClient` fake (DB is real test SQLite) | Cucumber scenarios via `TestRestTemplate` |
+| **Tier 2+** | Controllers / domain orchestration | the Tier-1 port fakes (`LlmClient` et al., `Clock`, a repo fake) | `GenerationService` running real Tier-0 logic, calling the scripted `LlmClient` |
+| **Acceptance / E2E** | Full stack over HTTP | the four scriptable port fakes from `TestBeans.kt` (DB is real test SQLite) | Cucumber scenarios driven via the `HttpClient` support class (`acceptance/support/HttpClient.kt` — Spring Boot 4 removed `TestRestTemplate`) |
 
 Run order is **lowest-first** (Tier 0 → 1 → 2 → acceptance). A break low down ripples upward, so the
 lowest failing tier names the culprit — read it first and ignore the cascade above it.
@@ -40,8 +54,9 @@ before any logic exists, which is what lets the team implement without breaking 
 ## Constructor injection is the discipline that keeps the seam intact
 
 The "one mock level" guarantee only holds if the boundary is *injectable*. So every dependency that
-touches the outside world — `LlmClient`, `Clock`, repositories — is passed by **constructor
-injection**, never reached for internally. The failure mode is gradual: an agent adds an
+touches the outside world — the four ports (`LlmClient`, `ImageDescriber`, `ShortcutClient`,
+`GitHubClient`), `Clock`, repositories — is passed by **constructor injection**, never reached for
+internally. The failure mode is gradual: an agent adds an
 `Instant.now()` here, a `new ProcessBuilder()` there, and suddenly a tier can't be tested in
 isolation. Hold the line:
 
@@ -67,10 +82,13 @@ file/network read mid-stack, that's a yellow flag — route it through an inject
 
 ## Testing the production adapter — the real code that IS the seam
 
-Everything above tests code *above* the seam against the fake. But the `@Profile("!test")` adapter
-(the real `LlmClient` — `ProcessLlmClient`; later the Docker-jail client) is real code too, and it
-must be tested *without* invoking the external dependency (no real `claude`, no network, no quota in
-CI). Split it in two so the un-fakeable part shrinks to almost nothing:
+Everything above tests code *above* the seam against the fake. But the `@Profile("!test")` adapters
+are real code too — `LlmClient` has **two** production adapters (`ProcessLlmClient` shelling to
+`claude -p`, and `OpenAiLlmClient` speaking the OpenAI-compatible HTTP API for local models), and
+`ImageDescriber` has `OpenAiImageDescriber`; the read-only `GhCliGitHubClient` and `HttpShortcutClient`
+follow the same split — and each must be tested *without* invoking the external dependency (no real
+`claude`, no network, no quota in CI). Split the adapter in two so the un-fakeable part shrinks to
+almost nothing:
 
 1. **Pure result→domain classification → Tier 0.** All the "what does this output *mean*" logic moves
    into a pure function fed a captured `(exitCode, stdout)` (or HTTP status/body) pair — no IO — so the
@@ -94,22 +112,48 @@ Keep the loop runaway-proof while you're here (it runs on a remote box with no m
 monotonic deadline, a floored poll interval, force-kill + reap, bounded stream joins. See
 [[haip-stack-gotchas]] for the `claude -p` envelope shape these tests pin.
 
+### Streaming is a second method on the SAME seam, not a second seam
+
+The IO seam carries a streaming overload — `LlmClient.generate(request, cancellation, sink)` — alongside the
+blocking one (live token streaming; see `plan_docs/streaming-agui.md`). It does **not** add a second mock
+level: the overload ships a **default** that wraps the blocking `generate` and emits the whole reply as one
+delta, so a backend (or the scriptable fake) that implements only the blocking method still satisfies the
+streaming path. The "mock only at Tier 1" guarantee holds. Its tests follow the same pure/IO split:
+
+- **Wire contract → Tier 0.** The internal `AguiEvent` vocabulary is serialised to AG-UI's wire JSON by one
+  object, `AguiWire`; `tier0/AguiWireTest` pins it with golden strings. This is the **only** test coupled to
+  the external spec — a spec bump changes `AguiWire` + this test and nothing else above it moves.
+- **Per-backend normalisation → Tier 0 then Tier 1.** Each backend maps its native stream
+  (`claude -p --output-format stream-json` NDJSON; OpenAI `stream:true` SSE; `opencode run --format json`
+  NDJSON) into the vocabulary via a *pure* parser (`ClaudeStreamParser` / `OpenAiStreamParser` /
+  `OpenCodeStreamParser`, Tier 0), then the streaming overload is exercised end-to-end through the **same**
+  `spawn()` / `MockRestServiceServer` stand-ins (Tier 1). Each still classifies the **final** text through a
+  Tier-0 classifier (`LlmResponseParser` / `OpenAiResponseParser` / `OpenCodeStreamParser.toResponse`), so the
+  persisted reply is byte-identical to the blocking path — the deltas are liveness only, not a second source
+  of truth. (opencode's `text` parts are *cumulative* per `part.id`; the parser emits each new suffix as a
+  delta — capture a real `--format json` run to pin fixtures rather than guessing the shape.)
+- **Don't grow a new mock level for transport.** The SSE fan-out is plain in-memory state (a per-run channel
+  on `InFlightGenerations`): test it directly at Tier 2 (replay / terminal-complete / unknown-fallback), and
+  assert the wire over **real HTTP** at acceptance — a terminal buffer replays as SSE frames, deterministic
+  without racing a live generation. The `LlmClient` fake gains a `Behavior.Stream` for this; see
+  [[cucumber-spring-bdd]].
+
 ## Error scenarios are first-class
 
 Every failure mode in the generation lifecycle (§4) gets explicit coverage: timeout, process error,
 auth/rate-limit, empty output, truncated/malformed, cancel, partial-roomful, persistence failure,
-validation, context-overflow. These are exactly what the single Tier-1 seam exists to simulate —
+validation, context-overflow. These are exactly what the Tier-1 LLM port exists to simulate —
 inject a fake that throws or returns the failure, then assert the **state transition**
 (drafting → failed(reason) → retry → posted) and the **user-visible outcome + working retry**.
 
 Validation is asserted at the controller tier (no LLM call should happen — assert the fake's spy
 received nothing). Cancel exercises the subprocess-kill path via a `CancellationToken`.
 
-## Three audit test patterns (all hold the one-seam line)
+## Three audit test patterns (all hold the port line)
 
-The Tier-1/2 audit added three new test shapes. The throughline: **none introduced a second mock
-seam.** Each forces a fault at a *real* IO boundary, or asserts a real-DB property, so a green result
-still means the wired-together system works.
+The Tier-1/2 audit added three new test shapes. The throughline: **none introduced a mock above the
+IO-port line.** Each forces a fault at a *real* IO boundary, or asserts a real-DB property, so a green
+result still means the wired-together system works.
 
 ### Forced-rollback atomicity (Tier 1) — fault at the real IO boundary, one statement deeper
 
@@ -187,8 +231,8 @@ assertTrue(solSettled.await(5, TimeUnit.SECONDS), "Sol's reply should settle on 
 The timeout is now only a **failsafe against a hung worker, never a sampling interval** — so it can be
 generous without slowing the happy path. The `@Synchronized insert` + the latch's countDown also
 establish the happens-before the post-await assertions rely on (worker writes, test thread reads). Still
-one seam: `RecordingComments` is the repo test-double the tier already uses; the hook is a probe on it,
-not a new mock.
+inside the port line: `RecordingComments` is the repo test-double the tier already uses; the hook is a
+probe on it, not a new mock.
 
 ## Logging is IO — assert it
 
@@ -283,8 +327,9 @@ Docker entrypoint passes it through).
 
 ## Tagged Gradle test tasks (tiered run)
 
-Tag JUnit tests with `@Tag("tier0")` etc.; give Cucumber its own task. Order them so the lowest tier
-runs first:
+**Source of truth: `build.gradle.kts` — the sketch below is illustrative; when they disagree, the
+build file wins.** Tag JUnit tests with `@Tag("tier0")` etc.; give Cucumber its own task. Order them
+so the lowest tier runs first:
 
 ```kotlin
 // GOTCHA: a manually-registered Test task does NOT inherit the test source set's classes/classpath
@@ -293,7 +338,8 @@ val testSrc = sourceSets.test.get()
 fun Test.tier(tag: String) {
     testClassesDirs = testSrc.output.classesDirs
     classpath = testSrc.runtimeClasspath
-    useJUnitPlatform { includeTags(tag) }
+    // jupiter only + tag filter, so tier tasks never run the Cucumber suite.
+    useJUnitPlatform { includeEngines("junit-jupiter"); includeTags(tag) }
     ignoreFailures = discoveryMode
 }
 
@@ -303,16 +349,32 @@ tasks.register<Test>("tier2")      { tier("tier2"); shouldRunAfter("tier1") }
 tasks.register<Test>("acceptance") {
     testClassesDirs = testSrc.output.classesDirs
     classpath = testSrc.runtimeClasspath
-    useJUnitPlatform { includeEngines("cucumber") }
-    systemProperty("cucumber.filter.tags", "not @wip")
-    // Before any .feature files exist, an engine filter that matches nothing trips JUnit's
-    // "no tests discovered" failure (tag-filtered tier tasks are exempt). Relax it while scaffolding;
-    // once features exist they run and failures show as red, which is the point.
-    failOnNoDiscoveredTests = false
+    // Features are discovered via the @Suite runner class (see [[cucumber-spring-bdd]]) — select the
+    // suite engine, NOT includeEngines("cucumber"): under Gradle the bare cucumber engine only scans
+    // compiled-class roots, so it would discover zero features. The tag filter (not @wip) lives in
+    // src/test/resources/junit-platform.properties, not a systemProperty.
+    useJUnitPlatform { includeEngines("junit-platform-suite") }
+    failOnNoDiscoveredTests = !discoveryMode
     shouldRunAfter("tier2")
+    // Gradle's failOnNoDiscoveredTests can't catch a tag-filter regression (cucumber filters at
+    // execution time — scenarios still count as "discovered", reported skipped). The real guard is
+    // a floor on *executed* scenarios read from cucumber's report.json:
+    val report = layout.buildDirectory.file("reports/cucumber/report.json")
+    doFirst { report.get().asFile.delete() }   // a stale report must never satisfy the floor
+    doLast {
+        val executed = report.get().asFile.takeIf { it.isFile }?.readText()
+            ?.let { Regex("\"type\"\\s*:\\s*\"scenario\"").findAll(it).count() } ?: 0
+        if (executed < 1 && !discoveryMode)
+            throw GradleException("acceptance executed 0 Cucumber scenarios (green would lie)")
+    }
 }
-tasks.register("verifyAll") { dependsOn("tier0", "tier1", "tier2", "acceptance") }
+tasks.register("verifyAll") {
+    dependsOn("jsTest", "mcpGhTest", "mcpShortcutTest", "tier0", "tier1", "tier2", "acceptance")
+}
 ```
+
+`verifyAll` is the whole gate — the JVM tiers plus the frontend `jsTest` and the two MCP-server test
+tasks (`mcpGhTest`, `mcpShortcutTest`); CI runs the same thing via the Docker image's default command.
 
 ## Profile isolation is itself tested
 

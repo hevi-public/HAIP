@@ -31,7 +31,8 @@ class StoryRefLinkerTest {
     @Test
     fun `a bare ref in prose becomes a link to the story`() = withBase {
         val html = MarkdownRenderer.render("let's track this in sc-42 today")
-        assertTrue(html.contains("""<a href="${base}42">sc-42</a>"""), html)
+        // rel="nofollow" comes from sanitizeUrls, which stamps it on every rendered link.
+        assertTrue(html.contains("""<a rel="nofollow" href="${base}42">sc-42</a>"""), html)
     }
 
     @Test

@@ -1,7 +1,7 @@
 @import com.aiforum.web.GitHubPageView
 @param page: GitHubPageView
 
-@template.layout(title = "GitHub", activeNav = "github", content = @`
+@template.layout(title = "GitHub · AI Forum", activeNav = "github", content = @`
     <div class="github" data-page="github">
         <h1 class="github__title">GitHub</h1>
 
