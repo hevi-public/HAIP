@@ -28,11 +28,16 @@
   --line-dotted: #dedccb;  /* dotted dividers */
   --line-node:   #ebe9da;  /* reply-node borders */
 
-  /* sage accent (the brand) */
+  /* sage accent (the brand; the dark theme re-tints this whole family to HUP blue) */
   --sage:        #b3bca3;
-  --sage-ink:    #3f4a2b;  /* text on sage */
+  --sage-ink:    #3f4a2b;  /* text ON a sage chip — flips WITH --sage (dark: light text on the blue chip) */
   --sage-ink-2:  #4a503b;
   --sage-2:      #cdd0bb;  /* secondary / avatar sage */
+  --sage-text:   #3f4a2b;  /* sage-tinted STANDALONE text/accent on the page/card surface — unlike
+                              --sage-ink this sits on a surface that DOES flip, so the dark theme
+                              re-tints it (using --sage-ink here made dark-mode text near-invisible) */
+  --label:       #6b6e48;  /* the 10px uppercase section labels (rail boxes, form legends) */
+  --focus-border: #9aa882;  /* focused text-field border (dark theme brightens it) */
   --spine:       #e4e2ce;  /* default tree spine */
   --spine-live:  #94a06e;  /* in-context / active spine */
 
@@ -47,6 +52,20 @@
   --dark:        #34342a;
   --dark-ink:    #e9e8d6;
   --dark-dim:    #b3b596;
+
+  /* floating overlay chrome (slash/@mention palette, quote toolbar/cone) — always a dark layer,
+     but tinted to the active theme (olive here, navy in dark) so it never reads as foreign */
+  --pop:          #34342a;
+  --pop-line:     #44443a;
+  --pop-row-line: #3c3c32;
+  --pop-hover:    #3f3f33;
+  --pop-ink:      #cdd0bb;
+  --pop-dim:      #b9b9a4;
+  --pop-cap:      #b3b596;
+  --scrim:        rgba(52, 52, 42, .38);
+
+  /* unread marker — the HUP "ÚJ" orange (outline badge on thread rows; HUP wears it in both themes) */
+  --new:         #c1731f;
 
   /* error-state accents (six UX states) */
   --clay:        #c07a5e;  --clay-bg:   #f7ede7;  --clay-line: #e8d3c6;  --clay-ink: #9c5a41;
@@ -70,47 +89,77 @@
 }
 
 /* ------------------------------------------------------------------ dark theme
- * Token-only override layer (palette source: HAIP_design/AI Forum - *-Dark-.dc.html).
+ * Token-only override layer. Palette source: HUP.hu's own dark theme (the app's design lineage) —
+ * near-black blue page, navy-slate panels, vivid HUP-blue links/accent, rounded panel corners.
  * Every component reads these vars, so flipping html[data-theme="dark"] re-skins the whole app.
- * The sage accent family is intentionally LEFT UNCHANGED — the comps keep the light-sage chips on
- * dark surfaces. Per-persona avatar hues (.monogram / .branch-index__dot, see below) are also left
- * as-is on purpose, pending a visual pass. */
+ * Unlike the earlier sage-dark comps, the whole --sage accent family DOES flip here: the brand
+ * accent becomes HUP blue, so the -ink pairs flip with it (light text on the blue chip). Per-persona
+ * avatar hues (.monogram / .branch-index__dot, see below) are left as-is, pending a visual pass. */
 html[data-theme="dark"] {
   /* surfaces */
-  --page:        #15150e;
-  --frame:       #232219;
-  --card:        #2a2920;
-  --input:       #2a2920;
-  --bar:         #2e2d23;
-  --strip:       #343328;
-  --wash:        #2b3020;  /* composer "in-context" green wash (comp: in-path/target bg) */
-  --row-hover:   #34332a;  /* thread / member row hover — a clear step above --card on dark */
+  --page:        #0b0e13;  /* near-black, blue-cast (HUP page ground) */
+  --frame:       #151a21;
+  --card:        #161c24;
+  --input:       #10151c;  /* fields sit darker than the panel, border carries the shape */
+  --bar:         #0a0c10;  /* header & footer — darkest step, almost black */
+  --strip:       #1d242e;  /* box header strips (HUP: "HUP keresés" / user-box caps) */
+  --wash:        #16202e;  /* composer "in-context" wash — blue-tinted, not green */
+  --row-hover:   #1d242e;  /* thread / member row hover — a clear step above --card */
 
   /* borders */
-  --line:        #3c3b30;
-  --line-dotted: #37362c;
-  --line-node:   #34332a;
+  --line:        #262e3a;
+  --line-dotted: #222933;
+  --line-node:   #202731;
 
-  /* sage accent left unchanged (stays light on dark, per comps); only the tree spine shifts */
-  --spine:       #3a3930;  /* default tree spine (comp: inactive spine) */
-  --spine-live:  #aab487;  /* in-context / active spine (comp: in-path spine) */
+  /* accent — the sage family re-tints to HUP blue (chips/buttons/underlines all read the pair) */
+  --sage:        #3672db;  /* HUP action blue (the »» search button) */
+  --sage-ink:    #f2f6ff;  /* text ON the blue chip */
+  --sage-ink-2:  #eaf1fb;
+  --sage-2:      #2c3a52;  /* slate-blue secondary: input/chip borders, quote bars, tag chips */
+  --spine:       #2a323e;  /* default tree spine */
+  --spine-live:  #5c96f2;  /* in-context / active spine */
 
   /* text */
-  --ink:         #e7e5d6;
-  --muted:       #a8a690;
-  --faint:       #a3a18b;
-  --faint-2:     #9a9a86;
-  --link:        #9aa6c4;
+  --ink:         #d8dee6;
+  --muted:       #98a2ae;
+  --faint:       #87919c;
+  --faint-2:     #77808c;
+  --link:        #5b9bf8;  /* HUP link blue */
 
   /* code / popover inset — slightly lighter than the frame so it still reads as an inset */
-  --dark:        #34342a;
-  --dark-ink:    #e9e8d6;
-  --dark-dim:    #b3b596;
+  --dark:        #1c2330;
+  --dark-ink:    #dbe3ee;
+  --dark-dim:    #93a2b7;
 
-  /* error-state accents — provisional dark tints (eyeball later, same as persona hues) */
-  --clay-bg:   #2f241d;  --clay-line: #4a3a2e;  --clay-ink: #d79a7f;
-  --amber-bg:  #2e2a1a;  --amber-line:#4a4327;  --amber-ink:#d8bd78;
-  --grey-bg:   #2c2b22;  --grey-ink:  #a8a690;
+  /* floating overlay chrome — navy-tinted dark layer */
+  --pop:          #1e2632;
+  --pop-line:     #334052;
+  --pop-row-line: #2a3543;
+  --pop-hover:    #273140;
+  --pop-ink:      #d7dfe9;
+  --pop-dim:      #a6b2c0;
+  --pop-cap:      #8fa0b3;
+  --scrim:        rgba(6, 9, 14, .55);
+
+  /* error-state accents — same hue semantics, cooled to sit on the navy ground.
+     The -chip tokens MUST flip alongside the -ink tokens: the light chips pair with dark inks, so
+     leaving a chip at its :root value while flipping its ink renders text on its own color
+     (the reasoning-leak badge, RATE_LIMITED badge, and mark.nav-hit were invisible in dark). */
+  --clay-bg:   #2a1d1c;  --clay-line: #4b322c;  --clay-ink: #e39a82;
+  --amber-bg:  #2a2415;  --amber-line:#4c3f20;  --amber-ink:#dfba6a;  --amber-chip:#4a3a1c;
+  --grey-bg:   #1a202a;  --grey-ink:  #98a2ae;  --grey-chip: #2b3440;
+
+  /* unread marker — brighter on the navy ground (HUP dark's ÚJ) */
+  --new:         #e8963f;
+
+  /* standalone accent text + section labels — lifted for dark surfaces (see :root notes) */
+  --sage-text:   #6ea8fe;
+  --label:       #8794a3;
+  --focus-border: #4d8ef7;
+
+  /* geometry — HUP dark is a rounder system than the 3px sage comps */
+  --r:           8px;
+  --r-sm:        4px;
 
   /* depth — shadows need more weight against the dark page to read at all */
   --shadow:      0 1px 4px rgba(0, 0, 0, .4);
@@ -244,11 +293,13 @@ html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
 .site-footer .sep { opacity: .5; }
 
 /* ------------------------------------------------------------- components */
+/* the unread-count badge on thread rows — HUP's "ÚJ" idiom: orange outline chip, transparent fill */
 .pill {
   display: inline-block;
-  background: var(--sage); color: var(--sage-ink-2);
+  background: transparent; color: var(--new);
+  border: 1px solid color-mix(in srgb, var(--new) 60%, transparent);
   font-family: var(--mono); font-size: 10px; font-weight: 700;
-  line-height: 1.4; padding: 1px 5px; border-radius: var(--r-sm);
+  line-height: 1.4; padding: 0 5px; border-radius: var(--r-sm);
   white-space: nowrap;
 }
 
@@ -389,7 +440,7 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 .members-box__link:hover .members-box__name { text-decoration: underline; }
 .members-box__add {
   display: inline-block; margin-top: 10px;
-  font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--sage-ink);
+  font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--sage-text);
 }
 
 /* Active-threads box — recent-activity shortlist in the right rail. Shares .rail-box card chrome. */
@@ -425,7 +476,7 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 .ask-card__summary::-webkit-details-marker { display: none; }   /* hide the default disclosure triangle */
 .ask-card__title {
   font-family: var(--mono); font-size: 10px; font-weight: 700;
-  letter-spacing: .04em; text-transform: uppercase; color: #6b6e48;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--label);
 }
 .ask-card__lead { font-size: 12px; color: var(--muted); }
 /* Once open, the form below is the action — the CTA has done its job, so retire it. */
@@ -450,7 +501,7 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 }
 .new-thread__label {
   font-family: var(--mono); font-size: 10px; font-weight: 700;
-  letter-spacing: .04em; text-transform: uppercase; color: #6b6e48;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--label);
 }
 .new-thread__title, .new-thread__body,
 .new-persona__name, .new-persona__descriptor, .new-persona__abilities, .new-persona__prompt {
@@ -467,7 +518,11 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 }
 .new-thread__title:focus, .new-thread__body:focus,
 .new-persona__name:focus, .new-persona__descriptor:focus,
-.new-persona__abilities:focus, .new-persona__prompt:focus { outline: none; border-color: #9aa882; }
+.new-persona__abilities:focus, .new-persona__prompt:focus {
+  outline: none; border-color: var(--focus-border);
+  box-shadow: 0 0 0 1px var(--focus-border);   /* doubles the border so focus reads in dark too,
+                                                  where the old #9aa882 was DIMMER than the resting border */
+}
 .new-thread__actions { display: flex; justify-content: flex-end; }
 /* The member form pairs a model picker (left) with the actions group (right). */
 .new-persona__actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -479,7 +534,7 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
   font-family: var(--sans); font-size: 13px;
   padding: 8px 10px;
 }
-.new-persona__model:focus { outline: none; border-color: #9aa882; }
+.new-persona__model:focus { outline: none; border-color: var(--focus-border); box-shadow: 0 0 0 1px var(--focus-border); }
 
 /* Personality dials: lay the sliders out in a horizontal row (wrapping on narrow widths) rather than a
    tall vertical stack — each dial is a compact labelled column (label above its slider). */
@@ -493,7 +548,7 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 }
 .new-persona__dials legend {
   font-family: var(--mono); font-size: 10px; font-weight: 700;
-  letter-spacing: .04em; text-transform: uppercase; color: #6b6e48; padding: 0 4px;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--label); padding: 0 4px;
 }
 .dial { display: flex; flex-direction: column; gap: 5px; flex: 1 1 160px; min-width: 150px; }
 .dial__label { font-size: 11.5px; color: var(--muted); }
@@ -615,7 +670,7 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 }
 .rail-box__title {
   font-family: var(--mono); font-size: 10px; font-weight: 700;
-  letter-spacing: .04em; text-transform: uppercase; color: #6b6e48;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--label);
   margin: 0 0 8px;
 }
 
@@ -720,7 +775,80 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 .reply__inreplyto-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
 .reply__inreplyto-quote { font-style: italic; }
 
-.reply .body { font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+/* Forward quote refs (comment-quotes.md): the comments THIS reply cites. Sibling of the in-reply-to
+   anchor — same quote-bar idiom, one row per source, each a jump link to #reply-<targetId>. */
+.reply__quotes { display: flex; flex-direction: column; gap: 2px; margin: 0 0 5px; }
+.reply__quote-ref {
+  display: block; max-width: var(--prose);
+  padding: 2px 0 2px 9px; border-left: 2px solid var(--sage-2);
+  font-size: 12px; line-height: 1.4; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reply__quote-ref:hover { text-decoration: none; border-left-color: var(--spine-live); color: var(--ink); }
+.reply__quote-ref-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
+.reply__quote-ref-snippet { font-style: italic; }
+
+/* "Quote" selection toolbar (quote.js) — a small dark pill that floats above a text selection in a
+   comment (Medium/Docs style), leaving the native right-click menu intact. Matches the slash/@mention
+   palette colours. Fixed so it anchors to the selection's viewport rect; quote.js repositions on scroll. */
+.quote-toolbar {
+  position: fixed; z-index: 60; display: flex;
+  background: var(--pop); border: 1px solid var(--pop-line); border-radius: 6px; overflow: hidden;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
+}
+.quote-toolbar__item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 13px; border: none; background: transparent; color: var(--pop-ink);
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.quote-toolbar__item:hover { background: var(--pop-hover); }
+
+/* Backward backlinks (quote-backlinks.js). The .reply__quoted-by block is SSR'd as the no-JS fallback
+   footer (a small "quoted by" list); quote-backlinks.js hides each entry it manages to highlight inline
+   and shows it instead as a hover cone. */
+.reply__quoted-by {
+  margin: 6px 0 0; padding-top: 5px; border-top: 1px dashed var(--line);
+  font-size: 12px; line-height: 1.5; color: var(--muted);
+}
+.reply__quoted-by-summary { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); margin-right: 6px; }
+.reply__backlink { margin-top: 3px; }
+.reply__backlink-passage { font-style: italic; color: var(--muted); }
+.reply__backlink-quoter { display: flex; gap: 5px; margin-left: 8px; max-width: var(--prose); }
+.reply__backlink-author { font-weight: 600; }
+.reply__backlink-snippet { color: var(--faint-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+
+/* Inline highlight on a quoted passage (added client-side; the body HTML stays untouched server-side).
+   Subtle sage wash + dotted underline to read as "this has citations", with a hover/focus accent. */
+mark.quoted {
+  background: color-mix(in srgb, var(--sage-2) 38%, transparent);
+  color: inherit; border-radius: 2px; padding: 0 1px;
+  text-decoration: underline dotted var(--sage-2); text-underline-offset: 2px;
+  cursor: pointer;
+}
+mark.quoted:hover, mark.quoted.is-open { background: color-mix(in srgb, var(--spine-live) 30%, transparent); }
+
+/* The selector "cone": a popover listing the comments that quoted the hovered passage. Built by
+   quote-backlinks.js from the SSR backlink data; same dark palette as the slash/@mention popovers. */
+.quote-cone {
+  position: fixed; z-index: 60; min-width: 200px; max-width: 320px;
+  background: var(--pop); border: 1px solid var(--pop-line); border-radius: 6px; overflow: hidden;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
+}
+.quote-cone__cap {
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--pop-cap); padding: 6px 12px; border-bottom: 1px solid var(--pop-line);
+}
+.quote-cone .reply__backlink-quoter {
+  display: flex; gap: 6px; margin: 0; padding: 7px 12px; border-bottom: 1px solid var(--pop-row-line);
+  color: var(--pop-ink); max-width: none;
+}
+.quote-cone .reply__backlink-quoter:last-child { border-bottom: none; }
+.quote-cone .reply__backlink-quoter:hover { background: var(--pop-hover); text-decoration: none; }
+.quote-cone .reply__backlink-author { color: var(--pop-ink); flex: none; }
+.quote-cone .reply__backlink-snippet { color: var(--pop-dim); }
+
+.reply .body { font-size: 13.5px; line-height: 1.5; color: var(--ink); overflow-wrap: break-word; }
+.thread__body { overflow-wrap: break-word; }
 .reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 5px; }
 
 /* Markdown-rendered body content (reply bodies + the OP). Now structured HTML, not pre-wrapped text:
@@ -754,7 +882,9 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 
 /* Markdown (GFM) tables. */
 .reply .body table, .thread__body table {
-  border-collapse: collapse; margin: 0 0 10px; font-size: 12.5px; max-width: 100%;
+  border-collapse: collapse; margin: 0 0 10px; font-size: 12.5px;
+  /* block + max-content: a wide GFM table scrolls inside the card instead of overflowing it */
+  display: block; width: max-content; max-width: 100%; overflow-x: auto;
 }
 .reply .body th, .reply .body td,
 .thread__body th, .thread__body td {
@@ -839,7 +969,7 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
   resize: none; overflow: hidden;
   min-height: 84px;                  /* generous resting room — Scribble-friendly (§4) */
 }
-.composer textarea:focus { outline: none; border-color: #9aa882; }
+.composer textarea:focus { outline: none; border-color: var(--focus-border); }
 .composer__row {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin-top: 10px;
@@ -847,7 +977,7 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 .composer__hint { font-family: var(--mono); font-size: 11px; color: var(--faint-2); margin-left: auto; }
 .composer__hint b { color: var(--link); font-weight: 700; }
 .composer label, .composer__ctx-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-.composer__head-label { color: var(--sage-ink-2); font-weight: 700; }
+.composer__head-label { color: var(--sage-text); font-weight: 700; }
 .composer select, .composer__select {
   font-family: var(--sans); font-size: 12.5px; color: var(--ink);
   background: var(--input); border: 1px solid var(--sage-2); border-radius: var(--r);
@@ -861,26 +991,26 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
 /* Slash + @mention popover — a dark overlay menu (reads as a layer above the page in both themes) */
 .palette {
   position: absolute; left: 0; right: 0; z-index: 30; margin-top: 6px;
-  background: #34342a; border: 1px solid #44443a; border-radius: 4px; overflow: hidden;
+  background: var(--pop); border: 1px solid var(--pop-line); border-radius: 4px; overflow: hidden;
   box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
 }
 .palette[hidden] { display: none; }
 .palette__cap {
   font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
-  color: #b3b596; padding: 6px 12px; border-bottom: 1px solid #44443a;
+  color: var(--pop-cap); padding: 6px 12px; border-bottom: 1px solid var(--pop-line);
 }
 .palette__row {
   display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
-  padding: 7px 12px; border: none; border-bottom: 1px solid #3c3c32;
-  background: transparent; color: #cdd0bb; cursor: pointer;
+  padding: 7px 12px; border: none; border-bottom: 1px solid var(--pop-row-line);
+  background: transparent; color: var(--pop-ink); cursor: pointer;
 }
 /* An explicit display on .palette__row beats the UA [hidden]{display:none}, so JS filtering needs this. */
 .palette__row[hidden] { display: none; }
 .palette__row:last-child { border-bottom: none; }
-.palette__row:hover, .palette__row.is-active { background: #3f3f33; }
-.palette__key { font-family: var(--mono); font-size: 12px; font-weight: 700; color: #cdd0bb; min-width: 64px; flex: none; }
+.palette__row:hover, .palette__row.is-active { background: var(--pop-hover); }
+.palette__key { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--pop-ink); min-width: 64px; flex: none; }
 .palette__desc {
-  font-size: 11px; color: #b9b9a4;
+  font-size: 11px; color: var(--pop-dim);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
 }
 
@@ -1025,13 +1155,14 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
   color: var(--muted);
 }
 [data-empty-state]::before {
-  display: inline-block;
+  display: block; width: fit-content; margin-left: auto; margin-right: auto;
   font-family: var(--mono); font-size: 11px;
   color: var(--dark-dim); background: var(--dark);
   padding: 5px 10px; border-radius: var(--r-sm);
   margin-bottom: 14px;
 }
 [data-empty-state="no-threads"]::before { content: "$ ls -1 ~/forum → empty"; }
+[data-empty-state="no-members"]::before { content: "$ ls -1 ~/forum/members → empty"; }
 [data-empty-state="waiting"]::before { content: "⟶ waiting on the room"; }
 [data-empty-state="waiting"] { margin-bottom: 14px; }
 
@@ -1048,15 +1179,48 @@ html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-w
   flex: none;
   width: 12px; height: 12px;
   border: 2px solid var(--sage-2);
-  border-top-color: var(--sage-ink);
+  border-top-color: var(--sage-text);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Honest failure UX (T1.4): toast-only. When an htmx request errors, HtmxErrorAdvice returns the mapped
+   non-2xx status (htmx swaps nothing on a non-2xx) + an app:error HX-Trigger; htmx-error.js raises a
+   sticky, dismissible toast off it — the sole, honest feedback (no fragment swapped into the compose
+   field). Styled off --clay (the existing danger token). Toasts persist across refresh (localStorage)
+   until the owner dismisses them with the ✕. */
+.error-toasts {
+  position: fixed; right: 16px; bottom: 16px; z-index: 1000;
+  display: flex; flex-direction: column; gap: 8px;
+  max-width: min(360px, calc(100vw - 32px)); pointer-events: none;
+}
+.error-toast {
+  pointer-events: auto;
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--clay); border-left-width: 3px; border-radius: var(--r, 6px);
+  background: var(--card); color: var(--ink);
+  font-size: 13px; line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+}
+.error-toast__text { flex: 0 1 auto; }
+/* The live "· N minutes ago" suffix — muted, takes the slack so the ✕ stays hard right. */
+.error-toast__age { flex: 1 1 auto; color: var(--muted); font-size: 11.5px; }
+.error-toast__dismiss {
+  flex: none; margin: -2px -4px 0 0;
+  border: 0; background: transparent; cursor: pointer;
+  color: var(--muted); font-size: 15px; line-height: 1; padding: 2px 4px;
+}
+.error-toast__dismiss:hover { color: var(--ink); }
+.error-toast__dismiss:focus-visible { outline: 2px solid var(--sage); outline-offset: 1px; }
+
 /* ------------------------------------------------------------------ mobile */
 @media (max-width: 600px) {
   .container { padding: 14px 12px 32px; }
+  /* The single-row header (brand + nav + layout/theme toggles) is wider than a phone, which forced
+     page-wide horizontal scroll. Let it wrap: toggles drop to their own right-aligned row. */
+  .site-header { flex-wrap: wrap; height: auto; min-height: 48px; padding: 6px 12px; gap: 8px 12px; }
   .site-nav { gap: 12px; }
   .reply .reply { margin-left: 10px; }       /* gentle indent cap on phones */
   .composer textarea { min-height: 54px; }   /* compact at rest, grows on focus (JS) */
@@ -1122,7 +1286,7 @@ mark.nav-hit {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(52, 52, 42, .38);
+  background: var(--scrim);
 }
 .nav-help[hidden] { display: none; }
 .nav-help__panel {
@@ -1142,7 +1306,7 @@ mark.nav-hit {
   padding: 3px 14px 3px 0;
   font-family: var(--mono);
   font-weight: 700;
-  color: var(--sage-ink);
+  color: var(--sage-text);
   vertical-align: top;
 }
 .nav-help td { padding: 3px 0; color: var(--muted); }
@@ -1229,7 +1393,7 @@ mark.nav-hit {
   font-family: var(--mono); font-size: 10px; color: var(--muted);
 }
 .story-card__state {
-  color: var(--sage-ink-2); background: var(--grey-bg);
+  color: var(--sage-text); background: var(--grey-bg);
   border-radius: 4px; padding: 0 5px;
 }
 .rail-box__more {
@@ -1258,7 +1422,7 @@ mark.nav-hit {
   margin: 12px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r);
   background: var(--card); color: var(--muted); font-size: 13px;
 }
-.notice--warn { border-color: var(--sage-2); color: var(--sage-ink-2); }
+.notice--warn { border-color: var(--sage-2); color: var(--sage-text); }
 
 /* ----------------------------------------------------------------- /github */
 /* Read-only GitHub snapshot page (GhCliGitHubClient → GitHubController). Reuses the shared tokens so it
@@ -1292,6 +1456,17 @@ mark.nav-hit {
   display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px;
   background: var(--strip); color: var(--muted); font-family: var(--mono); font-size: 10px;
 }
+/* Per-PR action: "Discuss in the forum" (creates a thread) or "View thread" (already ingested). */
+.github__action-form { margin: 4px 0 0; }
+.github__action {
+  display: inline-block; margin-top: 4px; font-family: var(--mono); font-size: 11px;
+  color: var(--sage-text); text-decoration: none;
+}
+.github__action--button {
+  border: 1px solid var(--line); border-radius: 999px; background: var(--card);
+  padding: 2px 10px; cursor: pointer;
+}
+.github__action--button:hover { background: var(--strip); }
 /* ── Admin statistics dashboard (/admin) ────────────────────────────────────
    Read-only stat cards in a single column. Shares the card chrome + sage accents
    used across the rails; numbers carry data-stat/data-value hooks the suite asserts on. */
@@ -1301,7 +1476,7 @@ mark.nav-hit {
 .admin__section { margin: 0 0 28px; }
 .admin__section-title {
   font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--sage-ink); margin: 0 0 12px;
+  text-transform: uppercase; color: var(--sage-text); margin: 0 0 12px;
   padding-bottom: 6px; border-bottom: 1px solid var(--line);
 }
 .admin__subhead { font-size: 12.5px; color: var(--muted); margin: 18px 0 8px; }
@@ -1326,18 +1501,18 @@ mark.nav-hit {
 }
 .stat-row:last-child { border-bottom: none; }
 .stat-row__label { font-size: 13px; color: var(--ink); }
-.stat-row__num { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--sage-ink); }
+.stat-row__num { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--sage-text); }
 
 /* Stat cards/rows are links into the /admin drill-downs. The data-stat hooks stay on the <li>; the
    anchor fills the card so the whole figure is clickable. */
 .stat__link { display: flex; flex-direction: column; gap: 4px; text-decoration: none; color: inherit; }
 .stat:hover { border-color: var(--sage-2); }
-.stat:hover .stat__num { color: var(--sage-ink); }
+.stat:hover .stat__num { color: var(--sage-text); }
 .stat-row__link {
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
   width: 100%; text-decoration: none; color: inherit;
 }
-.stat-row:hover .stat-row__label { color: var(--sage-ink); }
+.stat-row:hover .stat-row__label { color: var(--sage-text); }
 
 /* ── Admin drill-down list pages (/admin/comments, /admin/attachments) ──────── */
 .admin-list { max-width: 920px; margin: 0 auto; }
@@ -1416,3 +1591,60 @@ mark.nav-hit {
 .stats__miss { padding: 8px 0; border-bottom: 1px dotted var(--line-dotted); }
 .stats__miss-reply { color: var(--ink); }
 .stats__miss-meta { display: block; color: var(--faint); font-family: var(--mono); font-size: 11px; margin-top: 2px; }
+
+/* --------------------------------------------------------------- error page */
+/* Styled /error fallback (error.kte) — the dead ends keep the terminal voice too. */
+.error-page { max-width: var(--prose); margin: 48px auto; padding: 0 16px; }
+.error-page__code { font-size: 12px; color: var(--faint); margin: 0 0 10px; }
+.error-page__title { margin: 0 0 8px; font-size: 24px; color: var(--ink); }
+.error-page__hint { color: var(--muted); margin: 0 0 18px; }
+.error-page__home { font-size: 12.5px; }
+
+
+/* ------------------------------------------------------------- starred page */
+/* /starred had semantic classes but no rules — default bullets on a bare page. */
+.starred { max-width: var(--prose); }
+.starred__title { margin: 0 0 14px; }
+.starred__empty { color: var(--muted); }
+.starred__thread {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+  box-shadow: var(--shadow); padding: 13px 16px; margin-bottom: 14px;
+}
+.starred__thread-title { margin: 0 0 8px; font-size: 15px; }
+.starred__items { list-style: none; margin: 0; padding: 0; }
+.starred__item { padding: 7px 0; }
+.starred__item + .starred__item { border-top: 1px dotted var(--line-dotted); }
+.starred__quote { display: block; color: var(--ink); }
+.starred__quote:hover { color: var(--link); text-decoration: none; }
+.starred__meta { font-family: var(--mono); font-size: 10.5px; color: var(--faint); margin-top: 2px; }
+
+/* --------------------------------------------------------- persona profile */
+/* /personas/{slug} reuses the OP card chrome; these give its own bits shape (they had none). */
+.persona__abilities { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+.persona__abilities .tag {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  background: var(--sage-2); color: var(--sage-ink);
+  border-radius: 999px; padding: 2px 9px;
+}
+.persona__dials {
+  list-style: none; display: flex; flex-wrap: wrap; gap: 6px 18px;
+  margin: 10px 0 0; padding: 0;
+}
+/* the <li> reuses .dial, which the edit form lays out as a slider column — flatten it back to a row */
+.persona__dials .dial { flex: none; min-width: 0; flex-direction: row; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.persona__prompt {
+  font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--dark-ink);
+  background: var(--dark); border: 1px solid var(--line-node); border-radius: var(--r);
+  padding: 10px 12px; margin: 12px 0 14px; white-space: pre-wrap;
+}
+
+/* ------------------------------------------------------- native file input */
+/* The bare OS control sat unstyled inside the polished composer; dress its button like a ghost .btn. */
+input[type="file"] { font-family: var(--mono); font-size: 11px; color: var(--faint); max-width: 100%; }
+input[type="file"]::file-selector-button {
+  font-family: var(--mono); font-size: 11.5px; cursor: pointer;
+  background: var(--card); color: var(--muted);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 3px 10px; margin-right: 9px;
+}
+input[type="file"]::file-selector-button:hover { background: var(--strip); color: var(--ink); }

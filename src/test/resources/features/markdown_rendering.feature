@@ -28,3 +28,12 @@ Feature: Reply and post bodies render markdown
     Then the reply is "posted"
     And the reply body contains "&lt;script&gt;"
     And the reply body does not contain "<script>"
+
+  Scenario: A link with a hostile destination is neutralized
+    Given the LLM will respond with "See [click me](javascript:alert('x')) for details"
+    When the owner summons "saul"
+    Then the reply is "posted"
+    And the reply body contains "click me"
+    # The raw markdown source is allowed to appear escaped (edit textarea, snippets) — the threat is
+    # only a live href, so that exact form is what must be absent.
+    And the reply body does not contain 'href="javascript:'

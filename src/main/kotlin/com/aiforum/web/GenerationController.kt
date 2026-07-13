@@ -8,10 +8,12 @@ import com.aiforum.domain.budget.DepthBudget
 import com.aiforum.dto.AttachmentView
 import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
+import com.aiforum.dto.QuoteSpec
 import com.aiforum.dto.ReplyView
 import com.aiforum.dto.ScopeMode
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
+import com.aiforum.repo.QuoteRepository
 import com.aiforum.service.AttachmentService
 import com.aiforum.service.GenerationService
 import org.springframework.http.MediaType
@@ -25,6 +27,8 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
 import org.springframework.web.multipart.MultipartFile
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import tools.jackson.core.type.TypeReference
+import tools.jackson.databind.ObjectMapper
 import java.util.UUID
 
 /** Request body for POST /threads/{id}/generate. */
@@ -45,6 +49,11 @@ data class GenerateRequest(
     // node before fanning out, so it appears in the tree AND seeds every summoned persona's context. A
     // bare API summon leaves it false — the personas just weigh in on the existing discussion.
     val postAsOwner: Boolean = false,
+    // Pending quotes captured by the composer: a JSON array of {targetId, text} (see comment-quotes.md).
+    // One field carries them over both the browser form path and the JSON API, avoiding fragile nested
+    // list binding. Recorded as quote edges (this reply -> each target) once the owner node exists; a
+    // malformed / blank payload records nothing (never a 400). Null/absent for a reply with no quotes.
+    val quotesJson: String? = null,
 )
 
 /**
@@ -62,6 +71,9 @@ class GenerationController(
     // Regenerate/revision-nav re-render the node WITH its nested replies intact (a persona reply can have
     // children), so they go through the subtree assembler like the edit path — not the leaf renderNode.
     private val replyTree: ReplyTreeAssembler,
+    // Quote edges from the composer's quotesJson are recorded against the freshly-posted owner node.
+    private val quotes: QuoteRepository,
+    private val objectMapper: ObjectMapper,
 ) {
 
     // Two handlers, one body type each: the browser composer posts application/x-www-form-urlencoded
@@ -93,6 +105,7 @@ class GenerationController(
         // No image → behave exactly like the urlencoded composer submit (owner message + summon).
         if (uploads.isEmpty()) return respond(threadId, req, model)
         val ownerNode = postOwnerNode(threadId, req.parentId, req.text)
+        recordQuotes(threadId, ownerNode.id, parseQuotes(req.quotesJson))
         val attViews = attachments.attachToComment(ownerNode.id, uploads).map(AttachmentView::of)
         // Summon under the freshly-posted owner node. An empty selection (the owner deselected Anyone)
         // just posts the image as a note — nothing to summon — rather than erroring.
@@ -120,10 +133,10 @@ class GenerationController(
         val routingScope = req.routingScope?.let { runCatching { ScopeMode.valueOf(it) }.getOrNull() } ?: ScopeMode.WHOLE_THREAD
         // Async (§4): start drafting and return the DRAFTING node(s) at once. Each node self-polls
         // GET /replies/{id} and carries a Cancel control; it settles to POSTED|FAILED|CANCELLED later.
-        model.addAttribute(
-            "replies",
-            generation.startGeneration(threadId, req.parentId, req.personaIds, req.text, scope, req.includeSiblings, req.postAsOwner, routingScope),
-        )
+        val replies = generation.startGeneration(threadId, req.parentId, req.personaIds, req.text, scope, req.includeSiblings, req.postAsOwner, routingScope)
+        model.addAttribute("replies", replies)
+        // Record any quotes the composer carried against the owner's freshly-posted node (its root view).
+        recordQuotes(threadId, ownerNodeIdFrom(replies), parseQuotes(req.quotesJson))
         // Hand the fragment what its composers need so freshly-rendered nodes can be replied to.
         model.addAttribute("threadId", threadId)
         model.addAttribute("personas", personaViews())
@@ -201,6 +214,7 @@ class GenerationController(
         @PathVariable threadId: String,
         @RequestParam(required = false) text: String?,
         @RequestParam(required = false) parentId: String?,
+        @RequestParam(required = false) quotesJson: String?,
         model: Model,
     ): String {
         if (text.isNullOrBlank()) {
@@ -208,6 +222,7 @@ class GenerationController(
             return "fragments/replyList"
         }
         val node = postOwnerNode(threadId, parentId, text)
+        recordQuotes(threadId, node.id, parseQuotes(quotesJson))
         model.addAttribute("replies", listOf(node.toReplyView()))
         model.addAttribute("threadId", threadId)
         model.addAttribute("personas", personaViews())
@@ -226,6 +241,7 @@ class GenerationController(
         @PathVariable threadId: String,
         @RequestParam(required = false) text: String?,
         @RequestParam(required = false) parentId: String?,
+        @RequestParam(required = false) quotesJson: String?,
         @RequestParam(name = "images", required = false) images: List<MultipartFile>?,
         model: Model,
     ): String {
@@ -235,6 +251,7 @@ class GenerationController(
             return "fragments/replyList"
         }
         val node = postOwnerNode(threadId, parentId, text.orEmpty())
+        recordQuotes(threadId, node.id, parseQuotes(quotesJson))
         val attViews = if (uploads.isEmpty()) emptyList()
         else attachments.attachToComment(node.id, uploads).map(AttachmentView::of)
         model.addAttribute("replies", listOf(node.toReplyView(attachments = attViews)))
@@ -261,6 +278,40 @@ class GenerationController(
         )
         comments.insert(node)
         return node
+    }
+
+    // The owner's own node is the root of the views the /generate paths return
+    // (owner.toReplyView(children = drafts)); a bare summon returns drafts flat with no owner node. So
+    // the quote source is the first POSTED "owner" root view, or null when there is none.
+    private fun ownerNodeIdFrom(replies: List<ReplyView>): String? =
+        replies.firstOrNull { it.authorId == "owner" && it.state == GenerationState.POSTED }?.id
+
+    /** Parse the composer's quotesJson into specs; a null / malformed payload yields none (never a 400). */
+    private fun parseQuotes(quotesJson: String?): List<QuoteSpec> {
+        if (quotesJson.isNullOrBlank()) return emptyList()
+        return runCatching {
+            objectMapper.readValue(quotesJson, object : TypeReference<List<QuoteSpec>>() {})
+        }.getOrDefault(emptyList())
+    }
+
+    /**
+     * Persist quote edges from the just-posted owner comment [srcCommentId] to each cited comment. Drops
+     * entries with a blank target/text, a self-reference, an unknown target, or a target in another
+     * thread (defensive — a quote is within a thread), and de-dupes identical (target, text) pairs. A
+     * null src (a bare summon posted no owner node) records nothing.
+     */
+    private fun recordQuotes(threadId: String, srcCommentId: String?, specs: List<QuoteSpec>) {
+        if (srcCommentId == null || specs.isEmpty()) return
+        val seen = HashSet<Pair<String, String>>()
+        for (spec in specs) {
+            val targetId = spec.targetId.trim()
+            val text = spec.text.trim()
+            if (targetId.isBlank() || text.isBlank() || targetId == srcCommentId) continue
+            if (!seen.add(targetId to text)) continue
+            val target = comments.findById(targetId) ?: continue
+            if (target.threadId != threadId) continue
+            quotes.insert(threadId, srcCommentId, targetId, text)
+        }
     }
 
     /** Parse a ScopeMode name, defaulting to WHOLE_THREAD for null/unknown (the composer's default). */
@@ -375,9 +426,12 @@ class GenerationController(
     // threadId=null, so no composer/rail wiring — a drafting node has nothing to reply to or index.
     private fun renderNode(model: Model, reply: ReplyView, threadId: String?): String {
         model.addAttribute("reply", reply)
+        // Personas ALWAYS ride along: the monogram hue resolves through the persona's stored colour slot
+        // (AuthorColor), and a poll re-render without the roster fell back to the hashed hue — the
+        // drafting avatar visibly changed colour for a second, then changed back on settle.
+        model.addAttribute("personas", personaViews())
         if (threadId != null) {
             model.addAttribute("threadId", threadId)
-            model.addAttribute("personas", personaViews())
             model.addAttribute("branchIndex", branchIndex.forThread(threadId))
         }
         return "fragments/replyNode"

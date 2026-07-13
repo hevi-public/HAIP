@@ -46,6 +46,22 @@ class HttpClient(private val env: Environment) {
             .exchange { _, res -> capture(res) }
     }
 
+    /**
+     * Like [postForm] but stamps the `HX-Request: true` header htmx sets on every request — so a step can
+     * exercise the htmx-only error path. For these, HtmxErrorAdvice replies with the mapped non-2xx status
+     * + an `HX-Trigger: app:error` header + an EMPTY body (toast-only, nothing to swap); a non-htmx request
+     * is rethrown to Boot's default handling (Whitelabel at the real status). Mirrors the single header the
+     * advice branches on; nothing else about the call changes.
+     */
+    fun postFormHtmx(path: String, form: Map<String, Any?>): ResponseEntity<String> {
+        val map = LinkedMultiValueMap<String, String>()
+        form.forEach { (k, v) -> if (v != null) map.add(k, v.toString()) }
+        return client.post().uri(url(path))
+            .header("HX-Request", "true")
+            .contentType(MediaType.APPLICATION_FORM_URLENCODED).body(map)
+            .exchange { _, res -> capture(res) }
+    }
+
     fun post(path: String): ResponseEntity<String> =
         client.post().uri(url(path)).exchange { _, res -> capture(res) }
 
@@ -70,6 +86,8 @@ class HttpClient(private val env: Environment) {
             .exchange { _, res -> capture(res) }
     }
 
+    // Preserve the response headers too, not just status + body: T1.4 asserts on the HX-Trigger header
+    // the htmx error advice emits. Existing callers only read status/body, so this is backward-compatible.
     private fun capture(res: RestClient.RequestHeadersSpec.ConvertibleClientHttpResponse): ResponseEntity<String> =
-        ResponseEntity.status(res.statusCode).body(res.bodyTo(String::class.java) ?: "")
+        ResponseEntity.status(res.statusCode).headers(res.headers).body(res.bodyTo(String::class.java) ?: "")
 }

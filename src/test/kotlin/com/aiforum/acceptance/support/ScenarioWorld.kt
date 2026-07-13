@@ -15,6 +15,10 @@ class ScenarioWorld {
     var lastBody: String? = null
     var composerTargetId: String? = null
 
+    /** The HX-Trigger response header on the last response, if any — the htmx error advice's
+     *  out-of-band failure signal (T1.4). Null when the response carried no such header. */
+    var lastHxTrigger: String? = null
+
     /** The raw fragment a /generate POST returned (the htmx-swap payload), before any settle polling —
      *  so a scenario can assert on the swap structure the browser actually receives. */
     var lastFragment: String? = null

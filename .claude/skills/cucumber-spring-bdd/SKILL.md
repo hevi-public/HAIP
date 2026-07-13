@@ -1,11 +1,12 @@
 ---
 name: cucumber-spring-bdd
-description: Wiring Cucumber-JVM HTTP-level acceptance tests into a Spring Boot + Kotlin app for the AI Forum project. Use this whenever adding or fixing acceptance tests — the JUnit Platform Suite runner, the single @CucumberContextConfiguration + @SpringBootTest(RANDOM_PORT) class, step-definition layout and Spring bean injection, per-scenario state via @ScenarioScope, @Before/@After reset hooks, custom @ParameterType, TestRestTemplate usage, or programming the LlmClient test double. Reach for it before touching anything under src/test/.../acceptance or any .feature wiring, so the suite boots one context and scenarios stay isolated.
+description: Wiring Cucumber-JVM HTTP-level acceptance tests into a Spring Boot + Kotlin app for the AI Forum project. Use this whenever adding or fixing acceptance tests — the JUnit Platform Suite runner, the single @CucumberContextConfiguration + @SpringBootTest(RANDOM_PORT) class, step-definition layout and Spring bean injection, per-scenario state via @ScenarioScope, @Before/@After reset hooks, custom @ParameterType, the HttpClient support wrapper, or programming the scriptable IO-port doubles. Reach for it before touching anything under src/test/.../acceptance or any .feature wiring, so the suite boots one context and scenarios stay isolated.
 ---
 
 # Cucumber-JVM + Spring Boot (HTTP-level) for AI Forum
 
-Acceptance tests drive the app over HTTP — `@SpringBootTest(RANDOM_PORT)` + `TestRestTemplate`, no
+Acceptance tests drive the app over HTTP — `@SpringBootTest(RANDOM_PORT)` + the `HttpClient` support
+wrapper over the production `RestClient` (Spring Boot 4 removed `TestRestTemplate`), no
 browser, no DOM. Step definitions speak HTTP and assert on status, response bodies/DTOs, and stable
 `data-*` semantic hooks in rendered HTML. Keeping Gherkin DOM-agnostic means the same `.feature`
 files can later be re-pointed at a Playwright step layer for SPA E2E without rewriting scenarios.
@@ -18,7 +19,7 @@ skill is the concrete wiring.
 JUnit and the suite engine come managed by the Spring Boot BOM; pin only Cucumber.
 
 ```kotlin
-testImplementation("org.springframework.boot:spring-boot-starter-test") // TestRestTemplate, JUnit 6
+testImplementation("org.springframework.boot:spring-boot-starter-test") // assertions, JUnit 6 (no TestRestTemplate in SB 4)
 testImplementation("org.junit.platform:junit-platform-suite")           // version via SB 4.1 BOM
 testImplementation("io.cucumber:cucumber-java:7.34.3")
 testImplementation("io.cucumber:cucumber-spring:7.34.3")
@@ -122,8 +123,9 @@ old `com.fasterxml.jackson.module:jackson-module-kotlin` is the Jackson 2 module
 under Spring Boot 4. Without the right module, an omitted non-null `Boolean` field 400s with "Cannot
 map null into type boolean" (the symptom that reveals the wrong/missing module).
 
-Inject `TestRestTemplate` directly (it's auto-configured under `@SpringBootTest(RANDOM_PORT)`). Wrap
-raw HTTP calls in a small `support/HttpClient.kt` so a future Playwright swap touches one file.
+Wrap raw HTTP calls in the small `support/HttpClient.kt` (a `RestClient` wrapper that reads the
+random port lazily) so a future Playwright swap touches one file — never inject a raw HTTP client
+into step classes directly.
 
 ## Per-scenario state: @ScenarioScope, never step fields
 
@@ -176,7 +178,10 @@ actual datasource + recursive-CTE wiring — see [[sqlite-spring-jdbc]].
 
 ## The Tier-1 LlmClient seam and its test double
 
-The single IO seam for generation. The production impl wraps `claude -p` via `ProcessBuilder`; under
+The IO port for generation — one of **four** sibling ports faked the same way in
+`acceptance/config/TestBeans.kt` (`ScriptableLlmClient`, `ScriptableImageDescriber`,
+`ScriptableShortcutClient`, `ScriptableGitHubClient`; see [[bdd-tiered-testing]] for the port
+doctrine). The production impl wraps `claude -p` via `ProcessBuilder`; under
 `test` a `@Primary` scriptable fake stands in. The fake does two jobs: return scripted
 output/failures, and **spy** on what it received (used to prove the `+1` firewall — the owner's vote
 and identity must be absent from the `PromptContext`).
@@ -288,6 +293,54 @@ Scenario: Under the test profile the app uses the test DB and disables backups
 
 Assert these via a read-only diagnostics endpoint exposed only under `test`, or by injecting the
 config beans into the step class.
+
+## The htmx failure-path scenario (assert a non-2xx + trigger, no swapped body)
+
+The honest-failure UX (T1.4 — see [[jte-spring-kotlin]]) is **toast-only**: an **uncaught exception on
+an htmx request** must yield a mapped non-2xx response with an **empty body** and an `HX-Trigger`
+`app:error` signal — *not* a swapped fragment and *not* Boot's Whitelabel page. (An earlier design
+returned a 200 + fragment; that was removed. There is no error fragment and no `data-error-fragment`
+hook any more.) The acceptance wiring has three moving parts, all reusing existing seams:
+
+- **Stamp the `HX-Request` header.** htmx sets `HX-Request: true` on every call, and `HtmxErrorAdvice`
+  branches on exactly that header. So `support/HttpClient` grows a `postFormHtmx(path, form)` —
+  identical to `postForm` but adding `.header("HX-Request", "true")` — and the same endpoint is hit with
+  plain `postForm` to exercise the non-htmx branch. One header is the whole difference between the two
+  paths; keep the helper that thin so a future Playwright swap touches one file.
+- **Program the failure at the LLM port — no mock above the port line.** The surface is the persona
+  prompt-compose **preview** (`POST /personas/compose`), whose synchronous `llm.generate` is unguarded
+  by design, so an enqueued failure escapes uncaught to the `@ControllerAdvice`. Reuse the existing
+  `Given the LLM will fail with a {failureMode}` step (`ScriptableLlmClient`) — the htmx steps only
+  drive the request and assert the response; they enqueue nothing new.
+- **Assert the mapped non-2xx + empty body + the `HX-Trigger` signal.** The scenarios check three
+  things:
+  - "the response status is `<code>`" → the **mapped non-2xx** itself (process error → 502, rate-limit →
+    503; also Timeout → 504, other → 500). The non-2xx is load-bearing: htmx 2.0.6 discards a non-2xx
+    body without swapping, so returning it guarantees nothing lands in the compose `<textarea>` (see
+    [[jte-spring-kotlin]]).
+  - "the response has no error fragment body" → the body is **blank** (`body.isBlank()`) and carries no
+    `data-error-fragment` hook (the `Html` probe finds none) — proving the toast-only redesign dropped
+    the fragment and there's nothing to swap.
+  - "the response carries an htmx error trigger with status `<code>`" → read `HX-Trigger` off the
+    response headers (`resp.headers.getFirst("HX-Trigger")`) and assert it contains `app:error` and
+    `"status":<code>`. The status distinction (503 vs 502) lives in *both* the HTTP status line and the
+    trigger payload now.
+  - The non-htmx scenario asserts there's **no `HX-Trigger`** header (Boot's default Whitelabel page
+    renders at its real error status — unchanged).
+
+Two gotchas worth pinning here (both dictate how the advice is shaped):
+
+> **`@RequestHeader` does NOT bind as an `@ExceptionHandler` argument.** Spring's argument resolution
+> for exception handlers is narrower than for normal controller methods — `@RequestHeader` isn't among
+> the supported parameters, so a handler that declares `@RequestHeader("HX-Request") hx: String?` won't
+> populate it. Read the header off the injected **`HttpServletRequest`** instead
+> (`request.getHeader("HX-Request")`), which *is* a supported `@ExceptionHandler` arg.
+
+> **`HX-Trigger` header values must be ASCII (ISO-8859-1).** HTTP header values are Latin-1, and the
+> owner-facing copy has non-Latin1 punctuation (em dashes) Tomcat strips as invalid. So the
+> `{"app:error":{"status":<code>}}` payload carries **only the numeric status** — never the human
+> message; the client words the toast from that status. Keep human prose out of HTTP headers; signal
+> with an ASCII code and word it client-side.
 
 ## Common failure points
 

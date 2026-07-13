@@ -1,6 +1,6 @@
 ---
 name: jte-spring-kotlin
-description: Server-side rendering with JTE templates in the AI Forum Spring Boot + Kotlin app — the gg.jte Gradle plugin and precompile config, jte-spring-boot-starter-3 wiring, .kte Kotlin templates taking typed DTO params, calling sub-template fragments, and the stable data-* semantic-hook convention the acceptance tests assert against. Use this whenever creating or editing .kte templates, wiring a controller to a view, configuring JTE in build.gradle.kts, or debugging a template/DTO mismatch. Reach for it before touching anything under src/main/jte so templates compile at build time and stay assertable.
+description: Server-side rendering with JTE templates in the AI Forum Spring Boot + Kotlin app — the gg.jte Gradle plugin and precompile config, jte-spring-boot-starter-4 wiring, .kte Kotlin templates taking typed DTO params, calling sub-template fragments, and the stable data-* semantic-hook convention the acceptance tests assert against. Use this whenever creating or editing .kte templates, wiring a controller to a view, configuring JTE in build.gradle.kts, or debugging a template/DTO mismatch. Reach for it before touching anything under src/main/jte so templates compile at build time and stay assertable.
 ---
 
 # JTE + Spring Boot + Kotlin (SSR) for AI Forum
@@ -180,6 +180,64 @@ A fragment whose composer must keep working *after* a swap needs whatever its co
 those through `fragments/replyList` → `fragments/replyNode` as **nullable-default** params so a render
 path that lacks them (e.g. retry) still compiles and just omits the composer.
 
+**Failed htmx requests are a TOAST, NOT a rendered view (no error fragment).** Worth calling out *here*
+precisely because the intuitive fix — render a small error `.kte` and let htmx swap it in — is wrong on
+this stack, so don't reach for one. An *uncaught* exception on an htmx request must not return Boot's
+Whitelabel error **page** (htmx would swap a whole `<html>` into the request's target — e.g. the compose
+`<textarea>` — and corrupt the view). The shipped fix (`web/HtmxErrorAdvice`, a `@ControllerAdvice`)
+returns **no body at all**: a `ResponseEntity<Void>` with the **mapped non-2xx status** (RateLimited →
+503, Timeout → 504, other `LlmException` → 502, else 500) plus an `HX-Trigger: {"app:error":{"status":<code>}}`
+header. The client raises a toast off that event. **There is no `errorNotice.kte`, no
+`data-error-fragment`/`data-error-status` hook — that whole fragment design was removed.**
+
+Why a non-2xx + empty body rather than a swapped fragment (all verified against the vendored htmx 2.0.6
+`dist/htmx.js`):
+
+- htmx's default `responseHandling` maps `[45]..` to `{ swap: false, error: true }`, so on a non-2xx the
+  body is **fetched then discarded — htmx swaps nothing**. Returning the *real* error status is
+  therefore exactly what guarantees nothing lands in the compose field. (This is the inverse of the
+  intuition that you must return 200 to make htmx render something — here you *want* it to render
+  nothing.)
+- `HX-Trigger` is processed at the **top** of `handleAjaxResponse`, before the swap/error branches, so
+  the `app:error` event fires regardless of the non-2xx status. The failure travels out-of-band on that
+  header, not in a body.
+- htmx already re-enables `hx-disabled-elt` controls and clears `hx-indicator` spinners on every
+  terminal request path, so there's no stuck control to fix. The only gap it leaves is user-visible
+  failure feedback — which the toast supplies.
+
+> **`HX-Trigger` header values must be ASCII (ISO-8859-1).** HTTP header values are Latin-1, and the
+> owner-facing copy contains non-Latin1 punctuation (em dashes) Tomcat strips as invalid. So the header
+> payload carries **only the numeric status** — never the human message. The client words the toast from
+> that ASCII/numeric signal. General rule: keep human prose out of HTTP headers; signal with an ASCII
+> code and word it client-side.
+
+The toast itself lives entirely in **static JS, not a template**: `static/htmx-error-core.mjs` is a pure
+decision + persistence layer (toast wording + a sticky toast STORE — add/dismiss/list with a cap and
+consecutive-duplicate de-dupe, over an *injectable* storage so it's jsTest-unit-testable), and
+`static/htmx-error.js` is the DOM glue loaded as an ES module from `layout.kte` — it backs the store
+with `localStorage`, renders **sticky, dismissible (✕)** toasts, and **rehydrates them on page load**.
+It listens for `app:error` (the server signal) and `htmx:sendError` (request never left). The advice
+only fires for `HX-Request` calls; a non-htmx request **rethrows**, so Boot's default page renders at
+its real status and emits **no `HX-Trigger`**. See [[cucumber-spring-bdd]] for the failure-path
+acceptance wiring (mapped **non-2xx** + empty body + the `HX-Trigger` `app:error` assertion).
+
+Persistence is **best-effort and TTL-bounded**, deliberately — it's a single-user PoC, not a durable
+queue:
+
+- **TTL prune.** Each toast carries a `createdAt`; the store drops any toast older than `TOAST_TTL_MS`
+  (24h) **on load and on every write**, so a stale error from days ago never resurfaces and storage
+  can't accumulate forever (the per-`MAX_TOASTS` cap bounds count; the TTL bounds age).
+- **Best-effort writes.** `localStorage.setItem` is wrapped so a failure is swallowed, not thrown — the
+  toast still shows this session, it just may not survive a reload. **Documented limitation:** Safari
+  private mode (`setItem` *always* throws → no cross-load persistence that session) and hard quota
+  exhaustion are **not** handled, on purpose. Acceptable for a single-user PoC; revisit if it bites.
+  (This TTL + best-effort approach *replaced* an earlier in-memory-fallback latch — don't reintroduce
+  one.)
+- **Relative age label.** A pure-core `ageLabel(createdAt, now)` (native `Intl.RelativeTimeFormat`)
+  renders a rehydrated toast as e.g. "Server error · 3 minutes ago" rather than a contextless message,
+  refreshed on a single ~60s tick. `now` is **injected** (the core never calls `Date.now()`), so the
+  label is deterministic under test — the same Tier-0 purity the store and `noticeFor` already keep.
+
 ## Static assets & styling (`static/`, `app.css`)
 
 The visual layer is hand-written CSS + a little vanilla JS served as **static resources** — no build
@@ -243,9 +301,23 @@ $unsafe{expr}                  <%-- raw, only for trusted HTML --%>
 
 Null-safety is Kotlin's: use `?.`, `?:`, and the elvis fallback inside `${}`.
 
+### `$unsafe{}` and untrusted bodies — the two-half firewall
+
+The only untrusted HTML that may reach `$unsafe{}` is `bodyHtml` (and `captionHtml`), and only because
+`MarkdownRenderer` enforces **both** halves of the XSS firewall: `escapeHtml(true)` (raw HTML inert) **and**
+`sanitizeUrls(true)` with a custom `http/https/mailto` allowlist (hostile `javascript:`/`data:` link/image
+destinations emptied). Traps if you touch this:
+
+- `escapeHtml` alone is NOT enough — it never touches link *destinations* (that hole shipped for 3 weeks).
+- commonmark's *default* URL-sanitizer allowlist includes `data:` — keep the custom allowlist, `data:text/html`
+  is script execution.
+- `sanitizeUrls` stamps `rel="nofollow"` on every anchor — tests pinning exact anchor markup must expect it.
+- Never route new untrusted content through `$unsafe{}` directly; render it through `MarkdownRenderer` (or
+  `${}`-escape it). Details: `plan_docs/markdown-rendering.md` §Security; code: `markdown/MarkdownRenderer.kt`.
+
 ## Wiring a controller to a view
 
-With `jte-spring-boot-starter-3`, return the template name (path under `src/main/jte`, no extension)
+With `jte-spring-boot-starter-4`, return the template name (path under `src/main/jte`, no extension)
 and put the DTO on the model under the param name:
 
 ```kotlin

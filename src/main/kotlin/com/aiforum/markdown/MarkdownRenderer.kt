@@ -5,6 +5,7 @@ import org.commonmark.node.FencedCodeBlock
 import org.commonmark.node.Node
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.NodeRenderer
+import org.commonmark.renderer.html.DefaultUrlSanitizer
 import org.commonmark.renderer.html.HtmlNodeRendererContext
 import org.commonmark.renderer.html.HtmlRenderer
 import java.util.concurrent.ConcurrentHashMap
@@ -12,10 +13,15 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Renders a reply/post body (GitHub-flavoured markdown) to trusted HTML for `$unsafe{}` output.
  *
- * SECURITY — bodies are LLM-generated, hence untrusted. [HtmlRenderer.Builder.escapeHtml] is on, so any
- * raw HTML a body contains is rendered inert (shown as text). The only HTML in the output is what
- * commonmark and our own renderers emit, which closes the prompt-injection XSS hole the `$unsafe{}`
- * switch would otherwise open. Tables therefore arrive as GFM markdown pipes, never raw `<table>`.
+ * SECURITY — bodies are LLM-generated, hence untrusted. The firewall behind `$unsafe{}` has two halves:
+ * (1) [HtmlRenderer.Builder.escapeHtml] is on, so any raw HTML a body contains is rendered inert (shown
+ * as text) — the only HTML in the output is what commonmark and our own renderers emit, and tables
+ * therefore arrive as GFM markdown pipes, never raw `<table>`. (2) [HtmlRenderer.Builder.sanitizeUrls]
+ * is on, so link/image *destinations* — which escapeHtml does NOT touch — are checked too: a
+ * `javascript:`/`data:`/`vbscript:` href or src is emptied (the link text still renders, the URL is
+ * gone) and links gain `rel="nofollow"`. Only http/https/mailto and protocol-less (relative) URLs
+ * survive; `data:` is in commonmark's default allowlist but excluded here, since a `data:text/html`
+ * link is script execution the same as `javascript:`.
  *
  * Code blocks: [HighlightedCodeBlockRenderer] hands each fenced block's text + declared language to
  * [CodeHighlighter]. No language, an unknown language, or any highlight failure falls back to a plain
@@ -30,6 +36,8 @@ object MarkdownRenderer {
     private val renderer: HtmlRenderer = HtmlRenderer.builder()
         .extensions(extensions)
         .escapeHtml(true)
+        .sanitizeUrls(true)
+        .urlSanitizer(DefaultUrlSanitizer(listOf("http", "https", "mailto")))
         // Render a single newline as <br> rather than collapsing it to a space: forum replies are chatty
         // and authors expect their line breaks kept (this matches the prior plain-text/pre-wrap feel and
         // how GitHub comments behave). Paragraph breaks (blank line) still become separate <p> blocks.
