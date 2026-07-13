@@ -60,6 +60,7 @@
     article.dataset.streamBound = "1";
 
     var es = new EventSource("/replies/" + id + "/stream");
+    article._streamSource = es; // so htmx cleanup can close it when the 1s poll swaps this node away
 
     es.addEventListener("TEXT_MESSAGE_CONTENT", function (e) {
       var delta = JSON.parse(e.data).delta;
@@ -91,4 +92,14 @@
   // htmx swaps in fresh drafting nodes (a summon's reply list, an async-summon room poll) — attach to them
   // too, mirroring app.js's re-bind on swap.
   document.body.addEventListener("htmx:afterSwap", function (e) { bind(e.target); });
+  // The drafting node self-polls `every 1s` with hx-swap="outerHTML", so htmx discards the whole <article>
+  // (and opens a fresh one) each second. htmx fires htmx:beforeCleanupElement on the element it removes;
+  // close that element's EventSource here. Without this the orphaned stream stays open while attach() binds
+  // a new one to the fresh node, leaking ~1 SSE connection/second until the browser's ~6-per-host HTTP/1.1
+  // pool is exhausted and both the stream and the poll fallback stall. e.target is the element being cleaned
+  // (the event bubbles), and only streaming articles carry _streamSource, so descendant cleanups are no-ops.
+  document.body.addEventListener("htmx:beforeCleanupElement", function (e) {
+    var es = e.target && e.target._streamSource;
+    if (es) { es.close(); e.target._streamSource = null; }
+  });
 })();
