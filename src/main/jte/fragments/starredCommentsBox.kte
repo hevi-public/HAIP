@@ -1,0 +1,27 @@
+@import com.aiforum.web.StarredCommentRow
+@import com.aiforum.web.AuthorLabel
+@param starred: List<StarredCommentRow>
+
+<%-- Starred box: the right-rail cross-thread bookmark feed. Each row links to the comment in its
+     thread and shows the thread title as context. The "See all" link always renders so the owner
+     can navigate to /starred even before anything is starred. data-rail-box / data-starred-comment
+     / data-starred-comments-empty are the stable hooks the acceptance suite asserts on. --%>
+<section class="rail-box" data-rail-box="starred-comments">
+    <h2 class="rail-box__title">Starred</h2>
+    @if(starred.isEmpty())
+        <p class="rail-box__empty" data-starred-comments-empty="true">No starred comments yet.</p>
+    @else
+        <ul class="recent-comments">
+            @for(item in starred)
+                <li class="recent-comments__row">
+                    <a class="recent-comments__quote" href="/threads/${item.threadId}#reply-${item.id}"
+                       data-starred-comment="${item.id}">“${item.snippet}”</a>
+                    <div class="recent-comments__meta">${item.threadTitle} · ${AuthorLabel.display(item.author)}</div>
+                </li>
+            @endfor
+        </ul>
+    @endif
+    <%-- .rail-box__more so this matches the Shortcut box's "View all ▸" treatment (it had a class with
+         no rules behind it and rendered as a bare default link). --%>
+    <a class="rail-box__more" href="/starred">See all starred ▸</a>
+</section>

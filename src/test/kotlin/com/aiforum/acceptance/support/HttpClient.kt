@@ -2,6 +2,7 @@ package com.aiforum.acceptance.support
 
 import org.springframework.context.annotation.Profile
 import org.springframework.core.env.Environment
+import org.springframework.core.io.ByteArrayResource
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Component
@@ -45,9 +46,48 @@ class HttpClient(private val env: Environment) {
             .exchange { _, res -> capture(res) }
     }
 
+    /**
+     * Like [postForm] but stamps the `HX-Request: true` header htmx sets on every request — so a step can
+     * exercise the htmx-only error path. For these, HtmxErrorAdvice replies with the mapped non-2xx status
+     * + an `HX-Trigger: app:error` header + an EMPTY body (toast-only, nothing to swap); a non-htmx request
+     * is rethrown to Boot's default handling (Whitelabel at the real status). Mirrors the single header the
+     * advice branches on; nothing else about the call changes.
+     */
+    fun postFormHtmx(path: String, form: Map<String, Any?>): ResponseEntity<String> {
+        val map = LinkedMultiValueMap<String, String>()
+        form.forEach { (k, v) -> if (v != null) map.add(k, v.toString()) }
+        return client.post().uri(url(path))
+            .header("HX-Request", "true")
+            .contentType(MediaType.APPLICATION_FORM_URLENCODED).body(map)
+            .exchange { _, res -> capture(res) }
+    }
+
     fun post(path: String): ResponseEntity<String> =
         client.post().uri(url(path)).exchange { _, res -> capture(res) }
 
+    /**
+     * multipart/form-data POST — text [fields] plus named image [files]. Mirrors the browser's image
+     * upload (the multipart controller handlers). Each file part needs a filename, so we wrap the bytes in
+     * a ByteArrayResource that reports one.
+     */
+    fun postMultipart(
+        path: String,
+        fields: Map<String, String> = emptyMap(),
+        files: Map<String, ByteArray> = emptyMap(),
+    ): ResponseEntity<String> {
+        val map = LinkedMultiValueMap<String, Any>()
+        fields.forEach { (k, v) -> map.add(k, v) }
+        files.forEach { (k, bytes) ->
+            map.add(k, object : ByteArrayResource(bytes) {
+                override fun getFilename() = "$k.png"
+            })
+        }
+        return client.post().uri(url(path)).contentType(MediaType.MULTIPART_FORM_DATA).body(map)
+            .exchange { _, res -> capture(res) }
+    }
+
+    // Preserve the response headers too, not just status + body: T1.4 asserts on the HX-Trigger header
+    // the htmx error advice emits. Existing callers only read status/body, so this is backward-compatible.
     private fun capture(res: RestClient.RequestHeadersSpec.ConvertibleClientHttpResponse): ResponseEntity<String> =
-        ResponseEntity.status(res.statusCode).body(res.bodyTo(String::class.java) ?: "")
+        ResponseEntity.status(res.statusCode).headers(res.headers).body(res.bodyTo(String::class.java) ?: "")
 }

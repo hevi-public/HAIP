@@ -1,0 +1,34 @@
+@param postUrl: String
+@param rowSelector: String
+@param label: String
+@param warning: String
+
+<%-- Shared row-delete control (home thread list + members list). The trash-icon <summary> toggles the
+     <details> open; the confirm panel is a flex SIBLING of the <details> (NOT nested) so it lives in
+     normal flow and is shown/hidden purely by CSS — .row-delete[open] ~ .row-delete__confirm. This
+     avoids the absolutely-positioned-child-of-details browser quirk and the overflow-clipping problem,
+     and lets flex-wrap drop the panel onto its own line. Cancel closes the <details> by resetting its
+     open property; the real POST lives on "Yes, delete", which outerHTML-swaps the whole row away
+     (rowSelector) — the handler returns an empty body, mirroring the removal in the DB. --%>
+<details class="row-delete">
+    <summary class="row-delete__trigger" aria-label="${label}" title="${label}">
+        <svg class="icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            <line x1="10" y1="11" x2="10" y2="17"/>
+            <line x1="14" y1="11" x2="14" y2="17"/>
+        </svg>
+    </summary>
+</details>
+<div class="row-delete__confirm" role="group" aria-label="Confirm delete">
+    <p class="row-delete__warning">${warning}</p>
+    <div class="row-delete__buttons">
+        <button type="button" class="btn btn--danger"
+                hx-post="${postUrl}"
+                hx-target="closest ${rowSelector}"
+                hx-swap="outerHTML">Yes, delete</button>
+        <button type="button" class="btn btn--ghost"
+                onclick="this.closest('${rowSelector}').querySelector('details').open = false">Cancel</button>
+    </div>
+</div>

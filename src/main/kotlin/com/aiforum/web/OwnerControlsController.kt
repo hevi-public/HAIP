@@ -2,8 +2,10 @@ package com.aiforum.web
 
 import com.aiforum.domain.Comment
 import com.aiforum.domain.budget.DepthBudget
+import com.aiforum.dto.BranchIndexEntry
 import com.aiforum.dto.GenerationState
 import com.aiforum.repo.CommentRepository
+import com.aiforum.repo.PersonaRepository
 import com.aiforum.repo.VoteRepository
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -21,13 +23,61 @@ import java.util.UUID
 class OwnerControlsController(
     private val votes: VoteRepository,
     private val comments: CommentRepository,
+    private val personas: PersonaRepository,
+    private val replyTree: ReplyTreeAssembler,
+    private val branchIndex: BranchIndexBuilder,
 ) {
+
+    /**
+     * Edit a posted comment body (§7) — the owner fixing their own wording, or correcting an AI persona's
+     * reply when it misread the context (the corrected text then seeds future summons in this branch). The
+     * inline edit form (a collapsed disclosure on the node) outerHTML-swaps the closest <article> with the
+     * re-rendered node, so we return the WHOLE subtree (replyTree.subtree) — a bare node would drop the
+     * children nested inside this article. Only POSTED nodes are editable and a blank body is rejected; in
+     * either case we re-render the node unchanged so the swap restores it cleanly.
+     */
+    @PostMapping("/replies/{id}/edit")
+    fun edit(
+        @PathVariable id: String,
+        @RequestParam(required = false) text: String?,
+        model: Model,
+    ): String {
+        val comment = comments.findById(id) ?: error("no reply $id")
+        if (comment.state == GenerationState.POSTED && !text.isNullOrBlank()) {
+            comments.editBody(id, text.trim())
+        }
+        val node = replyTree.subtree(id) ?: comment.toReplyView()
+        model.addAttribute("reply", node)
+        model.addAttribute("threadId", comment.threadId)
+        model.addAttribute("personas", personaViews())
+        // An edit can change the node's body (and so its rail snippet) — refresh the branch index as an
+        // out-of-band swap so the rail preview stays in step with the comment.
+        model.addAttribute("branchIndex", branchIndex.forThread(comment.threadId))
+        return "fragments/replyNode"
+    }
+
+    private fun personaViews(): List<PersonaView> =
+        personas.findAll().map { PersonaView(it.id, it.name, it.descriptor, it.slug, colorIndex = it.colorIndex) }
     @PostMapping("/replies/{id}/plus-one")
     fun plusOne(@PathVariable id: String, model: Model): String {
         votes.add(id, voterId = "owner")
         val comment = comments.findById(id) ?: error("no reply $id")
-        model.addAttribute("replies", listOf(comment.toReplyView(voteCount = votes.count(id))))
-        return "fragments/replyList"
+        model.addAttribute("reply", comment.toReplyView(voteCount = votes.count(id)))
+        return "fragments/voteArea"
+    }
+
+    /**
+     * Star / unstar a comment — the owner's navigation bookmark, firewalled from the model like `+1`.
+     * Toggles the persisted flag and re-renders just the star control (its own htmx swap target), so
+     * the button reflects the new state in place. The branch-index rail mirrors the star client-side
+     * (nav.js reads each star area's data-starred), so the rail marker flips without a full reload.
+     */
+    @PostMapping("/replies/{id}/star")
+    fun star(@PathVariable id: String, model: Model): String {
+        comments.toggleStar(id)
+        val comment = comments.findById(id) ?: error("no reply $id")
+        model.addAttribute("reply", comment.toReplyView(voteCount = votes.count(id)))
+        return "fragments/starControl"
     }
 
     /**
@@ -55,6 +105,8 @@ class OwnerControlsController(
         )
         comments.insert(node)
         model.addAttribute("replies", listOf(node.toReplyView()))
+        // The owner reply posts immediately — refresh the rail's branch index as an out-of-band swap.
+        model.addAttribute("branchIndex", branchIndex.forThread(parent.threadId))
         return "fragments/replyList"
     }
 
@@ -81,7 +133,29 @@ class OwnerControlsController(
         )
         comments.insert(directive)
         model.addAttribute("replies", listOf(directive.toReplyView()))
+        // The directive node posts immediately — refresh the rail's branch index as an out-of-band swap.
+        model.addAttribute("branchIndex", branchIndex.forThread(parent.threadId))
         return "fragments/replyList"
+    }
+
+    /**
+     * Delete a comment and its whole subtree (§8 node operations). The browser button outerHTML-swaps the
+     * closest <article> with the response, so the node — and its replies, which render nested inside it —
+     * vanish from the DOM in one swap, mirroring the cascade the repository performs in the DB.
+     *
+     * The response is only the out-of-band branch index: htmx extracts that section to refresh the rail
+     * (the deleted nodes drop out of the TOC), and the now-empty main content is what outerHTML-removes
+     * the <article> — same removal as the old empty body, now with the rail kept in step. We read the
+     * thread id before deleting; a no-op delete of an already-gone node leaves it null, in which case
+     * there is no thread to rebuild and the empty index is harmless (a reload would restore it).
+     */
+    @PostMapping("/replies/{id}/delete")
+    fun delete(@PathVariable id: String, model: Model): String {
+        val threadId = comments.findById(id)?.threadId
+        comments.deleteSubtree(id)
+        model.addAttribute("entries", threadId?.let { branchIndex.forThread(it) } ?: emptyList<BranchIndexEntry>())
+        model.addAttribute("oob", true)
+        return "fragments/branchIndex"
     }
 
     private companion object {

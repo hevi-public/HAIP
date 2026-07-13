@@ -5,7 +5,21 @@
       "name": "haip",
       "runtimeExecutable": "./gradlew",
       "runtimeArgs": ["bootRun"],
-      "port": 8080
+      "port": 8081,
+      "autoPort": false
+    },
+    {
+      "name": "haip-stub",
+      "runtimeExecutable": "./gradlew",
+      "runtimeArgs": ["bootRun", "--args=--spring.profiles.active=dev,stub"],
+      "port": 8081,
+      "autoPort": false
+    },
+    {
+      "name": "haip-8081",
+      "runtimeExecutable": "./gradlew",
+      "runtimeArgs": ["bootRun", "--args=--server.port=8081"],
+      "port": 8081
     }
   ]
 }

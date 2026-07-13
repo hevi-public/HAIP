@@ -1,0 +1,36 @@
+@import com.aiforum.web.AdminAttachmentView
+@param listTitle: String
+@param rows: List<AdminAttachmentView>
+@param capped: Boolean
+@param cap: Int
+
+@template.layout(title = "Admin · " + listTitle + " · AI Forum", activeNav = "admin", content = @`
+    <div class="admin-list" data-admin-list="attachments">
+        <p class="admin-list__back"><a href="/admin">← Admin</a></p>
+        <h1 class="admin-list__title">${listTitle}</h1>
+        @if(rows.isEmpty())
+            <p class="admin-list__empty" data-admin-list-empty="true">No attachments match.</p>
+        @else
+            @if(capped)
+                <p class="admin-list__note">Showing the newest ${cap}.</p>
+            @endif
+            <ul class="admin-list__items admin-list__items--media">
+                @for(row in rows)
+                    <li class="admin-list__item admin-attach" data-admin-attachment="${row.id}">
+                        <a class="admin-attach__thumb" href="/attachments/${row.id}">
+                            <img src="/attachments/${row.id}" alt="${if (row.filename != null) row.filename else row.id}" loading="lazy">
+                        </a>
+                        <div class="admin-attach__meta">
+                            <span class="admin-list__badge">${row.captionState}</span>
+                            <span class="admin-attach__file">${if (row.filename != null) row.filename else row.mimeType}</span>
+                            <span class="admin-list__meta">${row.mimeType} · ${row.byteSize} bytes</span>
+                            @if(row.ownerThreadId != null)
+                                <a class="admin-attach__owner" href="/threads/${row.ownerThreadId}${if (row.ownerCommentId != null) "#reply-" + row.ownerCommentId else ""}">in ${row.ownerThreadTitle}</a>
+                            @endif
+                        </div>
+                    </li>
+                @endfor
+            </ul>
+        @endif
+    </div>
+`)

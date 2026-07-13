@@ -27,6 +27,7 @@ class CommonSteps(
     @Given("a thread {string} exists")
     fun threadExists(title: String) {
         world.threadId = data.insertThread(title)
+        world.threadIds[title] = world.threadId!!
     }
 
     @Given("a persona {string} exists")
@@ -35,14 +36,32 @@ class CommonSteps(
         data.insertPersona(id = name, name = name)
     }
 
+    @Given("a persona {string} skilled in {string} exists")
+    fun personaSkilledExists(name: String, ability: String) {
+        // The structured abilities tag (V10) the "Anyone" dispatcher now reads to match topic -> persona.
+        data.insertPersona(id = name, name = name, abilities = listOf(ability))
+    }
+
     @Given("a posted reply from {string} saying {string}")
     fun postedReply(persona: String, body: String) {
         val id = data.insertComment(world.threadId!!, authorId = persona, body = body)
         world.rememberReply("$persona's reply", id)
     }
 
+    @Given("a posted reply from {string} saying {string} under {string}'s reply")
+    fun postedReplyUnder(persona: String, body: String, parent: String) {
+        val parentId = world.replyIds["$parent's reply"] ?: error("no remembered reply for \"$parent's reply\"")
+        val id = data.insertComment(world.threadId!!, authorId = persona, body = body, parentId = parentId)
+        world.rememberReply("$persona's reply", id)
+    }
+
     @Given("the LLM will respond with {string}")
     fun llmWillRespond(text: String) = llm.enqueue(Behavior.Respond(text))
+
+    // Docstring variant: a reply body spanning multiple lines (e.g. a fenced code block needs real
+    // newlines, which a one-line {string} can't carry).
+    @Given("the LLM will respond with the markdown:")
+    fun llmWillRespondMarkdown(markdown: String) = llm.enqueue(Behavior.Respond(markdown))
 
     @Given("the next save will fail")
     fun nextSaveWillFail() {
@@ -70,6 +89,19 @@ class CommonSteps(
         assertTrue(Html.contains(body(), text), "expected body to contain \"$text\" in:\n${body()}")
     }
 
+    @Then("the reply body does not contain {string}")
+    fun replyBodyDoesNotContain(text: String) {
+        assertFalse(Html.contains(body(), text), "expected body NOT to contain \"$text\" in:\n${body()}")
+    }
+
+    @Then("the reply author is {string}")
+    fun replyAuthor(author: String) {
+        assertTrue(
+            Html.hasAttr(body(), "data-author", author),
+            "expected a reply with data-author=\"$author\" in:\n${body()}",
+        )
+    }
+
     @Then("the reply failureCategory is {string}")
     fun replyFailureCategory(category: String) {
         assertTrue(
@@ -83,6 +115,14 @@ class CommonSteps(
         assertTrue(
             Html.hasAttr(body(), "data-retryable", retryable),
             "expected data-retryable=\"$retryable\" in:\n${body()}",
+        )
+    }
+
+    @Then("the reply reasoning-leak is {string}")
+    fun replyReasoningLeak(leak: String) {
+        assertTrue(
+            Html.hasAttr(body(), "data-reasoning-leak", leak),
+            "expected data-reasoning-leak=\"$leak\" in:\n${body()}",
         )
     }
 

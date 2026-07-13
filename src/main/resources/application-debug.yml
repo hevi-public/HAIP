@@ -1,0 +1,17 @@
+# Debug overlay: verbose LLM diagnostics. Carries no datasource/provider of its own, so run it as an
+# OVERLAY on a base + provider (later profile wins), e.g.
+#
+#   SPRING_PROFILES_ACTIVE=dev,openai,debug ./gradlew bootRun
+#
+# It logs the RAW OpenAI/LM Studio response body so you can see the exact JSON shape — whether a model
+# leaks its chain-of-thought inline in `content` (tagged <think> or bare preamble) or splits it into a
+# dedicated reasoning_content/reasoning field. Off by default; never enable in prod (bodies are verbose
+# and may contain the full prompt echoed back).
+aiforum:
+  llm:
+    openai:
+      log-raw-response: true
+
+logging:
+  level:
+    com.aiforum.llm.OpenAiLlmClient: DEBUG

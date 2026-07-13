@@ -13,3 +13,10 @@ Feature: Composer submit (form-encoded)
     When the owner submits the bottom composer with text "How do we scale?" selecting "sol"
     Then the reply is "posted"
     And the reply body contains "Indexes help here"
+
+  Scenario: The composer offers a one-click /ask shortcut button
+    # Note is the default (the composer posts a silent owner comment), so the footer toggle offers the
+    # OTHER mode — /ask — like /more on a reply: summoning a persona is one click. Both /note and /ask
+    # also live in the slash palette (type "/").
+    When the owner uses the bottom composer
+    Then the composer offers a "/ask" shortcut button

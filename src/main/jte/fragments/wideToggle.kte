@@ -1,0 +1,8 @@
+<%-- In-content full-screen button (plan: collapsible-sidebars). Anchored top-right of the main column
+     on the home + thread pages; flips data-rail-left/right on <html> via layout.js, the same state the
+     header layout group drives, so the two stay in sync. aria-pressed = currently full-width. Pure
+     progressive enhancement — absent JS it's an inert button and both rails stay visible. --%>
+<button type="button" class="wide-toggle" data-toggle-wide aria-pressed="false"
+        title="Toggle full width (hide sidebars)" aria-label="Toggle full width">
+    <span aria-hidden="true">&#x2922;</span>
+</button>

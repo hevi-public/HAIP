@@ -1,0 +1,28 @@
+@import com.aiforum.dto.ReplyView
+@param reply: ReplyView
+
+<%-- Inline edit (§7), a collapsed disclosure like the delete-confirm: opening it reveals a textarea
+     prefilled with the RAW markdown source (reply.body, not the rendered HTML) so the owner edits what
+     they wrote. Save posts to /replies/{id}/edit and outerHTML-swaps the closest <article> with the
+     re-rendered node (whole subtree, so nested replies survive). Cancel just closes the disclosure — no
+     request, the unedited node stays as-is. We reuse the .composer styling (and its auto-grow binding in
+     app.js) but carry NO data-target-id, so the acceptance composer probe never confuses this with a
+     reply composer; data-edit-form is this form's own hook. --%>
+<details class="reply__edit">
+    <summary class="reply__edit-trigger">Edit</summary>
+    <form class="composer composer--inline reply__edit-form" data-edit-form="${reply.id}"
+          hx-post="/replies/${reply.id}/edit"
+          hx-target="closest article"
+          hx-swap="outerHTML"
+          hx-disabled-elt="find button[type='submit']">
+        <div class="composer__editor">
+            <textarea name="text" class="reply__edit-text" data-edit-text>${reply.body}</textarea>
+        </div>
+        <div class="composer__row">
+            <span class="composer__hint">Fix wording or correct the context — saved as the new body.</span>
+            <button type="button" class="btn btn--ghost"
+                    onclick="this.closest('details').open = false">Cancel</button>
+            <button class="btn" type="submit">Save ▸</button>
+        </div>
+    </form>
+</details>

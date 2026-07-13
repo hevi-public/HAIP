@@ -1,0 +1,14 @@
+{
+  "name": "haip-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Front-end JS for the AI Forum (HAIP). Pure ESM, no runtime deps; node:test for unit tests.",
+  "type": "module",
+  "engines": {
+    "node": ">=21"
+  },
+  "scripts": {
+    "test": "node --test \"src/test/js/**/*.test.mjs\"",
+    "test:mcp": "node --test \"mcp/gh-readonly/test/**/*.test.mjs\""
+  }
+}

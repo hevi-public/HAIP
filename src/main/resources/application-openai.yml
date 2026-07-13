@@ -1,0 +1,31 @@
+# Provider overlay: route generation through an OpenAI-compatible HTTP server (e.g. LM Studio serving a
+# local Gemma model) instead of the `claude -p` CLI — for environments with no Claude access.
+#
+# This profile sets ONLY the llm provider switch + model. It carries no datasource, and activating it
+# overrides `spring.profiles.default: dev`, so run it as an OVERLAY on a base profile (later profile wins):
+#
+#   SPRING_PROFILES_ACTIVE=dev,openai ./gradlew bootRun
+#
+# => provider=openai with the datasource/port from dev. The cli-only web-fetch-* keys are harmlessly ignored.
+aiforum:
+  llm:
+    provider: openai
+    # The exact model id the OpenAI-compatible server reports for the loaded model (in LM Studio: the id
+    # shown under Developer → Local Server, or `GET /v1/models`). Per-persona PersonaRef.model overrides it.
+    # Qwen3-arch model (vs Gemma): its reasoning is STRUCTURALLY separable — it wraps thinking in
+    # <think>…</think> (which ReplySanitizer strips cleanly) and honours enable_thinking, so the inline
+    # chain-of-thought Gemma leaked doesn't reach the reply. If LM Studio reports a different id for the
+    # loaded model (e.g. a quant suffix), copy it here verbatim.
+    default-model: "qwen/qwen3.5-9b"
+    openai:
+      base-url: http://localhost:1234/v1
+      api-key: ""
+      # Turn reasoning OFF at generation time (sends chat_template_kwargs.enable_thinking=false). Qwen3
+      # honours this, so personas answer directly — fastest, cleanest, no leak badge. If LM Studio's MLX
+      # engine ignores the flag, Qwen still emits <think> tags and ReplySanitizer strips them (clean body,
+      # an honest "reasoning leak" badge) — so we're covered either way. Flip to false to keep hidden
+      # reasoning quality at the cost of latency.
+      disable-thinking: true
+      # Headroom so that IF thinking still slips through, reasoning + answer fit without truncating to a
+      # FAILED/malformed node before the strip runs. Short conversational replies use far less.
+      max-tokens: 2048

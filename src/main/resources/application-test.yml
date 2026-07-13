@@ -10,3 +10,17 @@ spring:
 aiforum:
   backups:
     enabled: false
+  images:
+    # Image blobs go under build/ (like the test DB), asserted by ProfileGuard so a test run never writes
+    # into the real ~/.haip image store.
+    dir: build/images-test
+  # Shortcut integration ON under test so the acceptance suite can drive the rail box, the /shortcut page,
+  # and inline sc-N links. The real HttpShortcutClient is @Profile("!test"); a @Primary ScriptableShortcutClient
+  # (TestBeans) stands in and never does real IO. It's INACTIVE by default (isActive=false), so the surfaces
+  # stay dark in scenarios that don't opt in; a step flips it on. workspace-slug pins the inline-link host.
+  shortcut:
+    enabled: true
+    workspace-slug: test-workspace
+    default-query: is:started
+    recent-query: "updated:-2w..*"
+    owner-mention-name: owner

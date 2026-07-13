@@ -1,17 +1,88 @@
 @import com.aiforum.web.PersonaView
+@import com.aiforum.dto.Avatar
+@import com.aiforum.persona.Dials
 @param personas: List<PersonaView>
+@param dialKeys: List<String>
+@param dialDefault: Int
 
 @template.layout(title = "Members · AI Forum", activeNav = "members", content = @`
     <div data-page="members">
         <h1 class="home__title">Members</h1>
         <div class="thread-index">
+            @if(personas.isEmpty())
+                <%-- With every persona deleted the card was an empty border; keep the layout, say why. --%>
+                <div data-empty-state="no-members">No members yet — summon one below.</div>
+            @endif
             @for(persona in personas)
                 <div class="member-row" data-persona-id="${persona.id}" data-persona-name="${persona.name}">
-                    <span class="monogram" aria-hidden="true">${persona.name.take(2).uppercase()}</span>
-                    <span class="thread-row__title"><a href="/personas/${persona.id}">${persona.name}</a></span>
+                    <span class="monogram" aria-hidden="true" style="--mono-h: ${Avatar.hueForIndex(persona.colorIndex)}">${persona.name.take(2).uppercase()}</span>
+                    <span class="thread-row__title"><a href="/personas/${persona.slug}">${persona.name}</a></span>
                     <span class="reply__handle">${persona.descriptor}</span>
+                    @template.fragments.rowDelete(postUrl = "/personas/${persona.slug}/delete", rowSelector = ".member-row", label = "Delete persona", warning = "Delete this persona? This can't be undone.")
                 </div>
             @endfor
         </div>
+        <%-- Add a persona: a click-to-reveal composer that mirrors the home page's new-thread card — and
+             like it, sits below the index it adds to. The <summary> is the "Add a member" card; opening
+             the <details> discloses the form (form-urlencoded POST to /personas → PRG redirect onto the
+             new profile). The form lives in the DOM even while collapsed, so it still posts with JS off.
+             The structured inputs — descriptor (free notes), abilities (keyword tags), dials (0–10 axes)
+             — are what the LLM composes the system prompt from on submit. On an empty forum there's
+             nothing to browse, so it starts open. Enter submits (Shift+Enter = newline; app.js,
+             [data-new-persona]). --%>
+        <details class="ask-card" id="new-member" data-add-member open="${personas.isEmpty()}">
+            <summary class="ask-card__summary">
+                <span class="ask-card__title">Add a member</span>
+                <span class="ask-card__lead">Summon a new persona to the forum.</span>
+                <span class="btn btn--block ask-card__cta" data-add-member-cta>+ Add member</span>
+            </summary>
+            <form class="new-persona" data-new-persona data-persona-form method="post" action="/personas">
+                <input class="new-persona__name" type="text" name="name" required
+                       placeholder="Name (e.g. Sol)">
+                <textarea class="new-persona__descriptor" name="descriptor" rows="3"
+                          placeholder="Character notes — voice, expertise, point of view (optional)"></textarea>
+                <input class="new-persona__abilities" type="text" name="abilities"
+                       placeholder="Abilities — comma-separated (e.g. kotlin, systems)">
+                <fieldset class="new-persona__dials" data-dials>
+                    <legend>Dials</legend>
+                    @for(key in dialKeys)
+                        <label class="dial">
+                            <span class="dial__label">${Dials.describe(key)}</span>
+                            <input type="range" name="dial_${key}" min="0" max="10" value="${dialDefault}">
+                        </label>
+                    @endfor
+                </fieldset>
+                <%-- Preview is a paid LLM call, so it's explicit: compose into the textarea (no persist),
+                     tweak, then Save persists exactly what's shown. Blank on submit composes once on the
+                     server (the one-shot path). Changing an input above flags Regenerate + disables Save
+                     until it's re-run (persona-form.js). --%>
+                <textarea id="new-persona-prompt" class="new-persona__prompt" name="systemPrompt" data-prompt-field
+                          placeholder="Composed system prompt appears here — preview, tweak, then save"></textarea>
+                <%-- model picker on the left; the actions group on the right with Regenerate next to Save
+                     so the missing step is obvious. Cancel resets the half-authored form. --%>
+                <div class="new-persona__actions">
+                    <select class="new-persona__model" name="model">
+                        <option value="">default model</option>
+                        <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast)</option>
+                        <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+                        <option value="claude-opus-4-8">Opus 4.8</option>
+                        <option value="claude-fable-5">Fable 5</option>
+                    </select>
+                    <span class="new-persona__buttons">
+                        <button type="reset" class="btn btn--ghost" data-cancel-create>Cancel</button>
+                        <button type="button" class="btn btn--ghost" data-preview-prompt
+                                hx-post="/personas/compose" hx-include="closest form"
+                                hx-target="#new-persona-prompt" hx-swap="innerHTML"
+                                hx-disabled-elt="this" hx-indicator="next .regen-spinner">
+                            Preview / regenerate prompt
+                        </button>
+                        <span class="htmx-indicator regen-spinner" aria-live="polite">
+                            <span class="spinner" aria-hidden="true"></span>Composing…
+                        </span>
+                        <button class="btn" type="submit">Add member ▸</button>
+                    </span>
+                </div>
+            </form>
+        </details>
     </div>
 `)

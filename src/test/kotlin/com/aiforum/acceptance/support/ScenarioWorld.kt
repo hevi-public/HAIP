@@ -15,12 +15,26 @@ class ScenarioWorld {
     var lastBody: String? = null
     var composerTargetId: String? = null
 
+    /** The HX-Trigger response header on the last response, if any — the htmx error advice's
+     *  out-of-band failure signal (T1.4). Null when the response carried no such header. */
+    var lastHxTrigger: String? = null
+
+    /** The raw fragment a /generate POST returned (the htmx-swap payload), before any settle polling —
+     *  so a scenario can assert on the swap structure the browser actually receives. */
+    var lastFragment: String? = null
+
+    /** thread title -> thread id, for steps that act on a thread by its title (e.g. deletion). */
+    val threadIds = mutableMapOf<String, String>()
+
     /** alias (e.g. persona name or "sol's reply") -> reply id, for cross-step references. */
     val replyIds = mutableMapOf<String, String>()
     var lastReplyId: String? = null
 
     /** alias -> integer snapshot (e.g. a branch's descendant count before autonomous growth). */
     val counts = mutableMapOf<String, Int>()
+
+    /** How many personas the most recent seeding run inserted — for the idempotency assertion. */
+    var lastSeedCount: Int? = null
 
     fun rememberReply(alias: String, id: String) {
         replyIds[alias] = id

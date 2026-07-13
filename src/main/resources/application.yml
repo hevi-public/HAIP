@@ -6,6 +6,13 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  servlet:
+    multipart:
+      # Caps for image uploads (the only multipart in the app). max-file-size bounds one image;
+      # max-request-size the whole form (several images + the text fields). aiforum.images.max-bytes
+      # is the in-app guard the ImageStore also enforces after sniffing the bytes.
+      max-file-size: 10MB
+      max-request-size: 40MB
 
 # JTE templates are compiled at build time by the gg.jte.gradle plugin (see the jte-spring-kotlin
 # skill), so at runtime we load the precompiled classes rather than compiling in-process — no
@@ -15,13 +22,195 @@ gg:
     use-precompiled-templates: true
 
 aiforum:
+  # WAL-safe SQLite snapshots (VACUUM INTO) — see com.aiforum.backup.SqliteBackup. Gated on `enabled`
+  # (and the !test profile), so a test run never writes into the real ~/.haip store. `dir` defaults to
+  # ~/.haip/backup (a leading ~ is expanded via SqlitePath, never reaching disk literally); `keep` is the
+  # retention count — older snapshots beyond the newest N are pruned each run.
   backups:
     enabled: true
-  # ProcessLlmClient (dev/prod only; the test profile swaps in a scriptable fake). Defaults shown.
+    dir: ~/.haip/backup
+    keep: 7
+  # Shortcut ticketing integration (https://shortcut.com) — READ-ONLY. Off by default; the forum behaves
+  # exactly as before until you enable it. When on, three surfaces light up: a right-rail "Shortcut" box
+  # (the default-query feed) on the home + thread pages, a browsable /shortcut page with a source switcher
+  # (Search / Recently updated / Owner's stories), and inline linkification of bare `sc-N` story refs in
+  # comment bodies. Only GET endpoints are ever called (Shortcut-Token header), so it can't mutate tickets.
+  # ⚠ SECURITY: the token grants read access to your whole Shortcut workspace — supply it via env, e.g.
+  # api-token: ${SHORTCUT_API_TOKEN:}, never commit a real token.
+  shortcut:
+    enabled: false                                   # master switch; the HttpShortcutClient bean exists only when true
+    api-token: ""                                    # Shortcut-Token header; create at app.shortcut.com/settings/account/api-tokens
+    base-url: https://api.app.shortcut.com/api/v3    # REST API v3 base (override only for tests/mirrors)
+    workspace-slug: ""                               # url slug for building inline sc-N links without an API call
+    default-query: "is:started"                      # the rail box + page "Search" default (Shortcut search syntax)
+    recent-query: "updated:-2w..*"                   # the page's "Recently updated" source
+    owner-mention-name: ""                           # mention name (no @) for the page's "Owner's stories" source
+    box-limit: 5                                     # stories shown in the right-rail box
+    page-limit: 25                                   # stories shown on /shortcut (Shortcut caps a search page at 25)
+  # Image attachments. Bytes live on disk under `dir` (content-addressed); only metadata is in SQLite.
+  # The prod path is the base default (~/.haip/data/images, sibling of the DB); dev/test override it to a
+  # project-local / build dir (see application-{dev,test}.yml). ${user.home} is Spring-resolved, so a
+  # literal `~` never reaches the filesystem.
+  images:
+    dir: ${user.home}/.haip/data/images
+    max-bytes: 10485760        # 10 MiB; the ImageStore rejects anything larger after magic-byte sniffing
+    # Vision captioning (MANUAL — the owner clicks "Describe"). The caption is injected into LLM context
+    # as text; raw bytes never reach generation models (caption-only design). Enabled by default, but it
+    # still needs a vision-capable model SERVING at the base-url below — bring one up (you'll see a clear
+    # error on "Describe" until then). base-url/api-key fall back to the generation OpenAI server, so one
+    # LM Studio can serve both.
+    describe:
+      enabled: true
+    vision:
+      base-url: ${aiforum.llm.openai.base-url:http://localhost:1234/v1}
+      api-key: ${aiforum.llm.openai.api-key:}
+      # The model to caption with. Blank => send no specific model and let the server use its loaded one
+      # (LM Studio does this, same as the generation client). Set a real id for hosted servers.
+      model: ""
+      max-tokens: 512
+      # The instruction sent to the vision model. The caption it returns is injected into LLM context,
+      # used as the image's alt text, AND rendered as markdown (so it can carry a fenced code block).
+      prompt: >-
+        Describe this image factually and concisely for a reader who cannot see it. If it shows code, a
+        terminal, or a config/log file, transcribe it verbatim inside a fenced markdown code block with
+        the correct language tag. Note any other text, diagrams, charts, or UI shown.
+  # Read-only GitHub integration for the /github page (Option A): the backend shells out to the `gh` CLI
+  # via GhCliGitHubClient (repo view + open PRs + open issues) and renders them server-side. OFF by
+  # default — it needs the `gh` binary installed and authenticated (`gh auth login`) on the host. With it
+  # off, /github shows a clear "not configured" state and nothing is ever spawned. This is the HUMAN-facing
+  # path and does NOT use the gh-readonly MCP server (that one is for LLM tool-callers).
+  github:
+    enabled: true              # true => fetch live data from `gh` (needs `gh` installed + `gh auth login`); false => off state
+    repo: "hevi-public/HAIP"   # "OWNER/REPO" pinned so it works regardless of cwd (a git worktree's .git is a
+                               # pointer file, so `gh` repo-inference there is unreliable); blank => infer from cwd
+    command: gh                # the gh binary on PATH
+    list-limit: 10             # max open PRs / issues to list (clamped 1..100)
+    timeout-seconds: 20        # per-`gh`-invocation deadline
+  # Predefined personas seeded into the DB on first startup if they don't already exist (see
+  # PersonaSeeder; skipped under the test profile). A small product team for a Kotlin + Spring Boot +
+  # PostgreSQL backend with an Angular frontend and Playwright UI tests. Skills overlap on purpose so
+  # the room argues productively rather than each persona owning a silo. `model` is blank => the
+  # aiforum.llm.default-model fallback; pin a persona to e.g. "opus" here to give it a heavier brain.
+  seed:
+    personas:
+      - id: Sol
+        name: Sol
+        descriptor: >-
+          A pragmatic backend engineer who lives in Kotlin and Spring Boot. Thinks in terms of the
+          PostgreSQL data model first — schema, indexes, transactions, migrations — and is wary of
+          anything that smells like an N+1 query or a leaky abstraction. Writes JUnit and integration
+          tests as a matter of habit, and will happily debate test strategy with QA. Favours boring,
+          well-understood solutions over clever ones, and asks "what happens under load?" early.
+      - id: Saul
+        name: Saul
+        descriptor: >-
+          A frontend engineer fluent in Angular and TypeScript — components, RxJS streams, change
+          detection, and state management. Cares a lot about accessibility and how the UI actually
+          feels to use, and writes Playwright end-to-end tests for the flows that matter. Pushes back
+          when the backend API shape makes the client awkward, and likes to prototype quickly to see a
+          thing on screen before committing to it.
+      - id: Paul
+        name: Paul
+        descriptor: >-
+          A quality-minded test engineer who owns the Playwright UI suite and the broader testing
+          strategy across the stack, from JUnit on the Kotlin backend to end-to-end coverage in CI.
+          A constructive sceptic: hunts for edge cases, race conditions, and the unhappy paths everyone
+          else forgot. Asks "how would we test that?" and "what breaks when two users do this at once?"
+          before a feature is called done.
+      - id: Mira
+        name: Mira
+        descriptor: >-
+          The product manager. Keeps the room anchored to user value, scope, and trade-offs — turns
+          vague ideas into crisp user stories with acceptance criteria, and is unafraid to cut scope to
+          ship something real. Thinks about the end-to-end user journey and will sketch a rough flow to
+          align everyone. Translates between the engineers and the design intent, and asks "what problem
+          are we actually solving, and for whom?"
+      - id: Dana
+        name: Dana
+        descriptor: >-
+          A product designer focused on UX and interaction design. Owns the design system and advocates
+          relentlessly for the user and for accessibility. Comfortable enough with Angular component
+          structure to discuss how a design maps onto real components with Saul, and partners with Mira
+          on user flows and priorities. Pushes for clarity and consistency, and asks "is this the
+          simplest thing that helps the user get this done?"
+      - id: Ducky
+        name: Ducky McDuckface
+        descriptor: >-
+          The room's rubber duck — a debugging partner whose whole job is to help you think out loud.
+          Doesn't rush to answers or lecture: listens as you explain the problem, then asks the one
+          pointed question that makes the bug obvious to you. Deliberately sparing with words — a short
+          nudge beats a paragraph, and would rather you reach the insight yourself than hand it over.
+          Stays domain-agnostic, poking at assumptions with "what did you expect to happen, and what
+          actually did?" and "have you checked that's really true?" Speaks up with substance only when it
+          genuinely matters.
+      - id: Quackers
+        name: Sir Quacks-a-Lot
+        descriptor: >-
+          The code reviewer. Reads a diff the way others read prose — line by line — asking whether each
+          change is correct, clear, and something the team will still understand in six months. Hunts the
+          bugs that hide in the gaps: off-by-ones, unhandled errors, a race between two requests, a check
+          that's subtly inverted, an edge case the happy path skipped. Cares about naming, small functions,
+          and consistency with the surrounding code as much as raw correctness, and always separates the
+          must-fix blockers from the optional nitpicks so a review doesn't drown in noise. Pulls no punches
+          on a real problem but never rubber-stamps — quotes the specific line and suggests the concrete fix.
+  # LLM backend (dev/prod only; the test profile swaps in a scriptable fake). Defaults shown.
+  # `provider` selects which LlmClient loads: cli => ProcessLlmClient (claude -p), openai =>
+  # OpenAiLlmClient (any OpenAI-compatible HTTP server, e.g. LM Studio), opencode => OpenCodeLlmClient
+  # (the opencode agent CLI), stub => StubLlmClient (canned in-process replies — demos/UI work, no
+  # model). Flip via the `openai`/`stub` OVERLAY profiles (application-openai.yml /
+  # application-stub.yml) run alongside a base profile, e.g. SPRING_PROFILES_ACTIVE=dev,openai. The
+  # command/working-dir/web-fetch-* keys are cli-only; the openai:/opencode: blocks are provider-only;
+  # default-model is shared (the per-provider model fallback).
   llm:
+    provider: cli              # cli (claude -p, default) | openai (OpenAI-compatible HTTP, e.g. LM Studio)
+                               # | opencode (agent CLI) | stub (canned in-process replies; see application-stub.yml)
     command: claude            # the CLI binary on PATH
-    default-model: ""          # fallback model when a persona doesn't pin one (persona-specific models
-                               # are planned); blank => the CLI's default model. e.g. "opus" to pin one.
+    default-model: ""          # fallback model used when a persona doesn't pin its own (persona.model,
+                               # V4); blank => the CLI's default model. e.g. "opus" to pin one fleet-wide.
     working-dir: ""            # blank => system temp, so the project CLAUDE.md doesn't leak into personas
     rate-limit-retry-after-seconds: 300
     poll-millis: 100           # how often the wait loop checks the deadline and cancellation token
+    stream-partial-messages: true   # cli-only: spawn `claude -p` with --include-partial-messages so it
+                                    # streams token deltas (not just whole messages). Off => coarser
+                                    # whole-message streaming, still normalised by ClaudeStreamParser.
+    # Headless `claude -p` can't prompt for tool permission, so WebFetch is denied unless pre-authorised
+    # here (a persona asked to check the web otherwise just reports it can't reach the network). Off by
+    # default; turned on per-profile (dev + prod on — see application-dev.yml / application-prod.yml).
+    # ⚠ SECURITY: enabling this lets personas fetch the open web, and the Docker jail (requirements §12)
+    # that's meant to isolate that from the host is NOT built yet — so today the only mitigation is the
+    # domain allowlist below. Web content is untrusted input (prompt injection). See requirements §12.
+    web-fetch-enabled: false
+    web-fetch-allowed-domains: ""   # blank => any host; else comma-separated allowlist, e.g.
+                                    # "news.ycombinator.com,github.com" → personas can only fetch those
+    # Read-only GitHub TOOLS for personas (Option B, cli-provider only). When on, the spawned `claude -p`
+    # is given the gh-readonly MCP server (--mcp-config + --strict-mcp-config) and its tools are
+    # pre-authorised (mcp__gh-readonly), so a persona can pull a live PR/issue into its reply. Distinct from
+    # the human /github page above — this is the AI path, and it goes THROUGH the MCP server.
+    # ⚠ SECURITY: same prompt-injection risk class as web-fetch (GitHub bodies are untrusted) and the Docker
+    # jail (§12) isn't built; the server is read-only but reads whatever the host `gh` is authed to. Off by default.
+    github-tools-enabled: false
+    github-mcp-config: ""                 # passed to `claude --mcp-config` (file path or inline JSON);
+                                          # e.g. an ABSOLUTE path to this repo's .mcp.json. Blank => inert.
+    github-mcp-server-name: gh-readonly   # must match the server key in that config; authorises mcp__<name>
+    # OpenAiLlmClient (provider: openai only). Talks the OpenAI Chat Completions API over HTTP. The model
+    # name reuses `default-model` above (and per-persona PersonaRef.model) — no separate model key here.
+    openai:
+      base-url: http://localhost:1234/v1   # LM Studio's local server (OpenAI-compatible)
+      api-key: ""              # LM Studio ignores it; set e.g. ${LLM_API_KEY:} for hosted servers that need one
+      temperature: 0.7
+      max-tokens: 1024
+      log-raw-response: false  # DEBUG-log the unparsed HTTP body; the `debug` profile flips it on
+                               # (application-debug.yml) to inspect a model's reasoning shape. Off in prod.
+      disable-thinking: false  # send chat_template_kwargs.enable_thinking=false to turn reasoning off at
+                               # generation time. Only honoured by models with a thinking switch in their
+                               # chat template (Qwen3, vLLM/SGLang); a no-op for Gemma. Off by default.
+    # OpenCodeLlmClient (provider: opencode only). Wraps the `opencode run --format json` agent CLI as a
+    # streaming text backend. opencode has NO inline system prompt, so the persona's system prompt is folded
+    # into the message; the model reuses `default-model` above (and per-persona PersonaRef.model) but MUST be
+    # in opencode's `provider/model` form, e.g. "lmstudio/qwen/qwen3.5-9b" or "anthropic/claude-…". opencode
+    # itself must have that provider configured/authed (its own config); point `working-dir` at a dir holding
+    # an opencode.json when the provider is configured project-locally. ⚠ Heavy: opencode is a full agent
+    # (spins a server per run) — use sparingly.
+    opencode:
+      command: opencode        # the opencode binary on PATH
+      agent: ""                # optional opencode agent (its own prompt/tools); blank => opencode's default

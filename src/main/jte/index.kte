@@ -1,8 +1,27 @@
 @import com.aiforum.web.ThreadRow
+@import com.aiforum.web.PersonaView
+@import com.aiforum.web.ActiveThreadRow
+@import com.aiforum.web.RecentCommentRow
+@import com.aiforum.web.StarredCommentRow
 @param threads: List<ThreadRow>
+@param personas: List<PersonaView>
+@param activeThreads: List<ActiveThreadRow>
+@param recentComments: List<RecentCommentRow>
+@param starredComments: List<StarredCommentRow>
+@param threadCount: Int
+@param personaCount: Int
+@param shortcut: com.aiforum.shortcut.ShortcutResult = com.aiforum.shortcut.ShortcutResult.DISABLED
 
 @template.layout(title = "AI Forum", activeNav = "threads", content = @`
-    <div data-page="home">
+    <div class="home" data-page="home">
+      <%-- Left rail. The front-page side boxes (design left rail); Members is the first occupant. The
+           grid collapses to a single column below the rail breakpoint — see .home:has(.home__rail). --%>
+      <aside class="home__rail" data-home-rail>
+          @template.fragments.forumNavBox(threadCount = threadCount, personaCount = personaCount)
+          @template.fragments.membersBox(personas = personas)
+      </aside>
+      <div class="home__main">
+        @template.fragments.wideToggle()
         <h1 class="home__title">Threads</h1>
         @if(threads.isEmpty())
             <div data-empty-state="no-threads">No threads yet — start one!</div>
@@ -14,9 +33,53 @@
                         @if(thread.unreadCount > 0)
                             <span class="pill">${thread.unreadCount} new</span>
                         @endif
+                        @template.fragments.rowDelete(postUrl = "/threads/${thread.id}/delete", rowSelector = ".thread-row", label = "Delete thread", warning = "Delete this thread and all of its comments? This can't be undone.")
                     </div>
                 @endfor
             </div>
         @endif
+        <%-- Ask the room: a click-to-reveal new-thread composer in the main column (was a right-rail
+             CTA). The <summary> is the design's "Ask the room" card; opening the disclosure reveals
+             the full new-thread form below. Built on <details> so the form still posts with JS off —
+             the form (form-urlencoded POST to /threads → PRG redirect onto the fresh thread, title +
+             optional body = the opening post, §2) is always in the DOM, just visually collapsed.
+             Creating the thread auto-summons the room (a "Whole Topic + Anyone" call, §2), so the fresh
+             thread page shows the room already drafting its replies. Enter submits the form (Shift+Enter
+             = newline; app.js, [data-new-thread]).
+             On an empty forum there's nothing to browse, so it starts open — the form is the one
+             thing a first-time visitor is here to do, no click required. --%>
+        <details class="ask-card" id="new-thread" data-ask-room open="${threads.isEmpty()}">
+            <summary class="ask-card__summary">
+                <span class="ask-card__title">Ask the room</span>
+                <span class="ask-card__lead">Post a question; pick who answers.</span>
+                <span class="btn btn--block ask-card__cta" data-ask-room-cta>+ New thread</span>
+            </summary>
+            <%-- Multipart so the opening post can carry an image (name="images"). The urlencoded + JSON
+                 /threads handlers stay for the acceptance suite / API; the browser posts here. --%>
+            <form class="new-thread" data-new-thread method="post" action="/threads"
+                  enctype="multipart/form-data">
+                <input class="new-thread__title" type="text" name="title" required
+                       placeholder="Title — what's the thread about?">
+                <textarea class="new-thread__body" name="text" rows="3"
+                          placeholder="Body — the details of your post (optional)"></textarea>
+                <label class="new-thread__attach" data-new-thread-attach>
+                    <input type="file" name="images" data-new-thread-images
+                           accept="image/png,image/jpeg,image/gif,image/webp" multiple>
+                    <span>🖼 Attach image (optional)</span>
+                </label>
+                <div class="new-thread__actions">
+                    <button class="btn" type="submit">Create ▸</button>
+                </div>
+            </form>
+        </details>
+      </div>
+      <%-- Right rail. The design's right-hand side boxes; Active threads is the first occupant. Drops
+           below the main column on narrow screens — see .home:has(.home__rail-right). --%>
+      <aside class="home__rail-right" data-home-rail-right>
+          @template.fragments.shortcutBox(shortcut = shortcut)
+          @template.fragments.starredCommentsBox(starred = starredComments)
+          @template.fragments.recentCommentsBox(comments = recentComments)
+          @template.fragments.activeThreadsBox(threads = activeThreads)
+      </aside>
     </div>
 `)

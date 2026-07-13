@@ -1,0 +1,33 @@
+package com.aiforum.dto
+
+/**
+ * A read-only snapshot of forum-wide statistics for the admin dashboard (GET /admin). Assembled by
+ * StatsRepository from plain aggregate queries over the current schema — no new storage, no mutation.
+ *
+ * The well-known comment states and reasoning-leak verdicts are exposed via fixed accessors so the
+ * template can emit stable data-stat hooks even when a bucket has zero rows; the open-ended buckets
+ * (failure categories, caption states) are kept as maps and rendered row-per-entry.
+ */
+data class ForumStats(
+    val threads: Int,
+    val personas: Int,
+    val commentsByState: Map<String, Int>,
+    val failuresByCategory: Map<String, Int>,
+    val personaActivity: List<PersonaActivity>,
+    val votes: Int,
+    val regeneratedComments: Int,
+    val attachments: Int,
+    val attachmentBytes: Long,
+    val captionsByState: Map<String, Int>,
+    val reasoningLeaks: Map<String, Int>,
+) {
+    val commentsTotal: Int get() = commentsByState.values.sum()
+
+    /** POSTED comments authored by each persona/author, highest first. */
+    fun stateCount(state: String): Int = commentsByState[state] ?: 0
+
+    fun leakCount(verdict: String): Int = reasoningLeaks[verdict] ?: 0
+}
+
+/** One row of the per-author POSTED-comment leaderboard. [name] is null for non-persona authors. */
+data class PersonaActivity(val authorId: String, val name: String?, val posted: Int)

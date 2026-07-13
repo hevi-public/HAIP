@@ -32,4 +32,12 @@ class ConfigRailSteps(
     @Then("the active profile is {string}")
     fun activeProfile(profile: String) =
         assertTrue((world.lastBody ?: "").contains("\"$profile\""), "profile $profile not active: ${world.lastBody}")
+
+    @Then("persona web fetch is disabled")
+    fun webFetchDisabled() =
+        assertTrue((world.lastBody ?: "").contains("\"webFetchEnabled\":false"), "web-fetch not disabled: ${world.lastBody}")
+
+    @Then("persona GitHub tools are disabled")
+    fun githubToolsDisabled() =
+        assertTrue((world.lastBody ?: "").contains("\"githubToolsEnabled\":false"), "gh tools not disabled: ${world.lastBody}")
 }

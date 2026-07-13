@@ -9,11 +9,14 @@ services:
     build: .
     environment:
       - DISCOVERY_MODE=${DISCOVERY_MODE:-false}
-    # Explicit stage order so the log reads as a pipeline; lowest tier first.
-    command: ["generateJte", "compileKotlin", "tier0", "tier1", "tier2", "acceptance"]
+    # No command override: the image's CMD is verifyAll, whose shouldRunAfter chain keeps the log
+    # reading as a pipeline (jsTest → mcp gates → tier0 → tier1 → tier2 → acceptance). New gates
+    # wired into verifyAll appear here automatically — no stage list to drift.
     volumes:
       - .:/app
       - gradle-cache:/root/.gradle
+      - npm-cache:/root/.npm
 
 volumes:
   gradle-cache: {}
+  npm-cache: {}

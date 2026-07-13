@@ -1,0 +1,24 @@
+@import com.aiforum.web.RecentCommentRow
+@import com.aiforum.web.AuthorLabel
+@param comments: List<RecentCommentRow>
+
+<%-- Recent comments: the front-page right-rail feed of the newest posted replies across all threads
+     (design "Recent comments"). Each row is a quoted snippet linking to the comment in its thread
+     (#reply-<id> anchor) + author · time. data-rail-box / data-recent-comment are the stable hooks.
+     Empty state keeps the rail from popping before the room has spoken. --%>
+<section class="rail-box" data-rail-box="recent-comments">
+    <h2 class="rail-box__title">Recent comments</h2>
+    @if(comments.isEmpty())
+        <p class="rail-box__empty" data-recent-comments-empty="true">No comments yet.</p>
+    @else
+        <ul class="recent-comments">
+            @for(comment in comments)
+                <li class="recent-comments__row">
+                    <a class="recent-comments__quote" href="/threads/${comment.threadId}#reply-${comment.id}"
+                       data-recent-comment="${comment.id}">“${comment.snippet}”</a>
+                    <div class="recent-comments__meta">${AuthorLabel.display(comment.author)} · ${comment.ago}</div>
+                </li>
+            @endfor
+        </ul>
+    @endif
+</section>

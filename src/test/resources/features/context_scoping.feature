@@ -26,6 +26,9 @@ Feature: Per-branch context scoping
     When the owner replies under "A1" with whole-thread scope
     Then the model context includes node "A1"
     And the model context includes node "B"
+    # The whole tree is in scope, but the reply must still target the node the owner clicked ("A1") —
+    # not whichever line sorts last. This is the marker that stops the "replied to something else" bug.
+    And the model is told to reply to node "A1"
 
   # §5: sibling-inclusion is a selectable toggle, orthogonal to branch-vs-thread. Replying under "A"
   # with branch-only scope normally excludes its sibling "B"; opting siblings in adds "B" while still

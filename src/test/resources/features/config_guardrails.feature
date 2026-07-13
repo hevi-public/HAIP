@@ -7,3 +7,11 @@ Feature: Config guardrails
     Then the active datasource points at the test database
     And backups are disabled
     And the active profile is "test"
+
+  Scenario: The test profile never authorises personas to reach the network
+    # Headless `claude -p` denies WebFetch / MCP tools unless `--allowedTools` pre-authorises them (see
+    # ProcessLlmClient). These rails keep both toggles off under test so CI personas can't hit the network
+    # or the gh-readonly GitHub tools (both fetch untrusted content from the host).
+    When the test diagnostics are read
+    Then persona web fetch is disabled
+    And persona GitHub tools are disabled

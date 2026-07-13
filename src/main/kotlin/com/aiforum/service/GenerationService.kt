@@ -1,8 +1,10 @@
 package com.aiforum.service
 
+import com.aiforum.domain.Attachment
 import com.aiforum.domain.Comment
 import com.aiforum.domain.budget.DepthBudget
 import com.aiforum.domain.context.ContextAssembler
+import com.aiforum.agui.AguiEventSink
 import com.aiforum.domain.lifecycle.GenerationStateMachine
 import com.aiforum.dto.FailureCategory
 import com.aiforum.dto.GenerationState
@@ -12,9 +14,14 @@ import com.aiforum.llm.CancellationToken
 import com.aiforum.llm.LlmClient
 import com.aiforum.llm.LlmRequest
 import com.aiforum.llm.PersonaRef
+import com.aiforum.llm.PromptContext
+import com.aiforum.repo.AttachmentRepository
 import com.aiforum.repo.CommentRepository
 import com.aiforum.repo.PersonaRepository
+import com.aiforum.repo.ThreadRepository
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
 import java.util.UUID
 
@@ -22,47 +29,202 @@ import java.util.UUID
  * Orchestrates generation through the single LlmClient seam (Tier 2 running real Tier-0/1 below it,
  * see the bdd-tiered-testing skill). Sequential fan-out for M1: each persona generates in turn, and
  * one persona failing does not abort the others (partial-roomful).
+ *
+ * The summon path is **async** (§4): [startGeneration] returns DRAFTING nodes immediately and settles
+ * them on a worker thread held by [InFlightGenerations], so a later `POST /replies/{id}/cancel` can trip
+ * the in-flight token. [generate] is the synchronous variant (used by the Tier-2 test); [autoGrow] and
+ * [retry] stay synchronous (M1 cancel targets in-flight summon drafts only).
  */
 @Service
 class GenerationService(
     private val llm: LlmClient,
     private val comments: CommentRepository,
     private val personas: PersonaRepository,
+    // Default keeps the 3-arg Tier-2 construction compiling; Spring injects the real @Component bean
+    // (a single primary constructor means Spring passes all args, so the default is never used in app).
+    private val inFlight: InFlightGenerations = InFlightGenerations(),
+    // The "Anyone" dispatcher (defaulted for the same reason; Spring injects the @Component). Shares the
+    // single LlmClient seam, so routing is just another call through the same boundary the tests fake.
+    private val router: PersonaRouter = PersonaRouter(llm),
+    // The opening post lives on the thread (thread.body), not as a comment, so the context-assembly path
+    // needs to read it to seed the room. Nullable-defaulted so the 3/4-arg Tier-2 constructions (which
+    // don't exercise OP context) keep compiling; Spring injects the real bean.
+    private val threads: ThreadRepository? = null,
+    // Image attachments fold their captions into context (caption-only path). Nullable-defaulted for the
+    // same reason as [threads]; when null no captions are injected (the existing text-only behaviour).
+    private val attachments: AttachmentRepository? = null,
 ) {
     private val timeout = Duration.ofSeconds(120)
+    private val log = LoggerFactory.getLogger(GenerationService::class.java)
 
-    private companion object {
+    companion object {
+        // Sentinel the composer's default "Anyone" option submits instead of a persona id: it hands the
+        // pick to the AI dispatcher ([PersonaRouter]) rather than naming who replies. An explicit
+        // persona selection never carries it, so the routing call only happens on the "Anyone" path.
+        // Public so the auto-summon-on-create path (ThreadController) names the same "Anyone" sentinel.
+        const val AUTO_PERSONA = "auto"
+
         // Runaway backstop for autoGrow; real growth always drains in ≤ DepthBudget.DEFAULT_GRANT rounds.
-        const val GROWTH_ROUND_CAP = 100
+        private const val GROWTH_ROUND_CAP = 100
+        // The author id under which the owner's own composer messages are persisted (matches the seeded
+        // "owner" nodes the firewall/context scenarios use).
+        private const val OWNER_AUTHOR = "owner"
     }
 
+    /** A resolved unit of work: one persona's reply, with its id minted up front so it is cancellable. */
+    private data class GenPlan(
+        val id: String,
+        val threadId: String,
+        val parentId: String?,
+        val persona: PersonaRepository.Persona,
+        val depth: Int,
+        val budget: Int,
+        // Context is assembled LAZILY at settle time, not when the plan is minted. Sequential fan-out
+        // persists each persona's reply before the next settles, so re-reading the thread here lets a
+        // later persona in the round see the earlier ones' replies (see [roundContext]) — the room reads
+        // as a conversation rather than N blind takes of the same opening snapshot.
+        val contextOf: () -> PromptContext,
+    )
+
+    /**
+     * Async summon/fan-out (§4): register a DRAFTING node + token per persona, hand the room to a single
+     * worker that settles each persona IN ORDER (preserving sequential fan-out and the deque-scripted
+     * behaviours), and return the DRAFTING views immediately so the browser can render them and offer a
+     * Cancel control. Each node settles to exactly one DB row; until then it lives only in [inFlight].
+     */
+    fun startGeneration(
+        threadId: String,
+        parentId: String?,
+        personaIds: List<String>,
+        text: String,
+        scope: ScopeMode = ScopeMode.WHOLE_THREAD,
+        includeSiblings: Boolean = false,
+        postAsOwner: Boolean = false,
+        routingScope: ScopeMode = ScopeMode.WHOLE_THREAD,
+    ): List<ReplyView> {
+        // The composer authors the owner's message: persist it as the owner's node first, then summon
+        // BENEATH it, so the personas reply to it and it flows into their context (§4/§5).
+        val owner = ownerComment(threadId, parentId, text, postAsOwner)
+        val anchorId = owner?.id ?: parentId
+        // Resolve AFTER persisting the owner's message so the dispatcher routes on the new topic too.
+        val resolvedIds = resolvePersonas(threadId, anchorId, routingScope, personaIds, text)
+        val started = planGeneration(threadId, anchorId, resolvedIds, scope, includeSiblings).map { plan ->
+            val draft = draftView(plan)
+            val token = inFlight.register(plan.id, plan.threadId, draft)
+            Triple(plan, token, draft)
+        }
+        inFlight.submit {
+            started.forEach { (plan, token, _) ->
+                try {
+                    settleOne(plan, token)
+                } finally {
+                    inFlight.markDone(plan.id)
+                }
+            }
+        }
+        // Return the owner's freshly-posted node with the DRAFTING persona node(s) NESTED inside it, so
+        // the htmx swap appends a subtree that mirrors the tree: each reply sits under the owner message
+        // it answers, not as a flat sibling. A bare summon (no owner node) returns the drafts flat.
+        val drafts = started.map { it.third }
+        return owner?.let { listOf(it.toReplyView(children = drafts)) } ?: drafts
+    }
+
+    /**
+     * Fully-async summon (§4): unlike [startGeneration], the dispatcher's routing call ALSO runs on the
+     * worker, so the request thread never blocks on the LLM and the create page can render/redirect at
+     * once. The thread is marked "summoning" until routing finishes and the per-persona drafts are
+     * registered, then each settles. Used by the create path (ThreadController): the room is summoned
+     * "Whole Topic + Anyone" and the thread page polls /threads/{id}/room, swapping the drafts in as they
+     * appear. Returns nothing — there are no synchronously-known drafts to hand back.
+     *
+     * Without this, [resolvePersonas] (the "Anyone" dispatcher's LLM call) ran on the request thread, so
+     * a slow model left the new-thread page blank until it answered — the one place the otherwise-async
+     * summon path wasn't actually async.
+     */
+    fun summonAsync(
+        threadId: String,
+        parentId: String?,
+        personaIds: List<String>,
+        text: String,
+        scope: ScopeMode = ScopeMode.WHOLE_THREAD,
+        includeSiblings: Boolean = false,
+        postAsOwner: Boolean = false,
+        routingScope: ScopeMode = ScopeMode.WHOLE_THREAD,
+    ) {
+        inFlight.beginSummon(threadId)
+        inFlight.submit {
+            val started = try {
+                val owner = ownerComment(threadId, parentId, text, postAsOwner)
+                val anchorId = owner?.id ?: parentId
+                val resolvedIds = resolvePersonas(threadId, anchorId, routingScope, personaIds, text)
+                planGeneration(threadId, anchorId, resolvedIds, scope, includeSiblings).map { plan ->
+                    plan to inFlight.register(plan.id, plan.threadId, draftView(plan))
+                }
+            } catch (_: Throwable) {
+                // Routing/planning failed before any draft was registered — nothing to settle; the page's
+                // poller drops once `summoning` clears in the finally below.
+                emptyList()
+            } finally {
+                // Routing phase over: the drafts (if any) are now visible to the room poller, so it stops
+                // showing "summoning" and swaps them in.
+                inFlight.endSummon(threadId)
+            }
+            started.forEach { (plan, token) ->
+                try {
+                    settleOne(plan, token)
+                } finally {
+                    inFlight.markDone(plan.id)
+                }
+            }
+        }
+    }
+
+    /** Trip the in-flight token for [replyId] and wait (bounded) for the worker to settle it (§4). */
+    fun cancel(replyId: String) = inFlight.cancel(replyId)
+
+    /**
+     * Subscribe to a drafting node's AG-UI event stream (the SSE endpoint). Returns null when the node
+     * isn't in flight (unknown or already settled) — the caller then falls back to the poll, since the
+     * settled row exists. Delegates to [InFlightGenerations]; the service owns the in-flight registry.
+     */
+    fun subscribeEvents(replyId: String, listener: com.aiforum.agui.AguiEventListener) =
+        inFlight.subscribe(replyId, listener)
+
+    /** The transient DRAFTING view while a node is still in flight — the poll endpoint's DB-first fallback. */
+    fun inFlightView(replyId: String): ReplyView? = inFlight.view(replyId)
+
+    /**
+     * The DRAFTING nodes still in flight for [threadId] — surfaced on the thread page so an async summon's
+     * replies appear (and self-poll to settle) on a plain page load, before any row exists. Used by the
+     * auto-summon-on-create path, where the room is summoned and the browser then lands on the thread via
+     * a PRG redirect with no fragment to carry the drafts.
+     */
+    fun inFlightViews(threadId: String): List<ReplyView> = inFlight.viewsFor(threadId)
+
+    /** True while a create-time summon's dispatcher routing is still in flight (no drafts registered yet). */
+    fun isSummoning(threadId: String): Boolean = inFlight.isSummoning(threadId)
+
+    /**
+     * Synchronous summon/fan-out: settle every persona inline and return the settled views. Kept for the
+     * Tier-2 service test, which pins the couldn't-save path on the same persist logic [startGeneration]
+     * uses.
+     */
     fun generate(
         threadId: String,
         parentId: String?,
         personaIds: List<String>,
-        @Suppress("UNUSED_PARAMETER") text: String,
+        text: String,
         scope: ScopeMode = ScopeMode.WHOLE_THREAD,
         includeSiblings: Boolean = false,
+        postAsOwner: Boolean = false,
+        routingScope: ScopeMode = ScopeMode.WHOLE_THREAD,
     ): List<ReplyView> {
-        val parent = parentId?.let { comments.findById(it) }
-        val baseDepth = parent?.let { it.depth + 1 } ?: 0
-        // A reply continues its parent branch's depth budget (§4); a top-level reply starts unfuelled.
-        val baseBudget = DepthBudget.childBudget(parent?.depthBudget ?: 0)
-        // The context differentiator (§5): branch-only = root→parent ancestor path (recursive CTE);
-        // whole-thread = the full tree. Branch-only excludes siblings unless the owner opts them in,
-        // in which case the reply target's siblings (the other children of its parent) are added.
-        val contextComments = if (scope == ScopeMode.BRANCH_ONLY && parentId != null) {
-            val path = comments.ancestorPath(parentId)
-            if (includeSiblings) {
-                (path + comments.childrenOf(parent?.parentId)).distinctBy { it.id }
-            } else {
-                path
-            }
-        } else {
-            comments.threadComments(threadId)
-        }
-        // sequential (M1): map preserves order; a failure becomes a FAILED node, not an abort
-        return personaIds.map { personaId -> runOne(threadId, parentId, personaId, baseDepth, baseBudget, contextComments) }
+        val owner = ownerComment(threadId, parentId, text, postAsOwner)
+        val anchorId = owner?.id ?: parentId
+        val resolvedIds = resolvePersonas(threadId, anchorId, routingScope, personaIds, text)
+        val replies = planGeneration(threadId, anchorId, resolvedIds, scope, includeSiblings)
+            .map { settleOne(it, CancellationToken()) }
+        return owner?.let { listOf(it.toReplyView(children = replies)) } ?: replies
     }
 
     /**
@@ -86,7 +248,18 @@ class GenerationService(
             val context = comments.threadComments(threadId)
             frontier.forEach { leaf ->
                 val persona = pool[created.size % pool.size]
-                created += runOne(threadId, leaf.id, persona.id, leaf.depth + 1, DepthBudget.childBudget(leaf.depthBudget), context)
+                val plan = GenPlan(
+                    id = UUID.randomUUID().toString(),
+                    threadId = threadId,
+                    parentId = leaf.id,
+                    persona = persona,
+                    depth = leaf.depth + 1,
+                    budget = DepthBudget.childBudget(leaf.depthBudget),
+                    // autoGrow keeps its own per-round snapshot ([context]); each leaf gets a distinct
+                    // persona/target, so it doesn't share the summon round's settle-time re-read.
+                    contextOf = { assembleContext(threadId, persona.systemPrompt, withOpeningPost(threadId, context), targetId = leaf.id) },
+                )
+                created += settleOne(plan, CancellationToken())
             }
         }
         return created
@@ -95,35 +268,260 @@ class GenerationService(
     fun retry(replyId: String): ReplyView {
         val existing = comments.findById(replyId) ?: error("no reply $replyId")
         val persona = personas.find(existing.authorId) ?: error("unknown persona ${existing.authorId}")
-        val ctx = ContextAssembler.assemble(persona.systemPrompt, comments.threadComments(existing.threadId))
+        val ctx = assembleContext(existing.threadId, persona.systemPrompt, withOpeningPost(existing.threadId, comments.threadComments(existing.threadId)), targetId = existing.parentId)
         val updated = try {
-            val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name), timeout), CancellationToken())
-            existing.copy(body = resp.text, state = GenerationState.POSTED, failureCategory = null, reason = null, retryAfterSeconds = null)
+            val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name, persona.model), timeout), CancellationToken())
+            resp.reasoningLeak?.let { log.warn("reasoning leak ({}) on retry of reply {} by persona {}", it, replyId, persona.id) }
+            // Overwrite the flag with this regeneration's verdict (it may now be clean → null).
+            existing.copy(body = resp.text, state = GenerationState.POSTED, failureCategory = null, reason = null, retryAfterSeconds = null, reasoningLeak = resp.reasoningLeak)
         } catch (e: Throwable) {
             val o = GenerationStateMachine.classify(e)
-            existing.copy(body = "", state = o.state, failureCategory = o.failureCategory, reason = o.reason, retryAfterSeconds = o.retryAfterSeconds)
+            existing.copy(body = "", state = o.state, failureCategory = o.failureCategory, reason = o.reason, retryAfterSeconds = o.retryAfterSeconds, reasoningLeak = null)
         }
         comments.update(updated)
         return updated.toReplyView()
     }
 
-    private fun runOne(
+    /**
+     * Regenerate a POSTED persona reply (§7), KEEPING every prior take. Unlike [retry] (which overwrites a
+     * dead-end draft in place), this appends a content revision and points the node at it, so the owner can
+     * step back through earlier versions via the ‹ › switcher. The FIRST regenerate also stores the body
+     * being replaced as revision 0, so the original is never lost; thereafter the table already holds it.
+     *
+     * Children are untouched — the node's body changes, its subtree stays. A transient generation failure
+     * leaves the current take in place (no revision appended) and returns the node unchanged, so a flaky
+     * model can never destroy a good reply. Returns the re-rendered node (its body now the new revision).
+     *
+     * @Transactional: once the model has answered, the seed-idx0 + addRevision + selectRevision writes are
+     * one atomic unit — a crash or SQLITE_BUSY between them must not leave the revision history half-built
+     * (e.g. a new revision appended but never selected). The on-failure early return happens BEFORE any
+     * write, so the LLM call holds no write lock (SQLite defers the lock to the first statement). Called
+     * through the Spring proxy from the controller, so the boundary is active.
+     */
+    @Transactional
+    fun regenerate(replyId: String): ReplyView {
+        val existing = comments.findById(replyId) ?: error("no reply $replyId")
+        require(existing.state == GenerationState.POSTED) { "only a posted reply can be regenerated" }
+        val persona = personas.find(existing.authorId)
+            ?: error("reply $replyId is not a persona reply (author ${existing.authorId})")
+        // Same caption-aware context path as [retry], so a regenerated take sees the thread's image
+        // captions exactly as the original generation did.
+        val ctx = assembleContext(existing.threadId, persona.systemPrompt, withOpeningPost(existing.threadId, comments.threadComments(existing.threadId)), targetId = existing.parentId)
+        val resp = try {
+            llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name, persona.model), timeout), CancellationToken())
+        } catch (e: Throwable) {
+            // Regeneration is non-destructive: on failure we keep what's there and re-render it unchanged.
+            log.warn("regenerate of reply {} by persona {} failed; keeping current take", replyId, persona.id, e)
+            return existing.toReplyView()
+        }
+        resp.reasoningLeak?.let { log.warn("reasoning leak ({}) on regenerate of reply {} by persona {}", it, replyId, persona.id) }
+        // Append the new take. Seed revision 0 with the body we're replacing the first time, so the
+        // original survives; the appended index is the prior count (which already includes idx 0 after
+        // the first regenerate). Then select it so `comment.body` becomes this take for the rest of the app.
+        val count = comments.revisionCount(replyId)
+        if (count == 0) comments.addRevision(replyId, 0, existing.body, existing.reasoningLeak, editedAt = existing.updatedAt)
+        val newIdx = if (count == 0) 1 else count
+        comments.addRevision(replyId, newIdx, resp.text, resp.reasoningLeak)
+        comments.selectRevision(replyId, newIdx)
+        return comments.findById(replyId)!!.toReplyView()
+    }
+
+    /**
+     * Persist the owner's composed message as their own POSTED node (§4/§5) and return its id, so the
+     * summon that follows parents under it. This is what makes the owner's words both APPEAR in the tree
+     * and reach every persona's context — without it the room only ever sees a blank transcript and
+     * emits a generic opener. The node GRANTS a fresh depth budget so the branch can auto-grow past it
+     * (mirrors a seeded owner comment / `/more`). Returns null when there is nothing to author (a bare
+     * summon, or an empty message), leaving the summon parented exactly as before.
+     */
+    private fun ownerComment(threadId: String, parentId: String?, text: String, postAsOwner: Boolean): Comment? {
+        if (!postAsOwner || text.isBlank()) return null
+        val parent = parentId?.let { comments.findById(it) }
+        val owner = Comment(
+            id = UUID.randomUUID().toString(),
+            threadId = threadId,
+            parentId = parentId,
+            authorId = OWNER_AUTHOR,
+            body = text.trim(),
+            state = GenerationState.POSTED,
+            failureCategory = null,
+            depth = parent?.let { it.depth + 1 } ?: 0,
+            depthBudget = DepthBudget.granted(),
+        )
+        comments.insert(owner)
+        return owner
+    }
+
+    /**
+     * Turn the requested selection into concrete persona ids. A normal selection passes straight through;
+     * the composer's default "Anyone" option submits [AUTO_PERSONA], which hands the choice to the AI
+     * dispatcher so it picks who weighs in based on the topic. An empty selection is NOT auto — the
+     * controller already rejects that as a validation error — so the routing call is confined to the
+     * deliberate "Anyone" path and never fires on the explicit-persona scenarios.
+     *
+     * [routingScope] is the owner's own "looking at" selector (default whole topic): BRANCH_ONLY narrows
+     * the dispatcher to the ancestor path of [anchorId] (the branch being replied to) so the pick reflects
+     * that sub-discussion, not the whole tree. It is independent of the generation [scope] the chosen
+     * persona then reads.
+     *
+     * On the "Anyone" path the owner can still steer WHO replies without naming them in the dropdown by
+     * @mentioning personas in [text] (the composer's "type @ to summon" affordance): an explicit mention
+     * is a deliberate summon, so it takes precedence over the dispatcher. Breadth follows who's tagged:
+     * a named chip / @mention resolves to exactly that set; the "Anyone" dispatcher picks the room.
+     */
+    private fun resolvePersonas(
+        threadId: String,
+        anchorId: String?,
+        routingScope: ScopeMode,
+        requested: List<String>,
+        text: String,
+    ): List<String> {
+        // An explicit dropdown/chip selection passes straight through (mentions don't override a named
+        // pick — naming someone IS the summon); only the deliberate "Anyone" sentinel routes.
+        if (requested.none { it == AUTO_PERSONA }) return requested
+        val roster = personas.findAll()
+        if (roster.isEmpty()) return emptyList()
+        // @mentions summon deterministically — they pre-empt the dispatcher when present.
+        MentionParser.parse(text, roster).takeIf { it.isNotEmpty() }?.let { return it }
+        val context = if (routingScope == ScopeMode.BRANCH_ONLY && anchorId != null) {
+            comments.ancestorPath(anchorId)
+        } else {
+            comments.threadComments(threadId)
+        }
+        return router.pick(roster, withOpeningPost(threadId, context), routingScope).map { it.id }
+    }
+
+    /** Resolve personas into cancellable plans; each carries a settle-time context supplier (§5). */
+    private fun planGeneration(
         threadId: String,
         parentId: String?,
-        personaId: String,
-        depth: Int,
-        budget: Int,
+        personaIds: List<String>,
+        scope: ScopeMode,
+        includeSiblings: Boolean,
+    ): List<GenPlan> {
+        val parent = parentId?.let { comments.findById(it) }
+        val baseDepth = parent?.let { it.depth + 1 } ?: 0
+        // A reply continues its parent branch's depth budget (§4); a top-level reply starts unfuelled.
+        val baseBudget = DepthBudget.childBudget(parent?.depthBudget ?: 0)
+        // Mint every reply's id up front so each persona's context can fold in the OTHERS in this round
+        // (the ones already settled by the time it generates) — but only this round's replies, never the
+        // target's pre-existing children.
+        val roundIds = personaIds.map { UUID.randomUUID().toString() }
+        return personaIds.mapIndexed { i, personaId ->
+            val persona = personas.find(personaId) ?: error("unknown persona $personaId")
+            GenPlan(
+                id = roundIds[i],
+                threadId = threadId,
+                parentId = parentId,
+                persona = persona,
+                depth = baseDepth,
+                budget = baseBudget,
+                // Re-read at settle time so a later persona in the round sees the earlier ones' replies.
+                contextOf = {
+                    val live = roundContext(threadId, parentId, parent, scope, includeSiblings, roundIds)
+                    assembleContext(threadId, persona.systemPrompt, withOpeningPost(threadId, live), targetId = parentId)
+                },
+            )
+        }
+    }
+
+    /**
+     * The live context for one persona at settle time (§5). Re-read per persona so sequential fan-out
+     * becomes a conversation: a later persona in the round sees the earlier ones' replies, which are
+     * POSTED rows by the time it settles. The scope differentiator stays — branch-only = root→parent
+     * ancestor path (recursive CTE), whole-thread = the full tree, with the reply target's siblings folded
+     * in for branch-only only when the owner opts in. On TOP of that, this round's OWN already-posted
+     * replies ([roundIds]) are injected in EVERY scope — branch-only's ancestor path would otherwise
+     * exclude these same-round siblings. We fold in only the round's minted ids (not every child of the
+     * target), so a pre-existing child of the reply target stays out of a branch-only view. Non-POSTED
+     * nodes (failed/cancelled drafts, including a sibling that just failed earlier in this round) are
+     * dropped so an empty marker never enters the transcript.
+     */
+    private fun roundContext(
+        threadId: String,
+        parentId: String?,
+        parent: Comment?,
+        scope: ScopeMode,
+        includeSiblings: Boolean,
+        roundIds: List<String>,
+    ): List<Comment> {
+        val base = if (scope == ScopeMode.BRANCH_ONLY && parentId != null) {
+            val path = comments.ancestorPath(parentId)
+            val withTargetSiblings = if (includeSiblings) path + comments.childrenOf(parent?.parentId) else path
+            // The round's earlier replies aren't on the ancestor path; fold them in so even a narrowed
+            // view reads as a live exchange. Whole-thread's full tree already contains them.
+            withTargetSiblings + roundIds.mapNotNull { comments.findById(it) }
+        } else {
+            comments.threadComments(threadId)
+        }
+        return base.filter { it.state == GenerationState.POSTED }.distinctBy { it.id }
+    }
+
+    /**
+     * The opening post is the topic itself — its **title AND body** — and lives on the thread (the
+     * `thread` row), rendered as the post node (id == threadId), NOT as a persisted comment. Inject it at
+     * the HEAD of every persona's (and the dispatcher's) context so the room engages with the actual
+     * question instead of a blank transcript (the "dropped on the way in" bug). Both fields go in: the
+     * title is the topic, the body its detail, joined as one post (blank-line separated) — so a title-only
+     * quick-create still seeds the topic rather than handing the room nothing. Null only when [threads]
+     * isn't wired (the Tier-2 construction) or the thread has neither. The synthetic node carries the
+     * post's canonical id (threadId), depth 0, no parent — exactly how the page models the OP.
+     * Owner-authored, like any composer message already in context: the firewall is about VOTES, not the
+     * "owner" label.
+     */
+    private fun openingPost(threadId: String): Comment? =
+        threads?.find(threadId)?.let { thread ->
+            listOf(thread.title, thread.body).filter { it.isNotBlank() }.joinToString("\n\n")
+                .takeIf { it.isNotBlank() }
+                ?.let { Comment(threadId, threadId, null, OWNER_AUTHOR, it, GenerationState.POSTED, null, 0) }
+        }
+
+    /**
+     * Assemble context with image captions folded in (caption-only path). Reads the attachments for the
+     * context comments plus the thread's own (the OP synthetic node carries id == threadId), and hands
+     * the map to the firewall boundary [ContextAssembler]. When [attachments] isn't wired (Tier-2
+     * constructions), the map is empty and this is exactly the old text-only assemble.
+     */
+    private fun assembleContext(
+        threadId: String,
+        systemPrompt: String,
         contextComments: List<Comment>,
-    ): ReplyView {
-        val persona = personas.find(personaId) ?: error("unknown persona $personaId")
-        val ctx = ContextAssembler.assemble(persona.systemPrompt, contextComments)
-        val id = UUID.randomUUID().toString()
+        targetId: String?,
+    ) = ContextAssembler.assemble(systemPrompt, contextComments, targetId, attachmentMap(threadId, contextComments))
+
+    /** comment id -> its attachments, including the thread's own keyed under threadId (the OP node id). */
+    private fun attachmentMap(threadId: String, contextComments: List<Comment>): Map<String, List<Attachment>> {
+        val repo = attachments ?: return emptyMap()
+        // The OP synthetic node's id IS the threadId; its images live in thread-scoped rows, fetched
+        // separately. Every other node is a real comment, batch-read by id.
+        val byComment = repo.forComments(contextComments.map { it.id }.filter { it != threadId })
+        val opAttachments = repo.forThread(threadId)
+        return if (opAttachments.isEmpty()) byComment else byComment + (threadId to opAttachments)
+    }
+
+    /** Prepend the opening post to [comments] (deduped) so it heads the context handed to the model. */
+    private fun withOpeningPost(threadId: String, comments: List<Comment>): List<Comment> =
+        openingPost(threadId)?.takeIf { op -> comments.none { it.id == op.id } }
+            ?.let { listOf(it) + comments } ?: comments
+
+    /** The transient view shown while a node drafts — never persisted (no DRAFTING DB row). */
+    private fun draftView(plan: GenPlan): ReplyView =
+        Comment(plan.id, plan.threadId, plan.parentId, plan.persona.id, "", GenerationState.DRAFTING, null, plan.depth, depthBudget = plan.budget)
+            .toReplyView()
+
+    /** Run one persona's reply against the seam with [token], classify any failure, and persist it. */
+    private fun settleOne(plan: GenPlan, token: CancellationToken): ReplyView {
+        // Stream AG-UI events to the node's in-flight channel as the reply generates (a no-op for the
+        // synchronous generate/autoGrow paths, which register no holder). runId == the node id so the SSE
+        // endpoint /replies/{id}/stream and the channel route to the right drafting node.
+        val sink = AguiEventSink { inFlight.publish(plan.id, it) }
         val comment = try {
-            val resp = llm.generate(LlmRequest(ctx, PersonaRef(persona.id, persona.name), timeout), CancellationToken())
-            Comment(id, threadId, parentId, personaId, resp.text, GenerationState.POSTED, null, depth, depthBudget = budget)
+            val resp = llm.generate(LlmRequest(plan.contextOf(), PersonaRef(plan.persona.id, plan.persona.name, plan.persona.model), timeout, runId = plan.id), token, sink)
+            resp.reasoningLeak?.let { log.warn("reasoning leak ({}) in reply {} by persona {}", it, plan.id, plan.persona.id) }
+            Comment(plan.id, plan.threadId, plan.parentId, plan.persona.id, resp.text, GenerationState.POSTED, null, plan.depth, depthBudget = plan.budget, reasoningLeak = resp.reasoningLeak)
         } catch (e: Throwable) {
             val o = GenerationStateMachine.classify(e)
-            Comment(id, threadId, parentId, personaId, "", o.state, o.failureCategory, depth, o.reason, o.retryAfterSeconds, depthBudget = budget)
+            Comment(plan.id, plan.threadId, plan.parentId, plan.persona.id, "", o.state, o.failureCategory, plan.depth, o.reason, o.retryAfterSeconds, depthBudget = plan.budget)
         }
         return persist(comment)
     }

@@ -25,6 +25,9 @@ repositories { mavenCentral() }
 val jteVersion = "3.2.4"
 val cucumberVersion = "7.34.3"
 val flywayVersion = "12.4.0"   // matches the Spring Boot 4.1 BOM
+val commonmarkVersion = "0.24.0"
+val graalVersion = "24.1.2"
+val highlightjsWebjarVersion = "11.11.1"
 
 dependencies {
     // --- web + SSR (JTE) — note the Spring Boot 4 starter ---
@@ -38,6 +41,22 @@ dependencies {
     // at /webjars/htmx.org/dist/htmx.min.js, so an htmx bump doesn't churn the <script src> in layout.kte.
     implementation("org.webjars.npm:htmx.org:2.0.6")
     implementation("org.webjars:webjars-locator-lite")
+
+    // --- markdown rendering: commonmark + GFM tables, with server-side syntax highlighting ---
+    // commonmark parses reply/post bodies to HTML. escapeHtml(true) at the renderer makes raw HTML in a
+    // body inert and sanitizeUrls(true) strips script-scheme link/image destinations (LLM output is
+    // untrusted — prompt-injection XSS), so tables come via the GFM extension, not raw <table>.
+    // See MarkdownRenderer.
+    implementation("org.commonmark:commonmark:$commonmarkVersion")
+    implementation("org.commonmark:commonmark-ext-gfm-tables:$commonmarkVersion")
+    // GraalJS (Truffle) runs highlight.js' core highlight() — string in, <span class=hljs-*> HTML out, no
+    // DOM. Runs interpreted on this stock JDK 21 toolchain (no GraalVM JDK needed); fine for short snippets.
+    implementation("org.graalvm.polyglot:polyglot:$graalVersion")
+    implementation("org.graalvm.polyglot:js-community:$graalVersion")
+    // highlight.js itself, vendored as a webjar (hermetic, like htmx): the browser IIFE bundle
+    // highlight.min.js is read off the classpath and eval'd in GraalJS; the theme CSS is served to the
+    // client at /webjars/highlightjs/styles/... via webjars-locator-lite.
+    implementation("org.webjars:highlightjs:$highlightjsWebjarVersion")
 
     // --- persistence: spring-jdbc + SQLite + Flyway (NOT Hibernate) ---
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
@@ -103,9 +122,64 @@ fun registerTier(name: String, tag: String, after: String?) =
         testLogging { events("passed", "skipped", "failed") }
     }
 
-registerTier("tier0", "tier0", null)
+registerTier("tier0", "tier0", "mcpShortcutTest")
 registerTier("tier1", "tier1", "tier0")
 registerTier("tier2", "tier2", "tier1")
+
+// node:test's quoted glob args need Node >= 21 (Docker installs 22; .nvmrc pins 22). Fail fast with
+// an actionable message instead of node's own cryptic literal-path error. ProcessBuilder in doFirst,
+// not providers.exec: runs at execution time and captures nothing the configuration cache rejects.
+fun Exec.requireNode(min: Int = 21) = doFirst {
+    val v = runCatching {
+        ProcessBuilder("node", "--version").start().inputStream.bufferedReader().readText().trim()
+    }.getOrElse { throw GradleException("$name needs Node.js >= $min on PATH — none found (see .nvmrc).") }
+    if ((v.removePrefix("v").substringBefore('.').toIntOrNull() ?: 0) < min)
+        throw GradleException("$name needs Node >= $min (node --test glob args); found $v. Run `nvm use` (.nvmrc pins 22).")
+}
+
+// Frontend unit tier (src/test/js): pure *-core.mjs modules under node:test — the JS analogue of tier0
+// (pure logic, no DOM/IO). Delegates to `npm test` so there's one source of truth for the runner glob;
+// honours discovery mode like the JVM tiers so red breaks the build rather than being a suggestion.
+tasks.register<Exec>("jsTest") {
+    group = "verification"
+    description = "Runs the frontend (node:test) unit tests."
+    workingDir = projectDir
+    commandLine("npm", "test")
+    isIgnoreExitValue = discoveryMode
+    requireNode()
+}
+
+// MCP server gates. gh-readonly is zero-dep node:test (root package.json's test:mcp script);
+// shortcut is TypeScript and needs its dev deps installed first (npm ci, lockfile-keyed).
+tasks.register<Exec>("mcpGhTest") {
+    group = "verification"
+    description = "Runs the gh-readonly MCP server tests (node:test, zero deps)."
+    workingDir = projectDir
+    commandLine("npm", "run", "test:mcp")
+    isIgnoreExitValue = discoveryMode
+    requireNode()
+    shouldRunAfter("jsTest")
+}
+
+val mcpShortcutInstall = tasks.register<Exec>("mcpShortcutInstall") {
+    description = "Installs mcp/shortcut dev deps (npm ci); up-to-date while the lockfile is unchanged."
+    workingDir = file("mcp/shortcut")
+    commandLine("npm", "ci")
+    inputs.files("mcp/shortcut/package.json", "mcp/shortcut/package-lock.json")
+    outputs.dir("mcp/shortcut/node_modules")
+    requireNode()
+}
+
+tasks.register<Exec>("mcpShortcutTest") {
+    group = "verification"
+    description = "Compiles (full typecheck) + runs the shortcut MCP server tests (tsc + node:test)."
+    dependsOn(mcpShortcutInstall)
+    workingDir = file("mcp/shortcut")
+    commandLine("npm", "test")
+    isIgnoreExitValue = discoveryMode
+    requireNode()
+    shouldRunAfter("mcpGhTest")
+}
 
 tasks.register<Test>("acceptance") {
     testClassesDirs = testSourceSet.output.classesDirs
@@ -114,18 +188,43 @@ tasks.register<Test>("acceptance") {
     // acceptance from re-running the jupiter tier tests. Tag filter (not @wip) lives in
     // src/test/resources/junit-platform.properties.
     useJUnitPlatform { includeEngines("junit-platform-suite") }
-    // Tolerate zero discovered scenarios (true only before Phase B adds .feature files); once
-    // features exist they run and failures show as red, which is the point.
-    failOnNoDiscoveredTests = false
+    // Gradle's failOnNoDiscoveredTests can't catch a tag-filter regression: cucumber applies
+    // cucumber.filter.tags at execution time, so filtered scenarios still count as "discovered"
+    // (they report as skipped). Keep the flag for the nothing-discovered-at-all case, and enforce
+    // a floor on *executed* scenarios from cucumber's own report.json below.
+    failOnNoDiscoveredTests = !discoveryMode
     ignoreFailures = discoveryMode
     shouldRunAfter("tier2")
     testLogging { events("passed", "skipped", "failed") }
+
+    val report = layout.buildDirectory.file("reports/cucumber/report.json")
+    doFirst { report.get().asFile.delete() }   // a stale report must never satisfy the floor
+    doLast {
+        val executed = report.get().asFile.takeIf { it.isFile }?.readText()
+            ?.let { Regex("\"type\"\\s*:\\s*\"scenario\"").findAll(it).count() } ?: 0
+        println("acceptance: $executed Cucumber scenarios executed")
+        if (executed < 1 && !discoveryMode)
+            throw GradleException(
+                "acceptance executed 0 Cucumber scenarios (green would lie) — check cucumber.filter.tags " +
+                "in src/test/resources/junit-platform.properties and feature discovery.")
+    }
 }
 
 tasks.register("verifyAll") {
     group = "verification"
-    description = "Runs all test tiers lowest-first, then acceptance."
-    dependsOn("tier0", "tier1", "tier2", "acceptance")
+    description = "Runs all gates lowest-first: jsTest, MCP server tests, tiers 0-2, then acceptance."
+    dependsOn("jsTest", "mcpGhTest", "mcpShortcutTest", "tier0", "tier1", "tier2", "acceptance")
+}
+
+// `bootRun` (plugin-configured) uses the default `dev` profile → throwaway project-local DB. This
+// sibling runs the prod profile for long-term work: a persistent DB at ~/.haip/data/aiforum.db (see
+// application-prod.yml; ${user.home} resolves there). The profile is passed as an application arg.
+tasks.register<org.springframework.boot.gradle.tasks.run.BootRun>("bootRunProd") {
+    group = "application"
+    description = "Runs the app with the prod profile (persistent DB at ~/.haip/data/aiforum.db)."
+    mainClass.set("com.aiforum.AiForumApplicationKt")
+    classpath = sourceSets.main.get().runtimeClasspath   // pulls in generateJte → compile, like bootRun
+    args("--spring.profiles.active=prod")
 }
 
 tasks.named("check") { dependsOn("verifyAll") }

@@ -1,0 +1,253 @@
+package com.aiforum.github
+
+import com.aiforum.observability.event
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.context.event.ApplicationReadyEvent
+import org.springframework.context.event.EventListener
+import org.springframework.stereotype.Component
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+
+/**
+ * Production [GitHubClient]: wraps the `gh` CLI via [ProcessBuilder]. It is the single un-fakeable IO seam
+ * for the /github page; the pure classification of its output lives in [GitHubJson], so what remains here
+ * is just spawning, stream capture, and the deadline (mirrors ProcessLlmClient).
+ *
+ * READ-ONLY by construction. The only commands it ever builds are `repo view`, `pr list`, `issue list`,
+ * `pr view`, and `pr diff` — all reads. [requireReadOnly] is a defence-in-depth re-check on every argv
+ * before it reaches `gh`, so a future edit can't silently introduce a mutating subcommand.
+ *
+ * Inert unless `aiforum.github.enabled=true`: with the flag off (the default, including under the `test`
+ * profile) [overview] returns [GitHubResult.Unavailable] without spawning anything, so the bean is safe to
+ * have in every context and the acceptance suite never shells out.
+ *
+ * `open` (and `protected open fun exec`) so the Tier-1 test can substitute a controlled subprocess and
+ * exercise the argv-building / error-mapping without the real `gh` binary or a network call.
+ */
+@Component
+open class GhCliGitHubClient(
+    @Value("\${aiforum.github.enabled:false}") private val enabled: Boolean = false,
+    // Blank => let `gh` infer the repo from the working directory; usually you want to pin "OWNER/REPO"
+    // here since the app's working dir isn't a clone.
+    @Value("\${aiforum.github.repo:}") private val repo: String = "",
+    @Value("\${aiforum.github.command:gh}") private val command: String = "gh",
+    @Value("\${aiforum.github.list-limit:10}") private val listLimit: Int = 10,
+    @Value("\${aiforum.github.timeout-seconds:20}") private val timeoutSeconds: Long = 20,
+) : GitHubClient {
+
+    // Explicit class (not javaClass) so the logger NAME is stable at "com.aiforum.github.GhCliGitHubClient"
+    // even for test subclasses that override exec — the log output is a tested contract, so its source must
+    // be deterministic (see the bdd-tiered-testing skill, "Logging is IO").
+    private val log = LoggerFactory.getLogger(GhCliGitHubClient::class.java)
+
+    /** The outcome of one `gh` invocation: it either ran (with an exit code + captured streams) or never
+     *  started / timed out (the binary is missing, or it overran the deadline). */
+    protected sealed interface ExecResult {
+        data class Completed(val exitCode: Int, val stdout: String, val stderr: String) : ExecResult
+        data class Failed(val message: String) : ExecResult
+    }
+
+    /**
+     * One-time startup heads-up (logged, never fatal): when the integration is ENABLED, probe `gh --version`
+     * and WARN if the binary isn't available, so an operator sees the misconfiguration at boot instead of
+     * only when someone opens /github. Gated on [enabled] so a disabled feature stays silent, and cheap
+     * (one probe at startup, not per request). It is NOT the source of truth for the UI — that stays the
+     * live per-call result, which can't go stale if `gh` is installed or its auth changes after boot. Auth
+     * is validated naturally on the first real fetch (a non-zero `gh repo view` surfaces the auth error).
+     */
+    @EventListener(ApplicationReadyEvent::class)
+    fun logStartupAvailability() {
+        if (!enabled) return
+        val problem = availabilityError()
+        if (problem != null) {
+            log.atWarn().setMessage("GitHub integration is enabled but {} — /github will show an error until this is fixed.")
+                .addArgument(problem)
+                .event(EV_STARTUP_UNAVAILABLE).addKeyValue("command", command).addKeyValue("reason", problem)
+                .log()
+        } else {
+            log.atInfo().setMessage("GitHub integration enabled; `{}` is available.")
+                .addArgument(command)
+                .event(EV_STARTUP_OK).addKeyValue("command", command)
+                .log()
+        }
+    }
+
+    /** Probe `gh --version`; returns a human-readable problem string, or null when `gh` is available. */
+    fun availabilityError(): String? = when (val r = exec(listOf("--version"))) {
+        is ExecResult.Failed -> r.message
+        is ExecResult.Completed ->
+            if (r.exitCode == 0) null
+            else "`${command} --version` exited ${r.exitCode}: ${r.stderr.trim().ifBlank { "(no detail)" }}"
+    }
+
+    override fun overview(): GitHubResult {
+        if (!enabled) {
+            return GitHubResult.Unavailable(
+                "GitHub integration is off. Set aiforum.github.enabled=true (needs the `gh` CLI installed and authenticated with `gh auth login`).",
+            )
+        }
+
+        val repoArg = if (repo.isNotBlank()) listOf(repo) else emptyList()
+        val repoFlag = if (repo.isNotBlank()) listOf("--repo", repo) else emptyList()
+        val limit = listLimit.coerceIn(1, 100).toString()
+
+        // The repo summary is the anchor of the page; if it can't be fetched there's nothing to show.
+        val repoSummary = when (val r = run(listOf("repo", "view") + repoArg + listOf("--json", GitHubJson.REPO_FIELDS))) {
+            is ExecResult.Failed -> return unavailable(r.message)
+            is ExecResult.Completed ->
+                if (r.exitCode != 0) return unavailable(ghError("gh repo view", r.stderr))
+                else parseOr(null) { GitHubJson.parseRepo(r.stdout) } ?: return unavailable("Couldn't parse `gh repo view` output.")
+        }
+
+        // PRs and issues are best-effort: if either list fails we still render the repo summary with an
+        // empty section rather than failing the whole page (logged at debug — the page already renders).
+        val pulls = when (val r = run(listOf("pr", "list") + repoFlag + listOf("--state", "open", "--limit", limit, "--json", GitHubJson.PR_FIELDS))) {
+            is ExecResult.Completed -> if (r.exitCode == 0) parseOr(emptyList()) { GitHubJson.parsePulls(r.stdout) }
+                else { logListFailed("pr", "exited ${r.exitCode}: ${r.stderr.trim()}"); emptyList() }
+            is ExecResult.Failed -> { logListFailed("pr", r.message); emptyList() }
+        }
+        val issues = when (val r = run(listOf("issue", "list") + repoFlag + listOf("--state", "open", "--limit", limit, "--json", GitHubJson.ISSUE_FIELDS))) {
+            is ExecResult.Completed -> if (r.exitCode == 0) parseOr(emptyList()) { GitHubJson.parseIssues(r.stdout) }
+                else { logListFailed("issue", "exited ${r.exitCode}: ${r.stderr.trim()}"); emptyList() }
+            is ExecResult.Failed -> { logListFailed("issue", r.message); emptyList() }
+        }
+
+        return GitHubResult.Ok(GitHubOverview(repoSummary, pulls, issues))
+    }
+
+    override fun pull(number: Int): PullResult {
+        if (!enabled) {
+            return PullResult.Unavailable(
+                "GitHub integration is off. Set aiforum.github.enabled=true (needs the `gh` CLI installed and authenticated with `gh auth login`).",
+            )
+        }
+
+        val repoFlag = if (repo.isNotBlank()) listOf("--repo", repo) else emptyList()
+
+        // The PR detail is the anchor — without it there's nothing to seed a thread with, so a failure here
+        // is the user-facing off-state (WARN), mirroring `gh repo view` on the overview path.
+        val detail = when (val r = run(listOf("pr", "view", number.toString()) + repoFlag + listOf("--json", GitHubJson.PULL_FIELDS))) {
+            is ExecResult.Failed -> return pullUnavailable(number, r.message)
+            is ExecResult.Completed ->
+                if (r.exitCode != 0) return pullUnavailable(number, ghError("gh pr view", r.stderr))
+                else parseOr(null) { GitHubJson.parsePull(r.stdout) } ?: return pullUnavailable(number, "Couldn't parse `gh pr view` output.")
+        }
+
+        // The diff is best-effort: a thread carrying the description + changed-file list is still useful, so
+        // a diff failure logs at debug and leaves the diff blank rather than failing the whole ingest.
+        val diff = when (val r = run(listOf("pr", "diff", number.toString()) + repoFlag)) {
+            is ExecResult.Completed -> if (r.exitCode == 0) r.stdout
+                else { logDiffFailed(number, "exited ${r.exitCode}: ${r.stderr.trim()}"); "" }
+            is ExecResult.Failed -> { logDiffFailed(number, r.message); "" }
+        }
+
+        return PullResult.Ok(detail.copy(diff = diff))
+    }
+
+    /** Guard the argv, then run it. Keeps the read-only check on the single path to `gh`. */
+    private fun run(argv: List<String>): ExecResult = exec(requireReadOnly(argv))
+
+    /**
+     * Spawn `gh` with a fixed argv (no shell, so nothing can be smuggled through quoting) and capture its
+     * output under a bounded deadline. Overridden in tests with a controlled stand-in.
+     */
+    protected open fun exec(argv: List<String>): ExecResult {
+        val process = try {
+            ProcessBuilder(listOf(command) + argv)
+                .redirectErrorStream(false)
+                .start()
+        } catch (e: IOException) {
+            // Most commonly: the `gh` binary isn't on PATH.
+            return ExecResult.Failed("The `gh` CLI couldn't be launched ($command): ${e.message}. Install it from https://cli.github.com and run `gh auth login`.")
+        }
+
+        // `gh --json` output is bounded (capped by --limit), so draining stdout to EOF before waitFor is
+        // safe and simpler than the daemon-drain dance ProcessLlmClient needs for a chatty model.
+        val stdout = process.inputStream.use { it.readBytes().decodeToString() }
+        val stderr = process.errorStream.use { it.readBytes().decodeToString() }
+
+        return if (!process.waitFor(timeoutSeconds.coerceAtLeast(1), TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            ExecResult.Failed("`gh` timed out after ${timeoutSeconds}s.")
+        } else {
+            ExecResult.Completed(process.exitValue(), stdout, stderr)
+        }
+    }
+
+    /** Log the failure (the missing log half of "UI and log") and return the user-facing off-state. The
+     *  disabled case doesn't route through here — that's expected, not a fault, so it isn't logged. */
+    private fun unavailable(reason: String): GitHubResult {
+        log.atWarn().setMessage("/github is unavailable: {}").addArgument(reason)
+            .event(EV_UNAVAILABLE).addKeyValue("reason", reason)
+            .log()
+        return GitHubResult.Unavailable(reason)
+    }
+
+    /** A best-effort PR/issue list failure: the page still renders, so it's DEBUG, never WARN. */
+    private fun logListFailed(list: String, detail: String) {
+        log.atDebug().setMessage("gh {} list failed: {}").addArgument(list).addArgument(detail)
+            .event(EV_LIST_FAILED).addKeyValue("list", list).addKeyValue("detail", detail)
+            .log()
+    }
+
+    /** A PR couldn't be fetched in depth — the user-facing off-state for [pull]. */
+    private fun pullUnavailable(number: Int, reason: String): PullResult {
+        log.atWarn().setMessage("gh pr #{} couldn't be fetched: {}").addArgument(number).addArgument(reason)
+            .event(EV_PULL_UNAVAILABLE).addKeyValue("number", number).addKeyValue("reason", reason)
+            .log()
+        return PullResult.Unavailable(reason)
+    }
+
+    /** A best-effort `gh pr diff` failure: the thread is still seeded (without the diff), so it's DEBUG. */
+    private fun logDiffFailed(number: Int, detail: String) {
+        log.atDebug().setMessage("gh pr diff #{} failed (thread seeded without a diff): {}").addArgument(number).addArgument(detail)
+            .event(EV_DIFF_FAILED).addKeyValue("number", number).addKeyValue("detail", detail)
+            .log()
+    }
+
+    private fun <T> parseOr(fallback: T, parse: () -> T): T =
+        try {
+            parse()
+        } catch (_: Exception) {
+            fallback
+        }
+
+    /** A compact, user-facing message from a non-zero `gh` exit — the first non-blank stderr line (gh's
+     *  auth/not-found errors are one-liners), or a generic fallback. */
+    private fun ghError(what: String, stderr: String): String {
+        val line = stderr.lineSequence().map(String::trim).firstOrNull { it.isNotEmpty() }
+        return if (line != null) "$what failed: $line" else "$what failed (is `gh` authenticated and the repo reachable?)."
+    }
+
+    private companion object {
+        // The only top-level commands this client may ever invoke, each mapped to its allowed read
+        // subcommands. `pr` carries three reads now (list for the page, view + diff for PR ingestion); no
+        // mutating verb is ever in the set, so requireReadOnly can't pass one through.
+        val ALLOWED: Map<String, Set<String>> = mapOf(
+            "repo" to setOf("view"),
+            "pr" to setOf("list", "view", "diff"),
+            "issue" to setOf("list"),
+        )
+
+        // Structured log event ids — the stable, greppable contract tooling keys off (see the
+        // bdd-tiered-testing skill, "Logging is IO"). Namespaced `gh.*`; change a message freely, but
+        // treat an id change as a breaking change to anything consuming the logs.
+        const val EV_UNAVAILABLE = "gh.unavailable"
+        const val EV_STARTUP_OK = "gh.startup.ok"
+        const val EV_STARTUP_UNAVAILABLE = "gh.startup.unavailable"
+        const val EV_LIST_FAILED = "gh.list.failed"
+        const val EV_PULL_UNAVAILABLE = "gh.pull.unavailable"
+        const val EV_DIFF_FAILED = "gh.pull.diff.failed"
+    }
+
+    /** Defence-in-depth: every argv handed to `gh` must be one of the read commands above. */
+    private fun requireReadOnly(argv: List<String>): List<String> {
+        val command = argv.getOrNull(0)
+        val sub = argv.getOrNull(1)
+        require(command != null && ALLOWED[command]?.contains(sub) == true) {
+            "internal: '$command $sub' is not an allowed read-only gh command"
+        }
+        return argv
+    }
+}

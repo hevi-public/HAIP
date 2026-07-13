@@ -1,0 +1,74 @@
+@import com.aiforum.web.GitHubPageView
+@param page: GitHubPageView
+
+@template.layout(title = "GitHub · AI Forum", activeNav = "github", content = @`
+    <div class="github" data-page="github">
+        <h1 class="github__title">GitHub</h1>
+
+        @if(!page.available)
+            <p class="github__unavailable" data-github-unavailable="true">${page.reason}</p>
+        @else
+            !{val repo = page.repo!!;}
+            <section class="github__repo" data-github-repo="${repo.nameWithOwner}">
+                <h2 class="github__repo-name">
+                    <a href="${repo.url}" rel="noopener noreferrer" target="_blank">${repo.nameWithOwner}</a>
+                </h2>
+                @if(repo.description != null)
+                    <p class="github__repo-desc">${repo.description}</p>
+                @endif
+                <ul class="github__repo-meta">
+                    <li data-github-default-branch="${repo.defaultBranch}">branch <span class="mono">${repo.defaultBranch}</span></li>
+                    <li data-github-stars="${repo.stars}">★ ${repo.stars}</li>
+                    <li data-github-open-prs="${repo.openPrs}">${repo.openPrs} open PRs</li>
+                    <li data-github-open-issues="${repo.openIssues}">${repo.openIssues} open issues</li>
+                </ul>
+            </section>
+
+            <section class="github__section" data-github-section="pulls">
+                <h2 class="github__section-title">Open pull requests</h2>
+                @if(page.pulls.isEmpty())
+                    <p class="github__empty" data-github-pulls-empty="true">No open pull requests.</p>
+                @else
+                    <ul class="github__list">
+                        @for(pr in page.pulls)
+                            <li class="github__item" data-github-pr="${pr.number}" data-github-draft="${pr.isDraft}">
+                                <a class="github__item-title" href="${pr.url}" rel="noopener noreferrer" target="_blank">
+                                    <span class="mono">#${pr.number}</span> ${pr.title}
+                                </a>
+                                @if(pr.isDraft)
+                                    <span class="github__badge" data-github-badge="draft">draft</span>
+                                @endif
+                                <div class="github__item-meta">${pr.author} · ${pr.ago}</div>
+                                @if(pr.threadId != null)
+                                    <a class="github__action" data-github-pr-thread="${pr.number}" href="/threads/${pr.threadId}">View thread →</a>
+                                @else
+                                    <form class="github__action-form" method="post" action="/github/pr/${pr.number}/discuss">
+                                        <button class="github__action github__action--button" type="submit" data-github-pr-discuss="${pr.number}">Discuss in the forum</button>
+                                    </form>
+                                @endif
+                            </li>
+                        @endfor
+                    </ul>
+                @endif
+            </section>
+
+            <section class="github__section" data-github-section="issues">
+                <h2 class="github__section-title">Open issues</h2>
+                @if(page.issues.isEmpty())
+                    <p class="github__empty" data-github-issues-empty="true">No open issues.</p>
+                @else
+                    <ul class="github__list">
+                        @for(issue in page.issues)
+                            <li class="github__item" data-github-issue="${issue.number}">
+                                <a class="github__item-title" href="${issue.url}" rel="noopener noreferrer" target="_blank">
+                                    <span class="mono">#${issue.number}</span> ${issue.title}
+                                </a>
+                                <div class="github__item-meta">${issue.author} · ${issue.ago}</div>
+                            </li>
+                        @endfor
+                    </ul>
+                @endif
+            </section>
+        @endif
+    </div>
+`)

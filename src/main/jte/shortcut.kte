@@ -1,0 +1,54 @@
+@import com.aiforum.shortcut.ShortcutResult
+@import com.aiforum.shortcut.ShortcutStatus
+@import com.aiforum.shortcut.StorySource
+
+@param selected: StorySource
+@param sources: List<StorySource>
+@param query: String
+@param result: ShortcutResult
+@param enabled: Boolean
+
+@template.layout(title = "Shortcut · AI Forum", activeNav = "shortcut", content = @`
+    <div class="shortcut-page" data-page="shortcut">
+        <h1 class="home__title">Shortcut stories</h1>
+        @if(!enabled)
+            <%-- Integration off (or no token): say so plainly instead of an empty page. --%>
+            <p class="notice" data-shortcut-disabled="true">
+                The Shortcut integration is off. Set <code>aiforum.shortcut.enabled: true</code> and an
+                API token to connect a workspace.
+            </p>
+        @else
+            <%-- Source switcher: the three feeds. Each is a plain link so it works without JS and is
+                 deep-linkable. data-shortcut-source carries the slug; the active one is marked. --%>
+            <nav class="shortcut-sources" data-shortcut-sources>
+                @for(s in sources)
+                    <a class="shortcut-source ${if (s == selected) "is-active" else ""}"
+                       href="/shortcut?source=${s.slug}"
+                       data-shortcut-source="${s.slug}"
+                       aria-current="${if (s == selected) "page" else null}">${s.label}</a>
+                @endfor
+            </nav>
+            @if(selected == StorySource.QUERY)
+                <%-- Free-text Shortcut search for the Search source. GET so the query stays in the URL. --%>
+                <form class="shortcut-search" method="get" action="/shortcut" data-shortcut-search>
+                    <input type="hidden" name="source" value="query">
+                    <input class="shortcut-search__input" type="text" name="q" value="${query}"
+                           data-shortcut-query
+                           placeholder='Shortcut search, e.g. owner:jane state:"In Progress" type:bug'>
+                    <button class="btn" type="submit">Search ▸</button>
+                </form>
+            @endif
+            @if(result.status == ShortcutStatus.ERROR)
+                <p class="notice notice--warn" data-shortcut-error="true">${result.message}</p>
+            @elseif(result.stories.isEmpty())
+                <p class="notice" data-shortcut-empty="true">No matching stories.</p>
+            @else
+                <ul class="shortcut-stories shortcut-stories--page" data-shortcut-list>
+                    @for(story in result.stories)
+                        @template.fragments.storyCard(story = story)
+                    @endfor
+                </ul>
+            @endif
+        @endif
+    </div>
+`)

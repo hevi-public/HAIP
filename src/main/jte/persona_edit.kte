@@ -1,0 +1,59 @@
+@import com.aiforum.web.PersonaView
+@import com.aiforum.persona.Dials
+@param persona: PersonaView
+@param dialKeys: List<String>
+
+@template.layout(title = "Edit " + persona.name + " · AI Forum", activeNav = "members", content = @`
+    <div data-page="edit-persona">
+        <h1 class="home__title">Edit ${persona.name}</h1>
+        <%-- Re-composing edit: the previous values + prompt are replayed to the LLM server-side so it
+             ADJUSTS the prompt rather than regenerating it. The name (hence id/slug) is fixed here. --%>
+        <form class="new-persona" data-edit-persona data-persona-form method="post" action="/personas/${persona.slug}/edit">
+            <textarea class="new-persona__descriptor" name="descriptor"
+                      placeholder="Character notes — voice, expertise, point of view (optional)">${persona.descriptor}</textarea>
+            <input class="new-persona__abilities" type="text" name="abilities"
+                   value="${persona.abilities.joinToString(", ")}"
+                   placeholder="Abilities — comma-separated (e.g. kotlin, systems)">
+            <fieldset class="new-persona__dials" data-dials>
+                <legend>Dials</legend>
+                @for(key in dialKeys)
+                    <label class="dial">
+                        <span class="dial__label">${Dials.describe(key)}</span>
+                        <input type="range" name="dial_${key}" min="0" max="10" value="${persona.dials.getOrDefault(key, Dials.DEFAULT)}">
+                    </label>
+                @endfor
+            </fieldset>
+            <select class="new-persona__model" name="model">
+                <option value="" selected="${persona.model.isEmpty()}">default model</option>
+                <option value="claude-haiku-4-5-20251001" selected="${persona.model == "claude-haiku-4-5-20251001"}">Haiku 4.5 (fast)</option>
+                <option value="claude-sonnet-4-6" selected="${persona.model == "claude-sonnet-4-6"}">Sonnet 4.6</option>
+                <option value="claude-opus-4-8" selected="${persona.model == "claude-opus-4-8"}">Opus 4.8</option>
+                <option value="claude-fable-5" selected="${persona.model == "claude-fable-5"}">Fable 5</option>
+                <%-- A model pinned outside the list above (e.g. a local id set while running the openai
+                     provider) must keep an option, or the browser falls back to "default model" and Save
+                     silently WIPES the pin. --%>
+                @if(persona.model.isNotEmpty() && persona.model !in listOf("claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-8", "claude-fable-5"))
+                    <option value="${persona.model}" selected="${true}">${persona.model} (custom)</option>
+                @endif
+            </select>
+            <%-- Prefilled with the current prompt. "Regenerate" re-composes from the (edited) inputs
+                 against the previous values, swapping the result in; Save persists exactly what's shown.
+                 Changing an input above flags Regenerate and disables Save until it's re-run (app.js). --%>
+            <textarea id="edit-persona-prompt" class="new-persona__prompt" name="systemPrompt" data-prompt-field>${persona.systemPrompt}</textarea>
+            <div class="form-actions">
+                <a class="btn btn--ghost" data-cancel-edit href="/personas/${persona.slug}">Cancel</a>
+                <span class="form-actions__spacer"></span>
+                <button type="button" class="btn btn--ghost" data-preview-prompt
+                        hx-post="/personas/${persona.slug}/compose" hx-include="closest form"
+                        hx-target="#edit-persona-prompt" hx-swap="innerHTML"
+                        hx-disabled-elt="this" hx-indicator="next .regen-spinner">
+                    Regenerate prompt
+                </button>
+                <span class="htmx-indicator regen-spinner" aria-live="polite">
+                    <span class="spinner" aria-hidden="true"></span>Composing…
+                </span>
+                <button class="btn" type="submit">Save changes ▸</button>
+            </div>
+        </form>
+    </div>
+`)

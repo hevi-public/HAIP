@@ -1,0 +1,44 @@
+@import com.aiforum.web.AdminCommentView
+@import com.aiforum.web.AuthorLabel
+@param listTitle: String
+@param rows: List<AdminCommentView>
+@param capped: Boolean
+@param cap: Int
+
+@template.layout(title = "Admin · " + listTitle + " · AI Forum", activeNav = "admin", content = @`
+    <div class="admin-list" data-admin-list="comments">
+        <p class="admin-list__back"><a href="/admin">← Admin</a></p>
+        <h1 class="admin-list__title">${listTitle}</h1>
+        @if(rows.isEmpty())
+            <p class="admin-list__empty" data-admin-list-empty="true">No comments match.</p>
+        @else
+            @if(capped)
+                <p class="admin-list__note">Showing the newest ${cap}.</p>
+            @endif
+            <ul class="admin-list__items">
+                @for(row in rows)
+                    <li class="admin-list__item" data-admin-comment="${row.id}">
+                        <a class="admin-list__link" href="/threads/${row.threadId}#reply-${row.id}">
+                            <span class="admin-list__snippet">"${row.snippet}"</span>
+                            <span class="admin-list__meta">
+                                <span class="admin-list__author">${AuthorLabel.display(row.authorId)}</span>
+                                <span class="admin-list__sep">·</span>
+                                <span class="admin-list__state">${row.state}</span>
+                                @if(row.votes > 0)
+                                    <span class="admin-list__sep">·</span><span class="admin-list__badge">+${row.votes}</span>
+                                @endif
+                                @if(row.reasoningLeak != null)
+                                    <span class="admin-list__sep">·</span><span class="admin-list__badge">leak: ${row.reasoningLeak}</span>
+                                @endif
+                                <span class="admin-list__sep">·</span>
+                                <span class="admin-list__thread">in ${row.threadTitle}</span>
+                                <span class="admin-list__sep">·</span>
+                                <span class="admin-list__ago">${row.ago}</span>
+                            </span>
+                        </a>
+                    </li>
+                @endfor
+            </ul>
+        @endif
+    </div>
+`)

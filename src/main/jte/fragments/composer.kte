@@ -1,4 +1,5 @@
 @import com.aiforum.web.PersonaView
+@import com.aiforum.web.AuthorColor
 @param threadId: String
 @param targetId: String
 @param parentId: String?
@@ -9,29 +10,134 @@
 <%-- The data-* targeting hooks and the hx-* wiring live on the SAME opening tag: the acceptance
      probe (Html.composerScope/composerAttr) reads attributes from the single tag carrying
      data-target-id, so the composer is one <form>, not a wrapper div around a form (§4). The
-     class= styling hook rides along on that same tag and is ignored by the probe. --%>
-<form class="composer composer--${placement}"
+     class= styling hook rides along on that same tag and is ignored by the probe. The affordances
+     below (persona chips, slash palette, @mention menu — §4) are progressive enhancement driven by
+     app.js: with JS off the checkbox-backed chips still bind personaIds and the textarea still posts
+     text. --%>
+<%-- data-note-mode="1" makes Note the DEFAULT: app.js's configRequest handler reads it and rewrites
+     the POST from /generate down to /note (a silent owner comment, no AI summon). The owner opts into
+     summoning with /ask (or the footer toggle) — or simply by tagging a persona (@mention / chip),
+     which always asks even from the note default (see resolvePath in composer-core). The static
+     hx-post stays /generate so it's the canonical path the rewrite peels back from. --%>
+<form class="composer composer--${placement}" data-note-mode="1"
       data-composer="${placement}" data-target-id="${targetId}" data-scope="${scope}"
+      <%-- Multipart so the form can carry an image part (name="images"). With no file chosen the browser
+           sends an empty part, which the multipart controllers treat exactly as the urlencoded submit;
+           the urlencoded/JSON handlers remain for the acceptance suite and API clients. --%>
+      enctype="multipart/form-data"
       hx-post="/threads/${threadId}/generate"
       hx-target="${if (placement == "bottom") ".reply-list" else "closest article"}"
-      hx-swap="beforeend">
+      hx-swap="beforeend"
+      <%-- While the request is in flight, disable the submit button (so a second submit can't
+           race) and reveal the inline spinner (htmx toggles .htmx-request on the indicator). Mirrors the
+           auto-grow pattern in thread.kte. --%>
+      hx-disabled-elt="find button[type='submit']"
+      hx-indicator="find [data-composer-spinner]"
+      <%-- Once the post succeeds, clear the editor and collapse it: the owner's message has been swapped
+           in as a real comment box, so the open textarea should get out of the way. reset() empties the
+           textarea for both placements; the inline composer additionally closes its <details> disclosure
+           (a no-op for the persistent bottom composer, which has no enclosing <details>). --%>
+      hx-on::after-request="if(event.detail.successful){this.reset();this.closest('details')?.removeAttribute('open')}">
     <div class="composer__head">
         <span class="composer__tag">${if (placement == "bottom") "↳ level 0" else "↳ inline"}</span>
-        <span>${if (placement == "bottom") "New reply to the post" else "Reply in this branch"}</span>
+        <%-- Inline label describes PLACEMENT (where the reply lands), not reading scope — scope now
+             defaults to whole topic, so "in this branch" would mislead. --%>
+        <span class="composer__head-label">${if (placement == "bottom") "New reply to the post" else "Reply here"}</span>
     </div>
+
     @if(parentId != null)
         <input type="hidden" name="parentId" value="${parentId}">
     @endif
     <input type="hidden" name="scope" value="${scope}">
     <input type="hidden" name="triggerMode" value="SUMMON">
-    <textarea name="text" placeholder="Ask the room…   write a question, pick who answers"></textarea>
-    <div class="composer__row">
-        <label>who answers</label>
-        <select name="personaIds">
+    <%-- The composer is the owner authoring a message: the server persists `text` as the owner's own
+         node and seeds the room with it (otherwise the owner's words never appear and the personas only
+         ever see a blank transcript, emitting a generic opener). --%>
+    <input type="hidden" name="postAsOwner" value="true">
+
+    <div class="composer__editor" data-composer-editor>
+        <textarea name="text" data-composer-text
+                  placeholder="Write a note…   /ask or @tag a persona to summon a reply"></textarea>
+
+        <%-- Attach an image (owner-authored, caption-only to the model — see AttachmentService). Multiple
+             allowed; the server sniffs magic bytes and rejects non-images. data-composer-images is the
+             stable hook. --%>
+        <label class="composer__attach" data-composer-attach>
+            <input type="file" name="images" data-composer-images
+                   accept="image/png,image/jpeg,image/gif,image/webp" multiple>
+            <span class="composer__attach-hint">🖼 Attach image</span>
+        </label>
+
+        <%-- Slash palette (app.js shows + filters it while the line starts with "/"). Each command just
+             flips one of the existing controls, so it works the same as clicking them. --%>
+        <div class="palette" data-slash-menu hidden>
+            <div class="palette__cap">commands · control how the reply is generated</div>
+            <button type="button" class="palette__row" data-slash-cmd="branch"><span class="palette__key">/branch</span><span class="palette__desc">context = this branch</span></button>
+            <button type="button" class="palette__row" data-slash-cmd="topic"><span class="palette__key">/topic</span><span class="palette__desc">context = whole topic</span></button>
+            <button type="button" class="palette__row" data-slash-cmd="ask"><span class="palette__key">/ask</span><span class="palette__desc">summon a persona · AI replies</span></button>
+            <button type="button" class="palette__row" data-slash-cmd="note"><span class="palette__key">/note</span><span class="palette__desc">post your comment · no AI reply (default)</span></button>
+        </div>
+
+        <%-- @mention menu (app.js shows + filters it while typing an @handle). Picking a row inserts the
+             handle into the textarea AND selects that persona's chip; the mention is also parsed
+             server-side (MentionParser), so summoning by @name works even with JS off. --%>
+        <div class="palette" data-mention-menu hidden>
+            <div class="palette__cap">summon a persona</div>
             @for(p in personas)
-                <option value="${p.id}">${p.name}</option>
+                !{ val handle = if (p.slug.isNullOrBlank()) p.name else p.slug }
+                <button type="button" class="palette__row" data-mention-pick="${p.id}" data-mention-handle="${handle}" data-mention-name="${p.name.lowercase()}">
+                    <span class="monogram monogram--sm" aria-hidden="true" style="--mono-h: ${AuthorColor.hue(p.id, personas)}">${p.name.take(2).uppercase()}</span>
+                    <span class="palette__key">@${handle}</span>
+                    <span class="palette__desc">${p.name} · ${p.descriptor}</span>
+                </button>
             @endfor
-        </select>
-        <button class="btn" type="submit">Ask ▸</button>
+        </div>
+    </div>
+
+    <%-- Persona chips are the picker (name="personaIds", asserted by composer_reply_targeting). "Anyone"
+         hands the choice to the AI dispatcher (value "auto" = GenerationService.AUTO_PERSONA); selecting
+         persona chips names who replies. Checkbox-backed so the form still binds with JS off; app.js
+         enforces Anyone↔named exclusivity (named chips are multi-select — naming several is a roomful
+         summon; breadth follows who you tag). --%>
+    <div class="chips" data-persona-picker>
+        <label class="chip chip--anyone is-selected" data-anyone-chip>
+            <input type="checkbox" name="personaIds" value="auto" checked>
+            <span>✦ Anyone</span>
+        </label>
+        @for(p in personas)
+            <label class="chip" data-persona-chip="${p.id}">
+                <input type="checkbox" name="personaIds" value="${p.id}">
+                <span class="monogram monogram--xs" aria-hidden="true" style="--mono-h: ${AuthorColor.hue(p.id, personas)}">${p.name.take(2).uppercase()}</span>
+                <span>${p.name}</span>
+            </label>
+        @endfor
+    </div>
+
+    <div class="composer__row">
+        <%-- One-click /ask shortcut, left-anchored like /more on a reply. Note is the default, so the
+             footer toggle offers the OTHER mode: same hook the slash palette uses (data-slash-cmd="ask"),
+             so app.js's slash handler flips the composer into ask mode — the submit button relabels to
+             "Ask ▸" and the form posts to /generate (summon). Once in ask mode app.js relabels this to
+             /note so the owner can switch back. data-composer-shortcut is the stable assertion hook for
+             the footer button itself. The hint below carries margin-left:auto, so it and everything after
+             it (spinner, submit) sit on the right while this button stays on the left. --%>
+        <button type="button" class="btn btn--ghost composer__shortcut"
+                data-slash-cmd="ask" data-composer-shortcut="ask">/ask</button>
+        <%-- When "Anyone" is chosen, this scopes what the dispatcher reads to decide WHO replies: the
+             whole topic (default) or just this branch. Ignored when a specific persona is named. Inline
+             only: the bottom composer is top-level (no ancestor path), so "this branch" == "whole topic"
+             — omitting it (the controller defaults routingScope to WHOLE_THREAD) keeps it clean. --%>
+        @if(placement != "bottom")
+            <span class="composer__ctx-label">looking at</span>
+            <select name="routingScope" class="composer__select">
+                <option value="WHOLE_THREAD" selected>whole topic</option>
+                <option value="BRANCH_ONLY">this branch</option>
+            </select>
+        @endif
+        <span class="composer__hint"><b>/</b> commands · <b>@</b> summon</span>
+        <span class="htmx-indicator composer__spinner" data-composer-spinner aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>Posting…
+        </span>
+        <button class="btn" type="submit">Note ▸</button>
     </div>
 </form>

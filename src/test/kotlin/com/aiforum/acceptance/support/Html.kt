@@ -15,15 +15,158 @@ object Html {
         return Regex("$attr=\"([^\"]*)\"").find(tag)?.groupValues?.get(1)
     }
 
+    /** The value of [attr] on the thread row whose data-thread-title == [title], or null. */
+    fun threadRowAttr(html: String, title: String, attr: String): String? {
+        val tag = Regex("<[^>]*data-thread-title=\"${Regex.escape(title)}\"[^>]*>").find(html)?.value ?: return null
+        return Regex("${Regex.escape(attr)}=\"([^\"]*)\"").find(tag)?.groupValues?.get(1)
+    }
+
+    /** The value of [attr] on the member row whose data-persona-name == [name], or null. */
+    fun memberRowAttr(html: String, name: String, attr: String): String? {
+        val tag = Regex("<[^>]*data-persona-name=\"${Regex.escape(name)}\"[^>]*>").find(html)?.value ?: return null
+        return Regex("${Regex.escape(attr)}=\"([^\"]*)\"").find(tag)?.groupValues?.get(1)
+    }
+
     /** True if any element carries data-[name]="[value]". */
     fun hasAttr(html: String, name: String, value: String): Boolean =
         Regex("$name=\"${Regex.escape(value)}\"").containsMatchIn(html)
+
+    /** Every distinct data-reply-id in document order — one for a summon, several for a fan-out. */
+    fun allReplyIds(html: String): List<String> =
+        Regex("data-reply-id=\"([^\"]+)\"").findAll(html).map { it.groupValues[1] }.distinct().toList()
 
     fun contains(html: String, needle: String): Boolean = html.contains(needle, ignoreCase = true)
 
     /** Count of elements carrying data-[name]="[value]". */
     fun countAttr(html: String, name: String, value: String): Int =
         Regex("$name=\"${Regex.escape(value)}\"").findAll(html).count()
+
+    /** Every value carried by [name]="…" in document order — e.g. the reply id on each rail entry. */
+    fun attrValues(html: String, name: String): List<String> =
+        Regex("${Regex.escape(name)}=\"([^\"]*)\"").findAll(html).map { it.groupValues[1] }.toList()
+
+    /**
+     * The text of the in-reply-to anchor belonging to the reply with data-reply-id=[childId], or null.
+     * The anchor (data-in-reply-to="<parent id>") is the first one rendered inside the child's article
+     * (before its body and before any nested children), so the first match after the child's opening
+     * tag is the child's own anchor.
+     */
+    /** The visible text of the branch-index entry (data-branch-index-entry="[replyId]"), or null. */
+    fun branchEntryText(html: String, replyId: String): String? {
+        val a = Regex("<a\\b[^>]*data-branch-index-entry=\"${Regex.escape(replyId)}\"[^>]*>(.*?)</a>", RegexOption.DOT_MATCHES_ALL)
+            .find(html) ?: return null
+        return a.groupValues[1].replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim()
+    }
+
+    /** The value of [attr] on the branch-index entry anchor (data-branch-index-entry="[replyId]"), or
+     *  null. Reads e.g. data-starred, the rail's authoritative star marker the star feature asserts on. */
+    fun branchEntryAttr(html: String, replyId: String, attr: String): String? {
+        val tag = Regex("<a\\b[^>]*data-branch-index-entry=\"${Regex.escape(replyId)}\"[^>]*>").find(html)?.value ?: return null
+        return Regex("${Regex.escape(attr)}=\"([^\"]*)\"").find(tag)?.groupValues?.get(1)
+    }
+
+    fun inReplyToText(html: String, childId: String): String? {
+        val open = Regex("<article\\b[^>]*data-reply-id=\"${Regex.escape(childId)}\"[^>]*>").find(html) ?: return null
+        val anchor = Regex("<a\\b[^>]*data-in-reply-to=\"[^\"]*\"[^>]*>(.*?)</a>", RegexOption.DOT_MATCHES_ALL)
+            .find(html, open.range.last + 1) ?: return null
+        return anchor.groupValues[1].replace(Regex("<[^>]*>"), "").trim()
+    }
+
+    /**
+     * The substring of reply [replyId]'s OWN content — from its opening <article> tag up to its first
+     * nested child article (or its matching </article> when it has no children). The reply's head, the
+     * in-reply-to / forward-quotes strips, body and action bar live here; nested children do not. Null if
+     * [replyId] isn't present. Lets the quote-graph probes read a reply's own anchors without catching a
+     * child's or a sibling's.
+     */
+    private fun ownContent(html: String, replyId: String): String? {
+        val open = Regex("<article\\b[^>]*data-reply-id=\"${Regex.escape(replyId)}\"[^>]*>").find(html) ?: return null
+        val token = Regex("<article\\b|</article>")
+        var i = open.range.last + 1
+        var depth = 1
+        var firstChildStart = -1
+        var closeStart = html.length
+        while (true) {
+            val m = token.find(html, i) ?: break
+            if (m.value == "</article>") {
+                depth--
+                if (depth == 0) { closeStart = m.range.first; break }
+            } else {
+                if (depth == 1 && firstChildStart < 0) firstChildStart = m.range.first
+                depth++
+            }
+            i = m.range.last + 1
+        }
+        val end = if (firstChildStart in 0 until closeStart) firstChildStart else closeStart
+        return html.substring(open.range.last + 1, end)
+    }
+
+    /** The target ids of every forward quote anchor (data-quote-source) in reply [srcId]'s own quotes
+     *  strip, in document order. Empty if [srcId] quotes nothing (or isn't present). */
+    fun quoteSources(html: String, srcId: String): List<String> {
+        val span = ownContent(html, srcId) ?: return emptyList()
+        return Regex("data-quote-source=\"([^\"]*)\"").findAll(span).map { it.groupValues[1] }.toList()
+    }
+
+    /** The visible text of [srcId]'s forward quote anchor pointing at [targetId] (data-quote-source=
+     *  "[targetId]"), or null if [srcId] doesn't quote [targetId]. Mirrors [inReplyToText]. */
+    fun quoteRefText(html: String, srcId: String, targetId: String): String? {
+        val span = ownContent(html, srcId) ?: return null
+        val anchor = Regex("<a\\b[^>]*data-quote-source=\"${Regex.escape(targetId)}\"[^>]*>(.*?)</a>", RegexOption.DOT_MATCHES_ALL)
+            .find(span) ?: return null
+        return anchor.groupValues[1].replace(Regex("<[^>]*>"), "").trim()
+    }
+
+    /** The "quoted by" count on [targetId]'s backward-backlink block (data-quoted-by-count), or 0 if the
+     *  comment carries no backlinks. Read from the comment's own content (its SSR .reply__quoted-by). */
+    fun quotedByCount(html: String, targetId: String): Int {
+        val span = ownContent(html, targetId) ?: return 0
+        return Regex("data-quoted-by-count=\"([0-9]+)\"").find(span)?.groupValues?.get(1)?.toInt() ?: 0
+    }
+
+    /** The src-comment ids of every quoter listed in [targetId]'s backlink block (data-backlink-src). */
+    fun backlinkQuoters(html: String, targetId: String): List<String> {
+        val span = ownContent(html, targetId) ?: return emptyList()
+        return Regex("data-backlink-src=\"([^\"]*)\"").findAll(span).map { it.groupValues[1] }.toList()
+    }
+
+    /** The distinct quoted passages in [targetId]'s backlink block (data-backlink-text) — one per
+     *  coalesced group, so the size is the number of distinct passages quoted. */
+    fun backlinkPassages(html: String, targetId: String): List<String> {
+        val span = ownContent(html, targetId) ?: return emptyList()
+        return Regex("data-backlink-text=\"([^\"]*)\"").findAll(span).map { it.groupValues[1] }.toList()
+    }
+
+    /** The data-reply-id of the first <article> whose data-author == [author], or null. */
+    fun replyIdWithAuthor(html: String, author: String): String? {
+        val tag = Regex("<article\\b[^>]*data-author=\"${Regex.escape(author)}\"[^>]*>").find(html)?.value ?: return null
+        return Regex("data-reply-id=\"([^\"]+)\"").find(tag)?.groupValues?.get(1)
+    }
+
+    /**
+     * True if the <article> with data-reply-id=[childId] is nested INSIDE the one with
+     * data-reply-id=[parentId] — genuine DOM containment, not merely both present on the page (which is
+     * what the flat-rendering bug produced). Articles nest, so we balance <article>/</article> from the
+     * parent's opening tag to find its matching close and look for the child only within that span.
+     */
+    fun isNestedUnder(html: String, childId: String, parentId: String): Boolean {
+        val open = Regex("<article\\b[^>]*data-reply-id=\"${Regex.escape(parentId)}\"[^>]*>").find(html) ?: return false
+        val token = Regex("<article\\b|</article>")
+        var i = open.range.last + 1   // start scanning after the parent's opening tag (parent = depth 1)
+        var depth = 1
+        while (true) {
+            val m = token.find(html, i) ?: return false
+            if (m.value == "</article>") {
+                depth--
+                if (depth == 0) {     // parent's matching close — child must lie in the span before it
+                    return html.substring(open.range.last + 1, m.range.first).contains("data-reply-id=\"$childId\"")
+                }
+            } else {
+                depth++
+            }
+            i = m.range.last + 1
+        }
+    }
 
     /** The data-scope value on the composer element whose data-target-id == [targetId], or null. */
     fun composerScope(html: String, targetId: String): String? = composerAttr(html, targetId, "data-scope")

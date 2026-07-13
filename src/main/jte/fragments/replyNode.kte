@@ -1,20 +1,38 @@
 @import com.aiforum.dto.ReplyView
+@import com.aiforum.dto.BranchIndexEntry
+@import com.aiforum.dto.QuoteRef
 @import com.aiforum.dto.GenerationState
 @import com.aiforum.dto.FailureCategory
+@import com.aiforum.dto.ReasoningLeak
+@import com.aiforum.web.AuthorColor
+@import com.aiforum.web.AuthorLabel
 @import com.aiforum.web.PersonaView
 @param reply: ReplyView
 @param threadId: String? = null
 @param personas: List<PersonaView> = emptyList()
+<%-- Only set on a top-level fragment response whose settle changed the posted set (a draft polling to
+     POSTED, a retry, an edit). Carries a fresh branch index as an out-of-band swap so the rail refreshes
+     when the node lands. Left null on the recursive child renders and the full-page render. --%>
+@param branchIndex: List<BranchIndexEntry>? = null
 
 <%-- Indentation comes from DOM nesting (children render inside this <article>); state styling is
      driven off data-state / data-failure-category in app.css. All data-* hooks stay on this one
-     opening tag — the acceptance probe reads them by regex (see Html.replyAttr). --%>
+     opening tag — the acceptance probe reads them by regex (see Html.replyAttr).
+     A DRAFTING node self-polls GET /replies/{id} every second and carries a Cancel control; the
+     hx-* polling attrs are injected (raw, trusted — only the reply id, a UUID) onto the SAME tag so
+     they sit beside the data-* hooks. Once the node settles, the re-rendered fragment omits the
+     trigger, so htmx tears the polling timer down (§4). --%>
 !{ val badge = when (reply.failureCategory) {
        FailureCategory.RATE_LIMITED -> "usage limit"
        FailureCategory.COULDNT_SAVE -> "unsaved"
        else -> reply.state.name.lowercase()
-   } }
-<article class="reply"
+   }
+   val pollAttrs = if (reply.state == GenerationState.DRAFTING)
+       "hx-get=\"/replies/${reply.id}\" hx-trigger=\"every 1s\" hx-target=\"this\" hx-swap=\"outerHTML\""
+   else "" }
+<article class="reply" $unsafe{pollAttrs}
+         id="reply-${reply.id}"
+         data-nav-item="reply"
          data-reply-id="${reply.id}"
          data-author="${reply.authorId}"
          data-state="${reply.state.name.lowercase()}"
@@ -22,31 +40,229 @@
          data-retryable="${reply.retryable.toString()}"
          data-retry-after="${reply.retryAfterSeconds?.toString() ?: ""}"
          data-vote-count="${reply.voteCount.toString()}"
+         data-reasoning-leak="${reply.reasoningLeak?.name?.lowercase() ?: ""}"
+         data-edited="${reply.edited.toString()}"
+         data-revision-index="${reply.revisionIndex.toString()}"
+         data-revision-count="${reply.revisionCount.toString()}"
+         data-regeneratable="${reply.regeneratable.toString()}"
          data-depth="${reply.depth.toString()}">
     <header class="reply__head">
-        <span class="monogram" aria-hidden="true">${reply.authorId.take(2).uppercase()}</span>
-        <span class="reply__author">${reply.authorId}</span>
+        <span class="monogram" aria-hidden="true" style="--mono-h: ${AuthorColor.hue(reply.authorId, personas)}">${AuthorLabel.monogram(reply.authorId)}</span>
+        <span class="reply__author">${AuthorLabel.display(reply.authorId)}</span>
         @if(reply.state != GenerationState.POSTED)
             <span class="reply__badge reply__badge--${reply.state.name.lowercase()}">${badge}</span>
         @endif
+        <%-- Reasoning-leak badge: shown independently of state (a POSTED reply can still be flagged). The
+             body was already cleaned; this just tells the reader the model leaked its thinking. ACTUAL =
+             we stripped <think> tags; POSSIBLE = a heuristic suspects untagged reasoning. --%>
+        @if(reply.reasoningLeak != null)
+            <span class="reply__badge reply__badge--leak"
+                  title="The model leaked its reasoning into this reply; the body shown has been cleaned.">
+                ${if (reply.reasoningLeak == ReasoningLeak.ACTUAL) "reasoning leak" else "possible reasoning leak"}
+            </span>
+        @endif
+        <%-- The owner has revised this body (their own or an AI reply, §7). Subtle, honest marker — it
+             matters most on a persona's node, where it signals the owner changed what the persona "said". --%>
+        @if(reply.edited)
+            <span class="reply__edited" data-edited-marker>(edited)</span>
+        @endif
+        <%-- Revision switcher (§7 regenerate): only when the reply has more than one stored take. Steps
+             through versions in place — each ‹/› outerHTML-swaps this <article> with the selected revision
+             (children preserved, server-rendered). The 1-based label is the data-revision-* hooks the
+             acceptance probe reads; the prev/next targets are 0-based stored indices. --%>
+        @if(reply.revisionCount > 1)
+            <span class="reply__revisions" role="group" aria-label="Revision history" data-revisions>
+                <button type="button" class="reply__rev-nav" aria-label="Previous version"
+                        disabled="${reply.revisionIndex <= 1}"
+                        hx-post="/replies/${reply.id}/revision/${reply.revisionIndex - 2}"
+                        hx-target="closest article" hx-swap="outerHTML">‹</button>
+                <span class="reply__rev-count" data-revision-label>${reply.revisionIndex}/${reply.revisionCount}</span>
+                <button type="button" class="reply__rev-nav" aria-label="Next version"
+                        disabled="${reply.revisionIndex >= reply.revisionCount}"
+                        hx-post="/replies/${reply.id}/revision/${reply.revisionIndex}"
+                        hx-target="closest article" hx-swap="outerHTML">›</button>
+            </span>
+        @endif
     </header>
+    @if(reply.parent != null)
+        <%-- "In reply to" anchor: a literal truncated quote of the parent (ParentRef.previewOf), linking
+             up to that comment's node (#reply-<id>). data-in-reply-to carries the parent id — the
+             acceptance probe reads the anchor by it. --%>
+        <a class="reply__inreplyto" href="#reply-${reply.parent.id}" data-in-reply-to="${reply.parent.id}">
+            <span class="reply__inreplyto-label">in reply to ${AuthorLabel.display(reply.parent.author)}:</span>
+            <span class="reply__inreplyto-quote">${reply.parent.quote}</span>
+        </a>
+    @endif
+    @if(!reply.quotes.isEmpty())
+        <%-- Forward quote refs (comment-quotes.md §3): this reply cites other comments. Each "↗ author"
+             anchor jumps to the source comment (#reply-<targetId>, the same anchor the branch index and
+             in-reply-to use); the snippet is a literal preview of the quoted span. data-quote-source
+             carries the target id — the acceptance probe reads the anchor by it. The quoted text itself
+             also shows inline as a markdown blockquote in the body below. --%>
+        <div class="reply__quotes" data-quotes>
+            @for(q in reply.quotes)
+                <a class="reply__quote-ref" href="#reply-${q.targetId}" data-quote-source="${q.targetId}">
+                    <span class="reply__quote-ref-label">↗ ${AuthorLabel.display(q.targetAuthor)}:</span>
+                    <span class="reply__quote-ref-snippet">${q.snippet}</span>
+                </a>
+            @endfor
+        </div>
+    @endif
     @if(reply.reason != null)
         <div class="reason">${reply.reason}</div>
     @endif
-    <div class="body">${reply.body}</div>
-    @if(reply.voteCount > 0)
-        <span class="reply__vote">▲ ${reply.voteCount}</span>
+    <%-- bodyHtml is markdown rendered to trusted HTML (MarkdownRenderer): raw HTML in a body is escaped
+         there, so $unsafe{} here is safe — the only live HTML is commonmark's + our highlighted code. --%>
+    <div class="body">$unsafe{reply.bodyHtml}</div>
+    @if(!reply.quotedBy.isEmpty())
+        <%-- Backward backlinks (comment-quotes.md §6): the comments that quote THIS one, grouped per
+             distinct passage. SSR'd as a "quoted by" footer — the no-JS fallback AND the data source
+             quote-backlinks.js promotes into inline <mark>s + a hover cone. data-backlink-text carries the
+             FULL passage (untruncated) so the client can re-find and highlight it; only the label is cut. --%>
+        !{ val quotedByCount = reply.quotedBy.sumOf { it.quoters.size } }
+        <div class="reply__quoted-by" data-quoted-by data-quoted-by-count="${quotedByCount}">
+            <span class="reply__quoted-by-summary">quoted by ${quotedByCount}</span>
+            @for(bl in reply.quotedBy)
+                <div class="reply__backlink" data-backlink-text="${bl.text}">
+                    <span class="reply__backlink-passage">“${QuoteRef.previewOf(bl.text)}”</span>
+                    @for(q in bl.quoters)
+                        <a class="reply__backlink-quoter" href="#reply-${q.commentId}" data-backlink-src="${q.commentId}">
+                            <span class="reply__backlink-author">↩ ${AuthorLabel.display(q.author)}</span>
+                            <span class="reply__backlink-snippet">${q.snippet}</span>
+                        </a>
+                    @endfor
+                </div>
+            @endfor
+        </div>
     @endif
-    <%-- Inline composer only when the thread context is known (full page / generate / auto-grow);
-         fragments rendered without it (e.g. retry) re-render the node without a composer. It is a
-         collapsed disclosure so only one reply box opens at a time (§4). --%>
-    @if(threadId != null)
-        <details class="reply__compose">
-            <summary>Reply</summary>
-            @template.fragments.composer(placement = "inline", targetId = reply.id, parentId = reply.id, scope = "BRANCH_ONLY", threadId = threadId, personas = personas)
-        </details>
+    <%-- Owner-attached images (caption-only to the model). Only an owner node shows the Describe control;
+         personas never attach images. Renders nothing when there are none. --%>
+    @template.fragments.attachments(attachments = reply.attachments, owner = reply.authorId == "owner")
+    @if(reply.state == GenerationState.DRAFTING)
+        <%-- in-flight affordance: a neutral Cancel that trips the shared CancellationToken (§4); the
+             drafting indicator itself rides on the state badge above. --%>
+        <div class="reply__inflight">
+            <button class="btn btn--ghost reply__cancel" type="button"
+                    hx-post="/replies/${reply.id}/cancel"
+                    hx-target="closest article" hx-swap="outerHTML">Cancel</button>
+        </div>
     @endif
+    <%-- Action bar: a single footer line — Reply, then +1, then the rest; Delete is pushed to the far
+         right of the same row (.reply__delete { margin-left:auto }). /more and Retry, when present, sit
+         beside +1. The vote area stays its own htmx swap target, so a +1 swaps it in place untouched. --%>
+    <div class="reply__actionbar">
+        <%-- Inline composer leads the footer as a collapsed disclosure (one reply box open at a time, §4),
+             only on a POSTED node whose thread context is known (full page / generate / auto-grow);
+             fragments re-rendered without threadId (retry/drafting/failed) omit it. When opened it spans
+             the full row width so the composer drops below the footer buttons. Generation scope defaults
+             to WHOLE_THREAD (matches the visible "looking at: whole topic" control); a branch-only default
+             silently hid sibling branches from the model. Placement is still this node (parentId). --%>
+        @if(threadId != null && reply.state == GenerationState.POSTED)
+            <details class="reply__compose">
+                <summary>Reply</summary>
+                @template.fragments.composer(placement = "inline", targetId = reply.id, parentId = reply.id, scope = "WHOLE_THREAD", threadId = threadId, personas = personas)
+            </details>
+        @endif
+        @template.fragments.voteArea(reply = reply)
+        <%-- Star — the owner's navigation bookmark (firewalled like +1). Its own swap target so a toggle
+             replaces just the control; the branch-index rail mirrors it client-side (nav.js). --%>
+        @template.fragments.starControl(reply = reply)
+        <%-- /more — owner directive that re-grants depth budget (§7). Appears on POSTED nodes whose
+             branch has stalled (depthBudget == 0). The response is a new system directive node appended
+             inside this article; children stay in the DOM via beforeend. --%>
+        @if(reply.state == GenerationState.POSTED && reply.depthBudget == 0)
+            <button type="button" class="btn btn--ghost"
+                    hx-post="/replies/${reply.id}/more"
+                    hx-target="closest article"
+                    hx-swap="beforeend">/more</button>
+        @endif
+        <%-- Retry is the dead-end escape for a FAILED/CANCELLED draft (reply.retryable, §4) — the
+             settled counterpart to the DRAFTING Cancel above. The endpoint re-renders this node alone
+             via fragments/replyNode, so outerHTML swapping the closest <article> replaces just this
+             node in place. No data-* hooks here — they all stay on the opening tag. --%>
+        @if(reply.retryable)
+            <button type="button" class="btn btn--ghost"
+                    hx-post="/replies/${reply.id}/retry"
+                    hx-target="closest article"
+                    hx-swap="outerHTML">Retry</button>
+        @endif
+        <%-- Edit (§7): revise this body — the owner's own note or an AI persona's reply (to correct
+             context it misread). Only on a POSTED node; a drafting/failed node has nothing settled to
+             edit. The disclosure prefills with the raw markdown and saves in place (see editForm). --%>
+        @if(reply.state == GenerationState.POSTED)
+            @template.fragments.editForm(reply = reply)
+        @endif
+        <%-- Regenerate (§7): re-run the model on a POSTED persona reply for a fresh take. Reuses the
+             delete-confirm disclosure pattern, but it is NON-destructive (sage, not clay) — the current
+             take is kept as a revision, so the warning points the owner at the ‹ › switcher to step back.
+             Only on a persona reply (reply.regeneratable); the owner's own notes have nothing to regen. --%>
+        @if(reply.regeneratable)
+            <details class="reply__regenerate">
+                <summary class="reply__regenerate-trigger">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                    <span>Regenerate</span>
+                </summary>
+                <div class="reply__regenerate-confirm" role="group" aria-label="Confirm regenerate">
+                    <p class="reply__regenerate-warning">Regenerate this reply? The current version is kept — step back any time with the ‹ › control.</p>
+                    <div class="reply__regenerate-buttons">
+                        <%-- Synchronous LLM call: disable the button and reveal the inline spinner while it
+                             runs (htmx toggles .htmx-request on both), mirroring the persona-prompt
+                             regenerate and the composer submit. The settled node outerHTML-swaps this whole
+                             panel away, so the disabled/spinner state never needs resetting. --%>
+                        <button type="button" class="btn"
+                                hx-post="/replies/${reply.id}/regenerate"
+                                hx-target="closest article"
+                                hx-swap="outerHTML"
+                                hx-disabled-elt="this" hx-indicator="next .regen-spinner">Yes, regenerate</button>
+                        <span class="htmx-indicator regen-spinner" aria-live="polite">
+                            <span class="spinner" aria-hidden="true"></span>Regenerating…
+                        </span>
+                        <button type="button" class="btn btn--ghost"
+                                onclick="this.closest('details').open = false">Cancel</button>
+                    </div>
+                </div>
+            </details>
+        @endif
+        <%-- Delete cascades to the whole subtree (§8 node operations), pushed to the bottom-right of the action row. The
+             trash trigger opens an inline "are you sure" panel (a <details> disclosure) instead of the
+             browser's plain native confirm. The real POST lives on the "Yes, delete" button, so it
+             still outerHTML-swaps this <article> away — children, which render nested inside it, go with
+             it. Cancel just closes the disclosure (no request). Hidden on a DRAFTING node (it has
+             Cancel instead). --%>
+        @if(reply.state != GenerationState.DRAFTING)
+            <details class="reply__delete">
+                <summary class="reply__delete-trigger">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        <line x1="10" y1="11" x2="10" y2="17"/>
+                        <line x1="14" y1="11" x2="14" y2="17"/>
+                    </svg>
+                    <span>Delete</span>
+                </summary>
+                <div class="reply__delete-confirm" role="group" aria-label="Confirm delete">
+                    <p class="reply__delete-warning">Delete this comment and all of its replies? This can't be undone.</p>
+                    <div class="reply__delete-buttons">
+                        <button type="button" class="btn btn--danger"
+                                hx-post="/replies/${reply.id}/delete"
+                                hx-target="closest article"
+                                hx-swap="outerHTML">Yes, delete</button>
+                        <button type="button" class="btn btn--ghost"
+                                onclick="this.closest('details').open = false">Cancel</button>
+                    </div>
+                </div>
+            </details>
+        @endif
+    </div>
     @for(child in reply.children)
         @template.fragments.replyNode(reply = child, threadId = threadId, personas = personas)
     @endfor
 </article>
+@if(branchIndex != null)
+    @template.fragments.branchIndex(entries = branchIndex, oob = true)
+@endif

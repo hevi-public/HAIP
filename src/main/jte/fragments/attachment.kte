@@ -1,0 +1,40 @@
+@import com.aiforum.dto.AttachmentView
+@param attachment: AttachmentView
+@param owner: Boolean = false
+
+<%-- One gallery cell. The describe POST re-renders exactly this <figure> (hx outerHTML swap), so it is
+     the single root here. data-attachment-id / data-caption-state are the stable acceptance hooks. The
+     image is served by /attachments/{id} (content-addressed, immutable, long-cached). The caption — when
+     present — doubles as the alt text and is what flows into the model's context. The Describe control
+     shows only for the owner (personas never attach images). --%>
+<figure class="attachment" data-attachment-id="${attachment.id}" data-caption-state="${attachment.captionState}">
+    <img class="attachment__img" src="${attachment.src}" loading="lazy"
+         alt="${attachment.caption ?: attachment.originalFilename ?: "attached image"}">
+    @if(attachment.described && attachment.captionHtml != null)
+        <%-- The caption rendered through the markdown engine (MarkdownRenderer escapes raw HTML, so
+             $unsafe{} is safe), wrapped in a semantic blockquote styled as a quote. A transcribed code
+             fence in the caption renders as a real highlighted code block inside the quote. --%>
+        <blockquote class="attachment__caption" data-attachment-caption>$unsafe{attachment.captionHtml}</blockquote>
+    @endif
+    @if(owner)
+        <div class="attachment__controls">
+            <%-- Manual describe: hand the image to the vision model and fold the resulting caption into
+                 context. Disabled while in flight so a double-click can't double-describe. --%>
+            <button type="button" class="btn btn--ghost attachment__describe"
+                    data-attachment-describe="${attachment.id}"
+                    hx-post="/attachments/${attachment.id}/describe"
+                    hx-target="closest .attachment" hx-swap="outerHTML"
+                    hx-disabled-elt="this"
+                    hx-indicator="next .describe-spinner">
+                ${if (attachment.described) "Re-describe" else "Describe"}
+            </button>
+            <span class="htmx-indicator describe-spinner" aria-live="polite">
+                <span class="spinner" aria-hidden="true"></span>Describing…
+            </span>
+            <%-- "none" is the resting state — saying it aloud just reads as debug output. --%>
+            @if(attachment.captionState != "none")
+                <span class="attachment__state" data-attachment-state>${attachment.captionState}</span>
+            @endif
+        </div>
+    @endif
+</figure>

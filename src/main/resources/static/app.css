@@ -21,17 +21,23 @@
   --bar:         #f2f0e6;  /* header & footer bars */
   --strip:       #edeee0;  /* table-header / strip rows */
   --wash:        #eef0e4;  /* composer "in-context" green wash */
+  --row-hover:   #f2f1e4;  /* thread / member row hover */
 
   /* borders */
   --line:        #e3e2cf;  /* hairline */
   --line-dotted: #dedccb;  /* dotted dividers */
   --line-node:   #ebe9da;  /* reply-node borders */
 
-  /* sage accent (the brand) */
+  /* sage accent (the brand; the dark theme re-tints this whole family to HUP blue) */
   --sage:        #b3bca3;
-  --sage-ink:    #3f4a2b;  /* text on sage */
+  --sage-ink:    #3f4a2b;  /* text ON a sage chip — flips WITH --sage (dark: light text on the blue chip) */
   --sage-ink-2:  #4a503b;
   --sage-2:      #cdd0bb;  /* secondary / avatar sage */
+  --sage-text:   #3f4a2b;  /* sage-tinted STANDALONE text/accent on the page/card surface — unlike
+                              --sage-ink this sits on a surface that DOES flip, so the dark theme
+                              re-tints it (using --sage-ink here made dark-mode text near-invisible) */
+  --label:       #6b6e48;  /* the 10px uppercase section labels (rail boxes, form legends) */
+  --focus-border: #9aa882;  /* focused text-field border (dark theme brightens it) */
   --spine:       #e4e2ce;  /* default tree spine */
   --spine-live:  #94a06e;  /* in-context / active spine */
 
@@ -47,6 +53,20 @@
   --dark-ink:    #e9e8d6;
   --dark-dim:    #b3b596;
 
+  /* floating overlay chrome (slash/@mention palette, quote toolbar/cone) — always a dark layer,
+     but tinted to the active theme (olive here, navy in dark) so it never reads as foreign */
+  --pop:          #34342a;
+  --pop-line:     #44443a;
+  --pop-row-line: #3c3c32;
+  --pop-hover:    #3f3f33;
+  --pop-ink:      #cdd0bb;
+  --pop-dim:      #b9b9a4;
+  --pop-cap:      #b3b596;
+  --scrim:        rgba(52, 52, 42, .38);
+
+  /* unread marker — the HUP "ÚJ" orange (outline badge on thread rows; HUP wears it in both themes) */
+  --new:         #c1731f;
+
   /* error-state accents (six UX states) */
   --clay:        #c07a5e;  --clay-bg:   #f7ede7;  --clay-line: #e8d3c6;  --clay-ink: #9c5a41;
   --amber:       #c8a564;  --amber-bg:  #f6efdf;  --amber-line:#e7dcbf;  --amber-ink:#5a4a1f; --amber-chip:#d8bd78;
@@ -57,11 +77,95 @@
   --r-sm:        2px;
   --shadow:      0 1px 4px rgba(0, 0, 0, .09);
   --shadow-pop:  0 6px 22px rgba(0, 0, 0, .24);
-  --maxw:        1080px;
-  --prose:       680px;
+  --maxw:        1280px;   /* index/members working width (HUP-lineage comps frame at 1280) */
+  --prose:       680px;    /* line-length cap — keeps prose readable however wide the column gets */
+  --gutter:      24px;     /* gap between thread main column and the future side rail */
+  --rail:        300px;    /* reserved width for side boxes added later (design comp rail ≈ 268px) */
 
   --sans: Verdana, "DejaVu Sans", Geneva, Tahoma, sans-serif;
   --mono: "DejaVu Sans Mono", ui-monospace, "SF Mono", "Courier New", monospace;
+
+  color-scheme: light;
+}
+
+/* ------------------------------------------------------------------ dark theme
+ * Token-only override layer. Palette source: HUP.hu's own dark theme (the app's design lineage) —
+ * near-black blue page, navy-slate panels, vivid HUP-blue links/accent, rounded panel corners.
+ * Every component reads these vars, so flipping html[data-theme="dark"] re-skins the whole app.
+ * Unlike the earlier sage-dark comps, the whole --sage accent family DOES flip here: the brand
+ * accent becomes HUP blue, so the -ink pairs flip with it (light text on the blue chip). Per-persona
+ * avatar hues (.monogram / .branch-index__dot, see below) are left as-is, pending a visual pass. */
+html[data-theme="dark"] {
+  /* surfaces */
+  --page:        #0b0e13;  /* near-black, blue-cast (HUP page ground) */
+  --frame:       #151a21;
+  --card:        #161c24;
+  --input:       #10151c;  /* fields sit darker than the panel, border carries the shape */
+  --bar:         #0a0c10;  /* header & footer — darkest step, almost black */
+  --strip:       #1d242e;  /* box header strips (HUP: "HUP keresés" / user-box caps) */
+  --wash:        #16202e;  /* composer "in-context" wash — blue-tinted, not green */
+  --row-hover:   #1d242e;  /* thread / member row hover — a clear step above --card */
+
+  /* borders */
+  --line:        #262e3a;
+  --line-dotted: #222933;
+  --line-node:   #202731;
+
+  /* accent — the sage family re-tints to HUP blue (chips/buttons/underlines all read the pair) */
+  --sage:        #3672db;  /* HUP action blue (the »» search button) */
+  --sage-ink:    #f2f6ff;  /* text ON the blue chip */
+  --sage-ink-2:  #eaf1fb;
+  --sage-2:      #2c3a52;  /* slate-blue secondary: input/chip borders, quote bars, tag chips */
+  --spine:       #2a323e;  /* default tree spine */
+  --spine-live:  #5c96f2;  /* in-context / active spine */
+
+  /* text */
+  --ink:         #d8dee6;
+  --muted:       #98a2ae;
+  --faint:       #87919c;
+  --faint-2:     #77808c;
+  --link:        #5b9bf8;  /* HUP link blue */
+
+  /* code / popover inset — slightly lighter than the frame so it still reads as an inset */
+  --dark:        #1c2330;
+  --dark-ink:    #dbe3ee;
+  --dark-dim:    #93a2b7;
+
+  /* floating overlay chrome — navy-tinted dark layer */
+  --pop:          #1e2632;
+  --pop-line:     #334052;
+  --pop-row-line: #2a3543;
+  --pop-hover:    #273140;
+  --pop-ink:      #d7dfe9;
+  --pop-dim:      #a6b2c0;
+  --pop-cap:      #8fa0b3;
+  --scrim:        rgba(6, 9, 14, .55);
+
+  /* error-state accents — same hue semantics, cooled to sit on the navy ground.
+     The -chip tokens MUST flip alongside the -ink tokens: the light chips pair with dark inks, so
+     leaving a chip at its :root value while flipping its ink renders text on its own color
+     (the reasoning-leak badge, RATE_LIMITED badge, and mark.nav-hit were invisible in dark). */
+  --clay-bg:   #2a1d1c;  --clay-line: #4b322c;  --clay-ink: #e39a82;
+  --amber-bg:  #2a2415;  --amber-line:#4c3f20;  --amber-ink:#dfba6a;  --amber-chip:#4a3a1c;
+  --grey-bg:   #1a202a;  --grey-ink:  #98a2ae;  --grey-chip: #2b3440;
+
+  /* unread marker — brighter on the navy ground (HUP dark's ÚJ) */
+  --new:         #e8963f;
+
+  /* standalone accent text + section labels — lifted for dark surfaces (see :root notes) */
+  --sage-text:   #6ea8fe;
+  --label:       #8794a3;
+  --focus-border: #4d8ef7;
+
+  /* geometry — HUP dark is a rounder system than the 3px sage comps */
+  --r:           8px;
+  --r-sm:        4px;
+
+  /* depth — shadows need more weight against the dark page to read at all */
+  --shadow:      0 1px 4px rgba(0, 0, 0, .4);
+  --shadow-pop:  0 6px 22px rgba(0, 0, 0, .55);
+
+  color-scheme: dark;
 }
 
 /* -------------------------------------------------------------------- base */
@@ -73,7 +177,7 @@ body {
   color: var(--ink);
   font-family: var(--sans);
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.45;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -110,7 +214,74 @@ a:hover { text-decoration: underline; }
 .site-header__spacer { margin-left: auto; }
 .site-header__crumb { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
 
-.container { max-width: var(--maxw); margin: 0 auto; padding: 20px 18px 40px; }
+/* theme switcher: all options shown ("☾ dark / ☀ light / ◑ auto"), the active one underlined. Mirrors
+ * the .site-nav active treatment (sage border-bottom) so it reads as part of the header chrome. The
+ * active state is CSS-driven off html[data-theme-mode] (the user's choice, not the resolved palette),
+ * so it renders correctly before paint (no flash) and "auto" stays lit even as the palette flips. */
+.theme-toggle {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 12.5px;
+}
+.theme-toggle__sep { color: var(--faint-2); }
+.theme-toggle__opt {
+  border: 0; background: none; cursor: pointer; font: inherit;
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--link); padding: 2px 0; border-bottom: 2px solid transparent;
+}
+.theme-toggle__opt:hover { color: var(--ink); }
+html[data-theme-mode="dark"]  .theme-toggle__opt[data-set-theme="dark"],
+html[data-theme-mode="light"] .theme-toggle__opt[data-set-theme="light"],
+html[data-theme-mode="auto"]  .theme-toggle__opt[data-set-theme="auto"],
+html:not([data-theme-mode])   .theme-toggle__opt[data-set-theme="auto"] {
+  color: var(--ink); font-weight: 700; border-bottom-color: var(--sage);
+}
+
+/* Layout controls (plan: collapsible-sidebars): collapse either side rail or go full-width. Icon-only
+ * buttons that share the theme switcher's header treatment — the pressed (collapsed/wide) state lights
+ * with the same sage underline. layout.js drives aria-pressed; sits left of the theme toggle, the two
+ * grouped at the right edge of the header. */
+.layout-toggle {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 14px;
+}
+.layout-toggle + .theme-toggle { margin-left: 18px; }   /* layout-toggle owns the auto; keep them adjacent */
+.layout-toggle__opt {
+  border: 0; background: none; cursor: pointer; font: inherit; line-height: 1;
+  display: inline-flex; align-items: center;
+  color: var(--link); padding: 2px 1px; border-bottom: 2px solid transparent;
+}
+.layout-toggle__opt:hover { color: var(--ink); }
+.layout-toggle__opt[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--sage); }
+
+/* In-content full-screen button: a small card affordance pinned to the top-right of the main column on
+ * the home + thread pages. Flips the same wide state as the header group; pressed = currently full-width. */
+.wide-toggle {
+  position: absolute; top: 0; right: 0; z-index: 5;
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); color: var(--muted);
+  font-size: 14px; line-height: 1; cursor: pointer;
+}
+.wide-toggle:hover { color: var(--ink); border-color: var(--sage-2); }
+.wide-toggle[aria-pressed="true"] { background: var(--sage); color: var(--sage-ink); border-color: transparent; }
+
+/* Pin the header on desktop so the nav + theme toggle stay reachable while reading long threads, and so
+   clicking the bare chrome (header.js) scrolls back to a still-visible bar. z-index clears the sticky
+   side rails, which pin BELOW the header (their top offsets budget for it). Mobile keeps a static header
+   — pinning a 48px bar on a short phone viewport costs more reading room than it's worth. */
+@media (min-width: 1024px) {
+  /* -webkit-sticky first: Safari/iOS only honour the prefixed value on older engines, and silently drop
+     the whole declaration (no sticky) without it. Unprefixed second wins everywhere current. */
+  .site-header { position: -webkit-sticky; position: sticky; top: 0; z-index: 50; }
+}
+
+.container { max-width: var(--maxw); margin: 0 auto; padding: 20px clamp(16px, 2.5vw, 36px) 40px; }
+/* The thread view runs full-bleed — it wants every horizontal pixel for the reply tree. Prose stays
+   capped at --prose, so widening only buys room for depth, not unreadable line lengths. */
+.container:has(.thread) { max-width: none; }
 
 .site-footer {
   border-top: 1px solid var(--line);
@@ -122,11 +293,13 @@ a:hover { text-decoration: underline; }
 .site-footer .sep { opacity: .5; }
 
 /* ------------------------------------------------------------- components */
+/* the unread-count badge on thread rows — HUP's "ÚJ" idiom: orange outline chip, transparent fill */
 .pill {
   display: inline-block;
-  background: var(--sage); color: var(--sage-ink-2);
+  background: transparent; color: var(--new);
+  border: 1px solid color-mix(in srgb, var(--new) 60%, transparent);
   font-family: var(--mono); font-size: 10px; font-weight: 700;
-  line-height: 1.4; padding: 1px 5px; border-radius: var(--r-sm);
+  line-height: 1.4; padding: 0 5px; border-radius: var(--r-sm);
   white-space: nowrap;
 }
 
@@ -141,18 +314,245 @@ a:hover { text-decoration: underline; }
 .btn:disabled, .btn[aria-disabled="true"] {
   background: var(--grey-chip); color: var(--faint-2); cursor: not-allowed; filter: none;
 }
+/* ghost = neutral, low-emphasis action (e.g. Cancel an in-flight draft — a choice, not a failure) */
+.btn--ghost {
+  background: transparent; color: var(--muted);
+  border-color: var(--sage-2); font-weight: 400; padding: 2px 9px; font-size: 11.5px;
+}
+.btn--ghost:hover { background: var(--grey-bg); color: var(--ink); filter: none; }
+
+/* Persona-form actions row: Cancel pushed left, Regenerate + Save grouped on the right so the missing
+   step (Regenerate) sits right next to Save (see plan_docs/persona-prompt-edit-ux.md). */
+.form-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.form-actions__spacer { flex: 1; }
+/* When the shown prompt is stale, the (ghost) Regenerate button is promoted to a warning so it reads as
+   "do this first"; app.js toggles .is-needed and disables Save alongside it. */
+.btn.is-needed {
+  background: var(--clay, #b5532e); color: #fff; border-color: transparent; font-weight: 700;
+  animation: nudge 1.2s ease-in-out infinite;
+}
+.btn.is-needed::before { content: "\26A0"; margin-right: 2px; }  /* ⚠ */
+@keyframes nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+@media (prefers-reduced-motion: reduce) { .btn.is-needed { animation: none; } }
 
 .monogram {
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px;
-  background: var(--sage-2); color: var(--sage-ink-2);
+  width: 24px; height: 24px;
+  /* Pastel tint per author: --mono-h is set inline from the author's avatar hue (AuthorColor); fixed
+     lightness + saturation keep every avatar in the same soft register. Falls back to sage if unset. */
+  background: hsl(var(--mono-h, 75) 42% 84%);
+  color: hsl(var(--mono-h, 75) 32% 32%);
   font-family: var(--mono); font-weight: 700; font-size: 12px;
   border-radius: var(--r-sm);
 }
 
 /* ---------------------------------------------------------------- home */
 .home__title { font-size: 22px; font-weight: 700; margin: 4px 0 14px; }
+
+/* Front-page layout: side rails flanking the main thread index (design 3-col frame). Below the
+   breakpoint everything stacks to a single column (left rail, list, right rail in DOM order). */
+.home { display: block; }
+.home__rail, .home__rail-right { display: flex; flex-direction: column; gap: 16px; }
+.home__rail { margin-bottom: 16px; }
+.home__rail-right { margin-top: 16px; }
+@media (min-width: 1024px) {
+  .home {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr) 248px;
+    grid-template-areas: "left main right";
+    gap: 22px; align-items: start;
+  }
+  .home__rail { grid-area: left; margin-bottom: 0; }
+  .home__main { grid-area: main; }
+  .home__rail-right { grid-area: right; margin-top: 0; }
+  /* The LEFT nav rail pins as the page scrolls so the forum nav + members stay reachable. It pins below
+     the sticky header (48px) + an 18px gap = top:66px (same budget as the thread rail — see its note),
+     capped to the visible space with overflow scrolling inside so a rail taller than the viewport doesn't
+     glue its top and hide its tail. The RIGHT feeds rail is deliberately NOT sticky: on a page longer than
+     the rail, pinning leaves the boxes frozen over a growing blank gap, so it just scrolls away. */
+  .home__rail {
+    position: -webkit-sticky; position: sticky; top: 66px;
+    max-height: calc(100vh - 84px); overflow-y: auto;
+  }
+}
+
+/* -------------------------------------------------- collapsible side rails / full-width mode
+   (plan: collapsible-sidebars). The rails always render server-side; layout.js flips
+   data-rail-left / data-rail-right on <html> and these rules hide a rail and reflow the grid so the
+   main column reclaims the freed space. Initial state is set pre-paint in layout.kte (no flash). */
+
+/* Hiding works at every width, so collapsing also tidies the stacked single-column mobile layout. */
+html[data-rail-left="collapsed"]  [data-home-rail],
+html[data-rail-left="collapsed"]  [data-thread-rail],
+html[data-rail-right="collapsed"] [data-home-rail-right],
+html[data-rail-right="collapsed"] [data-thread-rail-right] { display: none; }
+
+/* The in-content button anchors to the main column's top-right corner. */
+.home__main, .thread__main { position: relative; }
+
+@media (min-width: 1024px) {
+  /* Left rail collapsed → main + right rail (same shape for both pages). */
+  html[data-rail-left="collapsed"]:not([data-rail-right="collapsed"]) .home,
+  html[data-rail-left="collapsed"]:not([data-rail-right="collapsed"]) .thread {
+    grid-template-columns: minmax(0, 1fr) 248px;
+    grid-template-areas: "main right";
+  }
+  /* Right rail collapsed → left rail + main (the left track differs per page). */
+  html[data-rail-right="collapsed"]:not([data-rail-left="collapsed"]) .home {
+    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-areas: "left main";
+  }
+  html[data-rail-right="collapsed"]:not([data-rail-left="collapsed"]) .thread {
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    grid-template-areas: "left main";
+  }
+  /* Both collapsed = "full screen": one full-width column on both pages. */
+  html[data-rail-left="collapsed"][data-rail-right="collapsed"] .home,
+  html[data-rail-left="collapsed"][data-rail-right="collapsed"] .thread {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "main";
+  }
+}
+
+/* Full-width mode lifts the home page's --maxw cap so the main content runs to the browser edge (the
+   thread view is already full-bleed, see .container:has(.thread)). Prose stays capped at --prose, so
+   the extra room goes to layout, not unreadable line lengths. */
+html[data-rail-left="collapsed"][data-rail-right="collapsed"] .container { max-width: none; }
+
+/* Forum-nav box — the "~/forum" terminal listing in the left rail. Shares .rail-box card chrome. */
+/* Compound selector beats the base .rail-box__title (defined later in the file) at the same specificity. */
+.rail-box__title.rail-box__title--path { text-transform: none; letter-spacing: 0; }
+.forum-nav { list-style: none; margin: 0; padding: 0; }
+.forum-nav__row + .forum-nav__row { border-top: 1px dotted var(--line-dotted); }
+.forum-nav__link {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 5px 0;
+  font-family: var(--mono); font-size: 12.5px; color: var(--link);
+}
+.forum-nav__link:hover .forum-nav__path { text-decoration: underline; }
+.forum-nav__count { flex: none; font-size: 11px; font-weight: 700; color: var(--muted); }
+
+/* Members box — roster rows in the left rail. Shares .rail-box card chrome. */
+.members-box { list-style: none; margin: 0; padding: 0; }
+.members-box__row + .members-box__row { margin-top: 7px; }
+.members-box__link { display: flex; align-items: center; gap: 8px; }
+.members-box__name { color: var(--link); font-size: 12.5px; }
+.members-box__link:hover .members-box__name { text-decoration: underline; }
+.members-box__add {
+  display: inline-block; margin-top: 10px;
+  font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--sage-text);
+}
+
+/* Active-threads box — recent-activity shortlist in the right rail. Shares .rail-box card chrome. */
+.active-threads { list-style: none; margin: 0; padding: 0; }
+.active-threads__row + .active-threads__row { border-top: 1px dotted var(--line-dotted); }
+.active-threads__link {
+  display: flex; align-items: baseline; gap: 8px; padding: 6px 0;
+  font-size: 12px; line-height: 1.4;
+}
+.active-threads__title { color: var(--link); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.active-threads__link:hover .active-threads__title { text-decoration: underline; }
+.active-threads__time { flex: none; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+/* Recent-comments box — right-rail feed of the newest posted replies. Shares .rail-box card chrome. */
+.recent-comments { list-style: none; margin: 0; padding: 0; }
+.recent-comments__row { padding: 7px 0; }
+.recent-comments__row + .recent-comments__row { border-top: 1px dotted var(--line-dotted); }
+.recent-comments__quote { display: block; color: var(--ink); font-size: 12px; line-height: 1.4; }
+.recent-comments__quote:hover { text-decoration: underline; }
+.recent-comments__meta { margin-top: 3px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+
+.btn--block { display: flex; justify-content: center; width: 100%; }
+
+/* Ask-the-room composer — a click-to-reveal new-thread form in the main column. The <summary> is the
+   card the user sees first (title + lead + button); opening the <details> discloses the form below.
+   Shares the new-thread card chrome; the nested form drops its own card chrome to avoid a double box. */
+.ask-card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r); box-shadow: var(--shadow);
+  padding: 15px 16px; margin-top: 18px;
+}
+.ask-card__summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 8px; }
+.ask-card__summary::-webkit-details-marker { display: none; }   /* hide the default disclosure triangle */
+.ask-card__title {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--label);
+}
+.ask-card__lead { font-size: 12px; color: var(--muted); }
+/* Once open, the form below is the action — the CTA has done its job, so retire it. */
+.ask-card[open] .ask-card__cta { display: none; }
+.ask-card .new-thread,
+.ask-card .new-persona {
+  margin-top: 12px; padding: 0; background: none; border: none; box-shadow: none;   /* no nested card */
+}
+
+/* New-thread / new-member composers — a card below the index list. Stacked fields with the submit button
+   right-aligned below; the new-member card adds a model picker beside its button. Shares the card chrome
+   of the index it sits under (dropped when nested in an .ask-card, above). */
+.new-thread,
+.new-persona {
+  display: flex; flex-direction: column; gap: 9px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 15px 16px;
+  margin-top: 18px;
+}
+.new-thread__label {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--label);
+}
+.new-thread__title, .new-thread__body,
+.new-persona__name, .new-persona__descriptor, .new-persona__abilities, .new-persona__prompt {
+  width: 100%; box-sizing: border-box;
+  background: var(--input); color: var(--ink);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  font-family: var(--sans);
+  padding: 9px 11px;
+}
+.new-thread__title, .new-persona__name { font-size: 15px; font-weight: 700; }
+.new-thread__body, .new-persona__descriptor, .new-persona__prompt {
+  font-size: 13.5px; line-height: 1.6;
+  resize: vertical; min-height: 70px;
+}
+.new-thread__title:focus, .new-thread__body:focus,
+.new-persona__name:focus, .new-persona__descriptor:focus,
+.new-persona__abilities:focus, .new-persona__prompt:focus {
+  outline: none; border-color: var(--focus-border);
+  box-shadow: 0 0 0 1px var(--focus-border);   /* doubles the border so focus reads in dark too,
+                                                  where the old #9aa882 was DIMMER than the resting border */
+}
+.new-thread__actions { display: flex; justify-content: flex-end; }
+/* The member form pairs a model picker (left) with the actions group (right). */
+.new-persona__actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* Cancel / Regenerate / Save grouped on the right, Regenerate adjacent to Save (the gated next step). */
+.new-persona__buttons { display: flex; align-items: center; gap: 10px; }
+.new-persona__model {
+  background: var(--input); color: var(--ink);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  font-family: var(--sans); font-size: 13px;
+  padding: 8px 10px;
+}
+.new-persona__model:focus { outline: none; border-color: var(--focus-border); box-shadow: 0 0 0 1px var(--focus-border); }
+
+/* Personality dials: lay the sliders out in a horizontal row (wrapping on narrow widths) rather than a
+   tall vertical stack — each dial is a compact labelled column (label above its slider). */
+.new-persona__dials {
+  /* width:100% + min-inline-size:0 override the <fieldset> min-content quirk that otherwise shrinks it
+     to one column's width, forcing the row to wrap into a vertical stack. */
+  width: 100%; box-sizing: border-box; min-inline-size: 0;
+  margin: 0; padding: 10px 12px;
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  display: flex; flex-wrap: wrap; gap: 12px 18px;
+}
+.new-persona__dials legend {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--label); padding: 0 4px;
+}
+.dial { display: flex; flex-direction: column; gap: 5px; flex: 1 1 160px; min-width: 150px; }
+.dial__label { font-size: 11.5px; color: var(--muted); }
+.dial input[type="range"] { width: 100%; accent-color: var(--spine-live); }
 
 .thread-index {
   background: var(--card);
@@ -167,61 +567,343 @@ a:hover { text-decoration: underline; }
   border-top: 1px dotted var(--line-dotted);
 }
 .thread-row:first-child { border-top: 0; }
-.thread-row:hover { background: #f2f1e4; }
+.thread-row:hover { background: var(--row-hover); }
 .thread-row[data-unread-count="0"] { padding-left: 17px; }       /* read: no spine, align with unread text */
 .thread-row:not([data-unread-count="0"]) { border-left: 3px solid var(--sage); padding-left: 14px; }
 .thread-row__title { font-weight: 700; font-size: 14px; flex: 1 1 auto; }
 .thread-row__title a { color: var(--link); }
 .thread-row[data-unread-count="0"] .thread-row__title a { color: var(--muted); font-weight: 400; }
 
-/* members list — same index frame, no unread spine */
+/* row delete — shared by the thread list and the members list (rendered by fragments/rowDelete.kte).
+   Same gated "are you sure" pattern as the reply delete (clay = warning hue), but a compact icon-only
+   trigger parked at the right end of the row. The confirm panel is a flex sibling of the <details>
+   (outside it, not nested) shown via the CSS sibling selector .row-delete[open] ~ .row-delete__confirm.
+   This keeps it in normal flex flow, avoiding the absolutely-positioned-inside-details browser quirk
+   and the overflow:hidden clipping problem. flex-wrap:wrap on the row lets the confirm span a second
+   line below the title/icon row when opened. Trigger icon is invisible at rest (revealed on row-hover,
+   keyboard focus, or when open). */
+.thread-row { flex-wrap: wrap; }
+.row-delete { margin-left: auto; align-self: center; }
+.row-delete > summary {
+  display: inline-flex; align-items: center;
+  list-style: none; cursor: pointer;
+  color: var(--muted);
+  border: 1px solid transparent; border-radius: var(--r);
+  padding: 4px;
+}
+.row-delete > summary::marker,
+.row-delete > summary::-webkit-details-marker { display: none; }
+.row-delete > summary .icon { width: 15px; height: 15px; flex-shrink: 0; }
+.row-delete:not([open]) > summary { opacity: 0; }   /* calm at rest… */
+.thread-row:hover .row-delete > summary,
+.member-row:hover .row-delete > summary,
+.row-delete[open] > summary,
+.row-delete > summary:focus-visible { opacity: 1; }   /* …revealed on row hover, open, or keyboard focus */
+.row-delete > summary:hover,
+.row-delete[open] > summary {
+  color: var(--clay-ink); border-color: var(--clay-line); background: var(--clay-bg);
+}
+/* Confirm panel: hidden by default, revealed when the sibling <details> is open. flex-basis:100% forces
+   it to wrap onto its own line below the title/icon row — no absolute positioning needed. */
+.row-delete__confirm { display: none; flex-basis: 100%; }
+.row-delete[open] ~ .row-delete__confirm {
+  display: block;
+  margin-top: 0; padding: 10px 14px 12px;
+  background: var(--clay-bg);
+  border-top: 1px solid var(--clay-line); border-left: 3px solid var(--clay);
+}
+.row-delete__warning { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--clay-ink); }
+.row-delete__buttons { display: flex; align-items: center; gap: 8px; }
+
+/* members list — same index frame, no unread spine. flex-wrap lets the delete-confirm panel drop onto
+   its own line; the trigger sits just past the right-aligned descriptor (which keeps the margin-auto). */
 .member-row {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
   padding: 10px 14px;
   border-top: 1px dotted var(--line-dotted);
 }
 .member-row:first-child { border-top: 0; }
-.member-row:hover { background: #f2f1e4; }
+.member-row:hover { background: var(--row-hover); }
 .member-row .thread-row__title { font-weight: 700; font-size: 14px; }
 .member-row .reply__handle { margin-left: auto; color: var(--muted); }
+.member-row .row-delete { margin-left: 8px; }
 
 /* ---------------------------------------------------------------- thread */
+/* Three-region scaffold mirroring the home page's left:nav / main / right:feeds frame. The LEFT rail
+   carries this thread's navigation (branch index + context legend); the RIGHT rail carries the
+   forum-wide feeds (recent comments + active threads) — the same boxes, same side, as the home page.
+   Below the breakpoint everything stacks to one column (main, then both rails in DOM order). */
+.thread { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gutter); align-items: start; }
+.thread__main { min-width: 0; }   /* let the grid track shrink the tree instead of overflowing */
+.thread__rail, .thread__rail-right { display: flex; flex-direction: column; gap: 14px; }
+@media (min-width: 1024px) {       /* three columns when there's room; rails stack below on narrow screens */
+  .thread {
+    grid-template-columns: var(--rail) minmax(0, 1fr) 248px;
+    grid-template-areas: "left main right";
+  }
+  .thread__main { grid-area: main; }
+  .thread__rail { grid-area: left; }
+  .thread__rail-right { grid-area: right; }
+  /* The LEFT nav rail follows as the tree scrolls so the branch index stays reachable; rather than
+     scrolling the whole rail, only the branch-index list scrolls inside its own box, so the context
+     legend below stays visible however long the index gets (a sticky rail taller than the viewport would
+     pin its top and hide its tail). The branch-index box is the one allowed to shrink; the legend holds
+     its full height. The RIGHT feeds rail is deliberately NOT sticky: on a thread longer than the rail,
+     pinning leaves the boxes frozen over a growing blank gap, so it just scrolls away with the page. */
+  .thread__rail { position: -webkit-sticky; position: sticky; top: 66px; }
+  /* Pin below the sticky header (48px) + an 18px gap = top:66px, so the branch index clears the bar
+     instead of sliding under it. Cap to the visible space so the lower boxes never drop below the fold:
+     66px top offset + an 18px bottom gap = 84px budget. */
+  .thread__rail { max-height: calc(100vh - 84px); }
+  .thread__rail .rail-box[data-rail-box="branch-index"] { display: flex; flex-direction: column; min-height: 0; }
+  .thread__rail .rail-box[data-rail-box="branch-index"] .branch-index { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .thread__rail .rail-box[data-rail-box="context-legend"] { flex-shrink: 0; }
+}
+
+/* rail box — the shared card chrome for side-rail occupants (branch index is the first) */
+.rail-box {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+}
+.rail-box__title {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--label);
+  margin: 0 0 8px;
+}
+
+.rail-box__empty { margin: 0; font-size: 12px; color: var(--faint); }
+
+.branch-index { list-style: none; margin: 0; padding: 0; }
+.branch-index__row { padding-left: calc(var(--bi-depth, 0) * 12px); }   /* light indent mirrors tree depth */
+.branch-index__link {
+  display: block; padding: 3px 0 3px 8px;
+  font-size: 12.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;   /* clip preview, never wrap */
+}
+/* mini-avatar dot: same hue as the author's monogram, deeper than the 84%-light box so it reads at 8px */
+.branch-index__dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 6px; vertical-align: baseline;
+  background: hsl(var(--mono-h, 75) 48% 70%);
+}
+.branch-index__author { color: var(--link); font-weight: 700; }
+.branch-index__snippet { color: var(--muted); }
+.branch-index__snippet::before { content: " — "; color: var(--faint-2); }
+.branch-index__link:hover .branch-index__author { text-decoration: underline; }
+.branch-index__row + .branch-index__row { border-top: 1px dotted var(--line-dotted); }
+/* starred marker: a star in the author's hue, swapped in for the dot when the owner bookmarks a
+   comment. Both glyphs are always in the DOM; data-starred on the link picks which shows, so nav.js
+   can flip a star live (after a toggle) by just changing the attribute — no re-render. */
+.branch-index__star {
+  display: none; width: 11px; height: 11px; margin-right: 5px; vertical-align: baseline;
+  color: hsl(var(--mono-h, 75) 52% 58%);
+}
+.branch-index__link[data-starred="true"] .branch-index__dot { display: none; }
+.branch-index__link[data-starred="true"] .branch-index__star { display: inline-block; }
+/* the selected comment, reflected in the rail — same cursor language as .reply.is-current */
+.branch-index__row.is-current { background: var(--wash); border-radius: var(--r-sm); }
+.branch-index__row.is-current .branch-index__link { }
+
+/* the starred toggle on a comment: a filled star reads "bookmarked" at a glance */
+.reply__star-btn.is-starred { color: hsl(45 90% 42%); }
+.reply__star-icon { width: 14px; height: 14px; vertical-align: text-bottom; }
+/* In the baseline-aligned action row, a flex button reports its FIRST child as its baseline — for the
+   Star chip that's the icon, not the text, so it rode a touch high next to the text-only +1 / /more.
+   Align the button's own items to the text baseline (so the chip reports the text baseline like the
+   others) while re-centering the icon so it still sits visually middled. */
+.reply__star-btn { align-items: baseline; }
+.reply__star-btn .reply__star-icon { align-self: center; }
+
+/* context legend — static key for the tree's spine/dimming convention */
+.context-legend { list-style: none; margin: 0; padding: 0; }
+.context-legend__row { display: flex; align-items: center; gap: 7px; }
+.context-legend__row + .context-legend__row { margin-top: 5px; }
+.context-legend__swatch { flex: none; width: 14px; height: 10px; }
+.context-legend__swatch--in { border-left: 3px solid var(--spine-live); background: var(--wash); }
+.context-legend__swatch--out { background: var(--card); border: 1px solid var(--line); opacity: .4; }
+.context-legend__label { font-size: 11px; color: var(--muted); }
+
 .thread__op {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--r);
   box-shadow: var(--shadow);
-  padding: 18px 22px 16px;
-  margin-bottom: 14px;
+  padding: 13px 18px 12px;
+  margin-bottom: 10px;
 }
-.thread__title { font-size: 21px; font-weight: 700; line-height: 1.25; margin: 0; max-width: var(--prose); }
+.thread__title { font-size: 19px; font-weight: 700; line-height: 1.2; margin: 0; max-width: var(--prose); }
+/* The OP body: the post's own content, sitting under the title (the comment tree is the room's reply).
+   Rendered markdown fills the full card width — no --prose cap — so wide content (code, tables) uses the room. */
+.thread__body {
+  margin: 8px 0 0;
+  font-size: 13.5px; line-height: 1.5; color: var(--ink);
+}
 
 /* reply tree -------------------------------------------------------------- */
-.reply-list { display: flex; flex-direction: column; gap: 8px; }
+.reply-list { display: flex; flex-direction: column; gap: 6px; }
 
 .reply {
   background: var(--card);
   border: 1px solid var(--line-node);
   border-left: 3px solid var(--spine);
   border-radius: 0 var(--r) var(--r) 0;
-  padding: 11px 14px;
+  padding: 8px 13px 9px;
 }
 /* DOM nesting === tree depth (replyNode renders children inside the parent <article>) */
-.reply .reply { margin-top: 8px; margin-left: 20px; }
+.reply .reply { margin-top: 6px; margin-left: 18px; }
 
 .reply__head {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin-bottom: 7px;
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin-bottom: 4px;
 }
 .reply__author { font-weight: 700; font-size: 13px; }
 .reply__handle { font-family: var(--mono); font-size: 11px; color: var(--faint-2); }
 
-.reply .body { font-size: 13.5px; line-height: 1.6; color: var(--ink); max-width: var(--prose); white-space: pre-wrap; }
-.reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
+/* "in reply to" anchor — a literal truncated quote of the parent, so deep replies stay legible
+   without scrolling up. Light indent + quote bar, the affordance Dana asked for. */
+.reply__inreplyto {
+  display: block; max-width: var(--prose);
+  margin: 0 0 5px; padding: 2px 0 2px 9px;
+  border-left: 2px solid var(--sage-2);
+  font-size: 12px; line-height: 1.4; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reply__inreplyto:hover { text-decoration: none; border-left-color: var(--spine-live); color: var(--ink); }
+.reply__inreplyto-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
+.reply__inreplyto-quote { font-style: italic; }
+
+/* Forward quote refs (comment-quotes.md): the comments THIS reply cites. Sibling of the in-reply-to
+   anchor — same quote-bar idiom, one row per source, each a jump link to #reply-<targetId>. */
+.reply__quotes { display: flex; flex-direction: column; gap: 2px; margin: 0 0 5px; }
+.reply__quote-ref {
+  display: block; max-width: var(--prose);
+  padding: 2px 0 2px 9px; border-left: 2px solid var(--sage-2);
+  font-size: 12px; line-height: 1.4; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reply__quote-ref:hover { text-decoration: none; border-left-color: var(--spine-live); color: var(--ink); }
+.reply__quote-ref-label { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); }
+.reply__quote-ref-snippet { font-style: italic; }
+
+/* "Quote" selection toolbar (quote.js) — a small dark pill that floats above a text selection in a
+   comment (Medium/Docs style), leaving the native right-click menu intact. Matches the slash/@mention
+   palette colours. Fixed so it anchors to the selection's viewport rect; quote.js repositions on scroll. */
+.quote-toolbar {
+  position: fixed; z-index: 60; display: flex;
+  background: var(--pop); border: 1px solid var(--pop-line); border-radius: 6px; overflow: hidden;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
+}
+.quote-toolbar__item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 13px; border: none; background: transparent; color: var(--pop-ink);
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.quote-toolbar__item:hover { background: var(--pop-hover); }
+
+/* Backward backlinks (quote-backlinks.js). The .reply__quoted-by block is SSR'd as the no-JS fallback
+   footer (a small "quoted by" list); quote-backlinks.js hides each entry it manages to highlight inline
+   and shows it instead as a hover cone. */
+.reply__quoted-by {
+  margin: 6px 0 0; padding-top: 5px; border-top: 1px dashed var(--line);
+  font-size: 12px; line-height: 1.5; color: var(--muted);
+}
+.reply__quoted-by-summary { font-family: var(--mono); font-size: 10.5px; color: var(--faint-2); margin-right: 6px; }
+.reply__backlink { margin-top: 3px; }
+.reply__backlink-passage { font-style: italic; color: var(--muted); }
+.reply__backlink-quoter { display: flex; gap: 5px; margin-left: 8px; max-width: var(--prose); }
+.reply__backlink-author { font-weight: 600; }
+.reply__backlink-snippet { color: var(--faint-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+
+/* Inline highlight on a quoted passage (added client-side; the body HTML stays untouched server-side).
+   Subtle sage wash + dotted underline to read as "this has citations", with a hover/focus accent. */
+mark.quoted {
+  background: color-mix(in srgb, var(--sage-2) 38%, transparent);
+  color: inherit; border-radius: 2px; padding: 0 1px;
+  text-decoration: underline dotted var(--sage-2); text-underline-offset: 2px;
+  cursor: pointer;
+}
+mark.quoted:hover, mark.quoted.is-open { background: color-mix(in srgb, var(--spine-live) 30%, transparent); }
+
+/* The selector "cone": a popover listing the comments that quoted the hovered passage. Built by
+   quote-backlinks.js from the SSR backlink data; same dark palette as the slash/@mention popovers. */
+.quote-cone {
+  position: fixed; z-index: 60; min-width: 200px; max-width: 320px;
+  background: var(--pop); border: 1px solid var(--pop-line); border-radius: 6px; overflow: hidden;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
+}
+.quote-cone__cap {
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--pop-cap); padding: 6px 12px; border-bottom: 1px solid var(--pop-line);
+}
+.quote-cone .reply__backlink-quoter {
+  display: flex; gap: 6px; margin: 0; padding: 7px 12px; border-bottom: 1px solid var(--pop-row-line);
+  color: var(--pop-ink); max-width: none;
+}
+.quote-cone .reply__backlink-quoter:last-child { border-bottom: none; }
+.quote-cone .reply__backlink-quoter:hover { background: var(--pop-hover); text-decoration: none; }
+.quote-cone .reply__backlink-author { color: var(--pop-ink); flex: none; }
+.quote-cone .reply__backlink-snippet { color: var(--pop-dim); }
+
+.reply .body { font-size: 13.5px; line-height: 1.5; color: var(--ink); overflow-wrap: break-word; }
+.thread__body { overflow-wrap: break-word; }
+.reply .reason { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 5px; }
+
+/* Markdown-rendered body content (reply bodies + the OP). Now structured HTML, not pre-wrapped text:
+   reset block margins at the edges so the card padding owns the outer gap, and give inner blocks rhythm.
+   Token colour for code lives in hljs-theme.css; everything here is layout/chrome. */
+.reply .body > :first-child, .thread__body > :first-child { margin-top: 0; }
+.reply .body > :last-child, .thread__body > :last-child { margin-bottom: 0; }
+.reply .body p, .thread__body p { margin: 0 0 9px; }
+.reply .body ul, .reply .body ol,
+.thread__body ul, .thread__body ol { margin: 0 0 9px; padding-left: 1.4em; }
+.reply .body blockquote, .thread__body blockquote {
+  margin: 0 0 9px; padding: 2px 0 2px 11px;
+  border-left: 2px solid var(--sage-2); color: var(--muted);
+}
+
+/* Fenced code blocks. hljs-theme.css sets the token colours, background, inner padding and the
+   horizontal scroll on `pre code.hljs`; this is just the block chrome around it. */
+.reply .body pre, .thread__body pre {
+  margin: 0 0 10px; max-width: 100%;
+  border: 1px solid var(--line-node); border-radius: var(--r);
+  overflow: hidden; /* clip the inner scroll area to the rounded corners */
+}
+.reply .body pre code.hljs, .thread__body pre code.hljs {
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+}
+/* Inline code (a `span` of code, never inside a <pre>). */
+.reply .body :not(pre) > code, .thread__body :not(pre) > code {
+  font-family: var(--mono); font-size: 12px;
+  padding: 1px 5px; border-radius: 4px; background: rgba(127, 127, 127, 0.14);
+}
+
+/* Markdown (GFM) tables. */
+.reply .body table, .thread__body table {
+  border-collapse: collapse; margin: 0 0 10px; font-size: 12.5px;
+  /* block + max-content: a wide GFM table scrolls inside the card instead of overflowing it */
+  display: block; width: max-content; max-width: 100%; overflow-x: auto;
+}
+.reply .body th, .reply .body td,
+.thread__body th, .thread__body td {
+  border: 1px solid var(--line-node); padding: 4px 9px; text-align: left;
+}
+.reply .body th, .thread__body th { background: rgba(127, 127, 127, 0.10); font-weight: 700; }
 
 .reply__vote {
   display: inline-block; margin-top: 8px;
   font-family: var(--mono); font-size: 11.5px; color: var(--faint-2);
+}
+
+/* action row: Reply, +1, Star (and /more / Retry) on the left, Delete pushed to the far right.
+   baseline alignment lines up the borderless "Reply" link with the bordered ghost chips on one text
+   baseline (flex-start left their tops aligned but baselines off — the "weird" stagger); it also keeps
+   every item anchored to the top line when the delete disclosure opens and grows tall below. */
+.reply__actionbar {
+  display: flex; align-items: baseline; flex-wrap: wrap;
+  gap: 6px; margin-top: 6px;
 }
 
 /* state badge ------------------------------------------------------------- */
@@ -231,10 +913,15 @@ a:hover { text-decoration: underline; }
   background: var(--grey-chip); color: var(--grey-ink);
 }
 .reply__badge--drafting { background: var(--sage-2); color: var(--sage-ink-2); }
+/* reasoning-leak: a soft warning, not a failure — amber, sits beside a POSTED reply that was cleaned */
+.reply__badge--leak { background: var(--amber-chip); color: var(--amber-ink); cursor: help; }
 .reply__badge--drafting::after {
   content: " •••"; animation: dotpulse 1.2s ease-in-out infinite;
 }
 @keyframes dotpulse { 0%, 80%, 100% { opacity: .22; } 40% { opacity: 1; } }
+
+/* in-flight row: holds the Cancel control while a node drafts */
+.reply__inflight { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 
 /* state treatments — spine + surface swap, one node shape -------------- */
 .reply[data-state="drafting"] { border-left-color: var(--spine); }
@@ -282,31 +969,181 @@ a:hover { text-decoration: underline; }
   resize: none; overflow: hidden;
   min-height: 84px;                  /* generous resting room — Scribble-friendly (§4) */
 }
-.composer textarea:focus { outline: none; border-color: #9aa882; }
+.composer textarea:focus { outline: none; border-color: var(--focus-border); }
 .composer__row {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin-top: 10px;
 }
-.composer__hint { font-family: var(--mono); font-size: 11px; color: var(--faint-2); }
-.composer label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-.composer select {
+.composer__hint { font-family: var(--mono); font-size: 11px; color: var(--faint-2); margin-left: auto; }
+.composer__hint b { color: var(--link); font-weight: 700; }
+.composer label, .composer__ctx-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.composer__head-label { color: var(--sage-text); font-weight: 700; }
+.composer select, .composer__select {
   font-family: var(--sans); font-size: 12.5px; color: var(--ink);
   background: var(--input); border: 1px solid var(--sage-2); border-radius: var(--r);
   padding: 5px 8px;
 }
-.composer .btn { margin-left: auto; }
+.composer .btn { margin-left: 10px; }
 
-/* inline reply as a disclosure — collapsed until the owner opens it (one composer at a time) */
-.reply__compose { margin-top: 10px; }
-.reply__compose > summary {
+/* The editor anchors the absolutely-positioned slash / @mention popovers below the textarea */
+.composer__editor { position: relative; }
+
+/* Slash + @mention popover — a dark overlay menu (reads as a layer above the page in both themes) */
+.palette {
+  position: absolute; left: 0; right: 0; z-index: 30; margin-top: 6px;
+  background: var(--pop); border: 1px solid var(--pop-line); border-radius: 4px; overflow: hidden;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
+}
+.palette[hidden] { display: none; }
+.palette__cap {
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--pop-cap); padding: 6px 12px; border-bottom: 1px solid var(--pop-line);
+}
+.palette__row {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 7px 12px; border: none; border-bottom: 1px solid var(--pop-row-line);
+  background: transparent; color: var(--pop-ink); cursor: pointer;
+}
+/* An explicit display on .palette__row beats the UA [hidden]{display:none}, so JS filtering needs this. */
+.palette__row[hidden] { display: none; }
+.palette__row:last-child { border-bottom: none; }
+.palette__row:hover, .palette__row.is-active { background: var(--pop-hover); }
+.palette__key { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--pop-ink); min-width: 64px; flex: none; }
+.palette__desc {
+  font-size: 11px; color: var(--pop-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+
+/* Persona chips — the who-answers picker; the real checkbox is visually hidden, the label IS the chip */
+.chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+.chip {
   display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 11px 3px 7px; border: 1px solid var(--sage-2); border-radius: 999px;
+  background: var(--input); color: var(--muted); font-size: 12px; cursor: pointer; user-select: none;
+}
+.chip input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.chip:hover { border-color: var(--sage); }
+.chip:focus-within { outline: 2px solid var(--link); outline-offset: 1px; }
+.chip.is-selected { background: var(--sage); border-color: var(--sage); color: var(--sage-ink); }
+.chip--anyone { font-weight: 700; padding-left: 11px; }
+
+/* Monogram size variants for the chips (xs) and @mention rows (sm) */
+.monogram--sm { width: 22px; height: 22px; font-size: 9px; }
+.monogram--xs { width: 18px; height: 18px; font-size: 8px; border-radius: var(--r-sm); }
+
+/* Inline reply — leads the footer action row as a collapsed disclosure (one composer at a time).
+   Closed: it's a plain "↩ Reply" text trigger, first in the row. Open: it spans the full row width
+   (flex-basis:100%) so the composer drops onto its own line below the footer buttons. */
+.reply__compose { order: -1; }                 /* keep Reply first even if markup order shifts */
+.reply__compose[open] { flex-basis: 100%; }
+.reply__compose > summary {
+  display: inline-flex; align-items: center; gap: 5px;
   list-style: none; cursor: pointer;
+  padding: 2px 0;                              /* nudge baseline to match the bordered ghost buttons */
   font-size: 11.5px; font-weight: 700; color: var(--link);
   width: max-content;
 }
 .reply__compose > summary::-webkit-details-marker { display: none; }
 .reply__compose > summary::before { content: "↩"; }
-.reply__compose[open] > summary { margin-bottom: 10px; }
+.reply__compose[open] > summary { margin-bottom: 9px; }
+
+/* delete — destructive, so gated behind an inline "are you sure" panel (the clay = error/warning hue,
+   which re-skins itself in dark mode via the --clay-* tokens). Trigger is a ghost-button-shaped
+   <summary>; opening it reveals the confirm panel whose "Yes, delete" button carries the real POST. */
+.reply__delete { margin-left: auto; }   /* push Delete to the far right of the action row */
+.reply__delete > summary {
+  display: inline-flex; align-items: center; gap: 6px;
+  list-style: none; cursor: pointer; width: max-content;
+  color: var(--muted);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  padding: 4px 12px; font-size: 12px;
+}
+.reply__delete > summary::-webkit-details-marker { display: none; }
+.reply__delete > summary .icon { width: 14px; height: 14px; }
+.reply__delete > summary:hover,
+.reply__delete[open] > summary {
+  color: var(--clay-ink); border-color: var(--clay-line); background: var(--clay-bg);
+}
+.reply__delete-confirm {
+  margin-top: 8px; max-width: 360px;
+  background: var(--clay-bg);
+  border: 1px solid var(--clay-line); border-left: 3px solid var(--clay);
+  border-radius: var(--r); padding: 11px 13px;
+}
+.reply__delete-warning {
+  margin: 0 0 10px;
+  font-size: 12.5px; line-height: 1.5; color: var(--clay-ink);
+}
+.reply__delete-buttons { display: flex; align-items: center; gap: 8px; }
+
+/* edited marker — subtle, honest "the owner revised this body" (§7); muted so it never competes with
+   the author. Reused by the OP block's (edited) span too. */
+.reply__edited {
+  font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+  font-style: italic;
+}
+
+/* edit disclosure — same neutral trigger shape as Delete, but non-destructive (sage, not clay). The
+   form inside reuses the .composer styling, so the textarea matches the reply composer. */
+.reply__edit > summary {
+  display: inline-flex; align-items: center; gap: 6px;
+  list-style: none; cursor: pointer; width: max-content;
+  color: var(--muted);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  padding: 4px 12px; font-size: 12px;
+}
+.reply__edit > summary::-webkit-details-marker { display: none; }
+.reply__edit > summary::before { content: "✎"; }
+.reply__edit > summary:hover,
+.reply__edit[open] > summary { color: var(--ink); border-color: var(--sage); }
+.reply__edit[open] { flex-basis: 100%; }              /* the open form spans the action row */
+.reply__edit-form { margin-top: 8px; }
+.reply__edit-text { width: 100%; }
+
+/* regenerate disclosure — same neutral trigger shape as Edit/Delete, but non-destructive (sage). The
+   confirm panel reuses the sage surface (not clay) since the current take is kept as a revision. */
+.reply__regenerate > summary {
+  display: inline-flex; align-items: center; gap: 6px;
+  list-style: none; cursor: pointer; width: max-content;
+  color: var(--muted);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+  padding: 4px 12px; font-size: 12px;
+}
+.reply__regenerate > summary::-webkit-details-marker { display: none; }
+.reply__regenerate > summary .icon { width: 14px; height: 14px; }
+.reply__regenerate > summary:hover,
+.reply__regenerate[open] > summary { color: var(--ink); border-color: var(--sage); }
+.reply__regenerate-confirm {
+  margin-top: 8px; max-width: 360px;
+  background: var(--grey-bg);
+  border: 1px solid var(--sage-2); border-left: 3px solid var(--sage);
+  border-radius: var(--r); padding: 11px 13px;
+}
+.reply__regenerate-warning {
+  margin: 0 0 10px;
+  font-size: 12.5px; line-height: 1.5; color: var(--ink);
+}
+.reply__regenerate-buttons { display: flex; align-items: center; gap: 8px; }
+
+/* revision switcher — a compact ‹ 2/3 › stepper in the reply header, shown only when a reply has more
+   than one stored take. The count is mono so the digits don't jitter as you step through versions. */
+.reply__revisions { display: inline-flex; align-items: center; gap: 2px; }
+.reply__rev-nav {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; padding: 0; line-height: 1;
+  background: none; cursor: pointer; color: var(--muted);
+  border: 1px solid var(--sage-2); border-radius: var(--r);
+}
+.reply__rev-nav:hover:not(:disabled) { color: var(--ink); border-color: var(--sage); }
+.reply__rev-nav:disabled { opacity: 0.4; cursor: default; }
+.reply__rev-count { font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding: 0 3px; }
+.thread__op-edit-title { width: 100%; margin-bottom: 8px; }
+/* the OP head keeps the title and its (edited) marker on one baseline */
+.thread__op-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+
+/* danger button — the destructive confirm itself (clay fill, white text) */
+.btn--danger { background: var(--clay); color: #fff; border-color: var(--clay); }
+.btn--danger:hover { filter: brightness(1.05); }
 
 /* --------------------------------------------------------------- empty states */
 [data-empty-state] {
@@ -318,20 +1155,496 @@ a:hover { text-decoration: underline; }
   color: var(--muted);
 }
 [data-empty-state]::before {
-  display: inline-block;
+  display: block; width: fit-content; margin-left: auto; margin-right: auto;
   font-family: var(--mono); font-size: 11px;
   color: var(--dark-dim); background: var(--dark);
   padding: 5px 10px; border-radius: var(--r-sm);
   margin-bottom: 14px;
 }
 [data-empty-state="no-threads"]::before { content: "$ ls -1 ~/forum → empty"; }
+[data-empty-state="no-members"]::before { content: "$ ls -1 ~/forum/members → empty"; }
 [data-empty-state="waiting"]::before { content: "⟶ waiting on the room"; }
 [data-empty-state="waiting"] { margin-bottom: 14px; }
+
+/* ------------------------------------------------------------ thread controls */
+.thread__controls {
+  display: flex; align-items: center; gap: 10px; margin-top: 10px;
+}
+
+/* htmx-indicator: hidden by default, shown (inline-flex) when htmx-request is added */
+.htmx-indicator { display: none; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.htmx-indicator.htmx-request { display: inline-flex; }
+
+.spinner {
+  flex: none;
+  width: 12px; height: 12px;
+  border: 2px solid var(--sage-2);
+  border-top-color: var(--sage-text);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Honest failure UX (T1.4): toast-only. When an htmx request errors, HtmxErrorAdvice returns the mapped
+   non-2xx status (htmx swaps nothing on a non-2xx) + an app:error HX-Trigger; htmx-error.js raises a
+   sticky, dismissible toast off it — the sole, honest feedback (no fragment swapped into the compose
+   field). Styled off --clay (the existing danger token). Toasts persist across refresh (localStorage)
+   until the owner dismisses them with the ✕. */
+.error-toasts {
+  position: fixed; right: 16px; bottom: 16px; z-index: 1000;
+  display: flex; flex-direction: column; gap: 8px;
+  max-width: min(360px, calc(100vw - 32px)); pointer-events: none;
+}
+.error-toast {
+  pointer-events: auto;
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--clay); border-left-width: 3px; border-radius: var(--r, 6px);
+  background: var(--card); color: var(--ink);
+  font-size: 13px; line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+}
+.error-toast__text { flex: 0 1 auto; }
+/* The live "· N minutes ago" suffix — muted, takes the slack so the ✕ stays hard right. */
+.error-toast__age { flex: 1 1 auto; color: var(--muted); font-size: 11.5px; }
+.error-toast__dismiss {
+  flex: none; margin: -2px -4px 0 0;
+  border: 0; background: transparent; cursor: pointer;
+  color: var(--muted); font-size: 15px; line-height: 1; padding: 2px 4px;
+}
+.error-toast__dismiss:hover { color: var(--ink); }
+.error-toast__dismiss:focus-visible { outline: 2px solid var(--sage); outline-offset: 1px; }
 
 /* ------------------------------------------------------------------ mobile */
 @media (max-width: 600px) {
   .container { padding: 14px 12px 32px; }
+  /* The single-row header (brand + nav + layout/theme toggles) is wider than a phone, which forced
+     page-wide horizontal scroll. Let it wrap: toggles drop to their own right-aligned row. */
+  .site-header { flex-wrap: wrap; height: auto; min-height: 48px; padding: 6px 12px; gap: 8px 12px; }
   .site-nav { gap: 12px; }
   .reply .reply { margin-left: 10px; }       /* gentle indent cap on phones */
   .composer textarea { min-height: 54px; }   /* compact at rest, grows on focus (JS) */
 }
+
+/* ── Keyboard navigation (vim mode) — see plan_docs/keyboard-navigation.md ──────────────────────────
+   Pure progressive enhancement layer: the cursor highlight, the in-body search hit, and the two
+   overlays (command line + help) injected by nav.js. All scoped to nav.js's own classes so nothing
+   here touches the data-* contract the acceptance suite reads. */
+
+/* the cursor — the "current" comment. A sage spine + faint wash, distinct from the live-context spine. */
+.reply.is-current {
+  box-shadow: inset 3px 0 0 0 var(--spine-live);
+  background: var(--wash);
+  border-radius: var(--r-sm);
+}
+/* the OP carries the same cursor, but keep its card shadow alongside the spine */
+.thread__op.is-current {
+  box-shadow: inset 3px 0 0 0 var(--spine-live), var(--shadow);
+  background: var(--wash);
+}
+
+/* search term hit inside the focused comment body */
+mark.nav-hit {
+  background: var(--amber-chip);
+  color: var(--amber-ink);
+  border-radius: var(--r-sm);
+  padding: 0 1px;
+}
+
+/* command line — vim-style, pinned bottom-left */
+.nav-cmdline {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--dark);
+  color: var(--dark-ink);
+  font-family: var(--mono);
+  font-size: 14px;
+  box-shadow: var(--shadow-pop);
+}
+.nav-cmdline[hidden] { display: none; }
+.nav-cmdline__prompt { color: var(--sage); font-weight: 700; }
+.nav-cmdline__input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: var(--dark-ink);
+  font-family: var(--mono);
+  font-size: 14px;
+  outline: none;
+}
+
+/* help cheat sheet — centred modal-ish panel, click anywhere or Esc to dismiss */
+.nav-help {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--scrim);
+}
+.nav-help[hidden] { display: none; }
+.nav-help__panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-pop);
+  padding: 18px 22px;
+  max-width: 460px;
+  width: calc(100% - 32px);
+}
+.nav-help__panel h2 { margin: 0 0 10px; font-size: 15px; color: var(--ink); }
+.nav-help table { width: 100%; border-collapse: collapse; }
+.nav-help th {
+  text-align: left;
+  white-space: nowrap;
+  padding: 3px 14px 3px 0;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--sage-text);
+  vertical-align: top;
+}
+.nav-help td { padding: 3px 0; color: var(--muted); }
+.nav-help__hint { margin: 12px 0 0; font-size: 12px; color: var(--faint); }
+
+/* --- image attachments (gallery under a post/comment body) --------------------------------------- */
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0 2px;
+}
+.attachment {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* Cap each cell so a tall/wide image can't stretch the column; the image scales within it. */
+  max-width: min(320px, 100%);
+}
+.attachment__img {
+  display: block;
+  max-width: 100%;
+  /* Hard ceiling on height too, so a very tall image stays a thumbnail rather than a banner. The
+     image keeps its aspect ratio (object-fit) within the box. */
+  max-height: 320px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border: 1px solid var(--line-node);
+  border-radius: var(--r);
+  background: var(--card);
+}
+/* Caption is a markdown-rendered blockquote (the model's description; may contain a transcribed code
+   block). Quote chrome here; code-block token colours come from hljs-theme.css. */
+.attachment__caption {
+  margin: 0;
+  padding: 3px 0 3px 11px;
+  border-left: 2px solid var(--sage-2);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.attachment__caption > :first-child { margin-top: 0; }
+.attachment__caption > :last-child { margin-bottom: 0; }
+.attachment__caption p { margin: 0 0 8px; }
+.attachment__caption pre {
+  margin: 6px 0; border: 1px solid var(--line-node); border-radius: var(--r);
+  overflow: hidden; /* clip the inner scroll area to the rounded corners */
+}
+.attachment__caption pre code.hljs { font-family: var(--mono); font-size: 12px; line-height: 1.5; }
+.attachment__caption :not(pre) > code {
+  font-family: var(--mono); font-size: 11.5px;
+  padding: 1px 5px; border-radius: 4px; background: rgba(127, 127, 127, 0.14);
+}
+.attachment__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.attachment__state {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+/* ── Shortcut ticketing surfaces ────────────────────────────────────────────
+   Right-rail box (shares .rail-box chrome), the shared story card, and the
+   /shortcut page (source switcher + search + list). All keyed off design tokens
+   so they track the sage light/dark palette like everything else. */
+.shortcut-stories { list-style: none; margin: 0; padding: 0; }
+.story-card { padding: 6px 0; }
+.story-card + .story-card { border-top: 1px dotted var(--line-dotted); }
+.story-card__link { display: flex; gap: 6px; align-items: baseline; text-decoration: none; min-width: 0; }
+.story-card__ref {
+  flex: none; font-family: var(--mono); font-size: 10px; font-weight: 700;
+  color: var(--sage-ink); background: var(--sage-2);
+  border-radius: 4px; padding: 1px 4px;
+}
+.story-card__name { color: var(--link); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.story-card__link:hover .story-card__name { text-decoration: underline; }
+.story-card__meta {
+  display: flex; gap: 8px; align-items: center; margin-top: 3px;
+  font-family: var(--mono); font-size: 10px; color: var(--muted);
+}
+.story-card__state {
+  color: var(--sage-text); background: var(--grey-bg);
+  border-radius: 4px; padding: 0 5px;
+}
+.rail-box__more {
+  display: inline-block; margin-top: 8px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted); text-decoration: none;
+}
+.rail-box__more:hover { color: var(--ink); text-decoration: underline; }
+
+/* The page */
+.shortcut-page { max-width: 760px; }
+.shortcut-sources { display: flex; gap: 4px; margin: 12px 0; flex-wrap: wrap; }
+.shortcut-source {
+  font-family: var(--mono); font-size: 12px; color: var(--muted); text-decoration: none;
+  padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--card);
+}
+.shortcut-source:hover { color: var(--ink); border-color: var(--sage-2); }
+.shortcut-source.is-active { color: var(--sage-ink); background: var(--sage); border-color: transparent; font-weight: 700; }
+.shortcut-search { display: flex; gap: 8px; margin: 12px 0 16px; }
+.shortcut-search__input {
+  flex: 1; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--card); color: var(--ink); font-size: 13px;
+}
+.shortcut-stories--page .story-card { padding: 10px 0; }
+.shortcut-stories--page .story-card__name { white-space: normal; }
+.notice {
+  margin: 12px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--card); color: var(--muted); font-size: 13px;
+}
+.notice--warn { border-color: var(--sage-2); color: var(--sage-text); }
+
+/* ----------------------------------------------------------------- /github */
+/* Read-only GitHub snapshot page (GhCliGitHubClient → GitHubController). Reuses the shared tokens so it
+   sits inside the sage HUP system rather than introducing new chrome. */
+.github { max-width: 760px; margin: 0 auto; }
+.github__title { font-family: var(--mono); font-size: 18px; margin: 4px 0 16px; }
+.github__unavailable {
+  background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+  padding: 14px 16px; color: var(--muted); font-size: 14px;
+}
+.github__repo {
+  background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+  padding: 14px 16px; margin-bottom: 18px;
+}
+.github__repo-name { font-family: var(--mono); font-size: 15px; margin: 0 0 6px; }
+.github__repo-desc { color: var(--ink); font-size: 14px; margin: 0 0 10px; }
+.github__repo-meta {
+  list-style: none; display: flex; flex-wrap: wrap; gap: 14px; margin: 0; padding: 0;
+  font-family: var(--mono); font-size: 12px; color: var(--muted);
+}
+.github__section { margin-bottom: 22px; }
+.github__section-title { font-family: var(--mono); font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+.github__empty { color: var(--faint); font-size: 13px; }
+.github__list { list-style: none; margin: 0; padding: 0; }
+.github__item {
+  padding: 8px 0; border-bottom: 1px dotted var(--line-dotted);
+}
+.github__item-title { font-size: 14px; text-decoration: none; }
+.github__item-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+.github__badge {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px;
+  background: var(--strip); color: var(--muted); font-family: var(--mono); font-size: 10px;
+}
+/* Per-PR action: "Discuss in the forum" (creates a thread) or "View thread" (already ingested). */
+.github__action-form { margin: 4px 0 0; }
+.github__action {
+  display: inline-block; margin-top: 4px; font-family: var(--mono); font-size: 11px;
+  color: var(--sage-text); text-decoration: none;
+}
+.github__action--button {
+  border: 1px solid var(--line); border-radius: 999px; background: var(--card);
+  padding: 2px 10px; cursor: pointer;
+}
+.github__action--button:hover { background: var(--strip); }
+/* ── Admin statistics dashboard (/admin) ────────────────────────────────────
+   Read-only stat cards in a single column. Shares the card chrome + sage accents
+   used across the rails; numbers carry data-stat/data-value hooks the suite asserts on. */
+.admin { max-width: 920px; margin: 0 auto; }
+.admin__title { font-size: 22px; margin: 0 0 4px; color: var(--ink); }
+.admin__lede { margin: 0 0 24px; font-size: 13px; color: var(--muted); }
+.admin__section { margin: 0 0 28px; }
+.admin__section-title {
+  font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--sage-text); margin: 0 0 12px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--line);
+}
+.admin__subhead { font-size: 12.5px; color: var(--muted); margin: 18px 0 8px; }
+.admin__empty { font-size: 13px; color: var(--muted); }
+
+.stat-grid {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;
+}
+.stat {
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 14px 16px;
+}
+.stat__num { font-size: 26px; font-weight: 700; line-height: 1; color: var(--ink); }
+.stat__label { font-size: 11.5px; color: var(--muted); }
+
+.stat-list { list-style: none; margin: 0; padding: 0; }
+.stat-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 7px 2px; border-bottom: 1px solid var(--line);
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-row__label { font-size: 13px; color: var(--ink); }
+.stat-row__num { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--sage-text); }
+
+/* Stat cards/rows are links into the /admin drill-downs. The data-stat hooks stay on the <li>; the
+   anchor fills the card so the whole figure is clickable. */
+.stat__link { display: flex; flex-direction: column; gap: 4px; text-decoration: none; color: inherit; }
+.stat:hover { border-color: var(--sage-2); }
+.stat:hover .stat__num { color: var(--sage-text); }
+.stat-row__link {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  width: 100%; text-decoration: none; color: inherit;
+}
+.stat-row:hover .stat-row__label { color: var(--sage-text); }
+
+/* ── Admin drill-down list pages (/admin/comments, /admin/attachments) ──────── */
+.admin-list { max-width: 920px; margin: 0 auto; }
+.admin-list__back { margin: 0 0 8px; font-family: var(--mono); font-size: 12px; }
+.admin-list__back a { color: var(--muted); text-decoration: none; }
+.admin-list__back a:hover { color: var(--ink); }
+.admin-list__title { font-size: 20px; margin: 0 0 6px; color: var(--ink); }
+.admin-list__note { margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+.admin-list__empty { font-size: 13px; color: var(--muted); }
+.admin-list__items { list-style: none; margin: 0; padding: 0; }
+.admin-list__item { border-bottom: 1px solid var(--line); }
+.admin-list__item:last-child { border-bottom: none; }
+.admin-list__link {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 11px 4px; text-decoration: none; color: inherit;
+}
+.admin-list__item:hover { background: var(--row-hover); }
+.admin-list__snippet { font-size: 13.5px; color: var(--ink); line-height: 1.4; }
+.admin-list__meta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.admin-list__sep { opacity: 0.5; margin: 0 2px; }
+.admin-list__state { font-weight: 700; }
+.admin-list__badge {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  color: var(--sage-ink); background: var(--sage-2); border-radius: 4px; padding: 1px 6px;
+}
+
+/* Attachments drill-down: a thumbnail grid with metadata beside each image. */
+.admin-list__items--media { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.admin-attach { display: flex; gap: 12px; border: 1px solid var(--line); border-radius: var(--r); padding: 10px; }
+.admin-attach:hover { background: var(--row-hover); }
+.admin-attach__thumb { flex: none; }
+.admin-attach__thumb img {
+  width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); display: block;
+}
+.admin-attach__meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.admin-attach__file { font-size: 12.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-attach__owner { font-size: 12px; color: var(--muted); text-decoration: none; }
+.admin-attach__owner:hover { color: var(--ink); }
+
+/* Admin → Statistics (/admin/stats): routing-health numbers for the "Anyone" dispatcher. */
+.stats__title { margin: 0 0 4px; }
+.stats__lede { color: var(--muted); max-width: var(--prose); margin: 0 0 20px; }
+.stats__headline {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.stats__headline-value { font-size: 34px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.stats__headline-label { color: var(--muted); }
+.stats__headline-note { color: var(--faint); font-family: var(--mono); font-size: 11px; }
+.stats__table {
+  width: 100%;
+  max-width: 560px;
+  border-collapse: collapse;
+  margin-bottom: 28px;
+}
+.stats__table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  background: var(--strip);
+  padding: 6px 12px;
+}
+.stats__table td { padding: 8px 12px; border-bottom: 1px solid var(--line-dotted); }
+.stats__row-count, .stats__row-7d { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+.stats__subtitle { font-size: 14px; margin: 0 0 8px; }
+.stats__misses-empty { color: var(--faint); font-family: var(--mono); font-size: 12px; }
+.stats__misses-list { list-style: none; padding: 0; margin: 0; }
+.stats__miss { padding: 8px 0; border-bottom: 1px dotted var(--line-dotted); }
+.stats__miss-reply { color: var(--ink); }
+.stats__miss-meta { display: block; color: var(--faint); font-family: var(--mono); font-size: 11px; margin-top: 2px; }
+
+/* --------------------------------------------------------------- error page */
+/* Styled /error fallback (error.kte) — the dead ends keep the terminal voice too. */
+.error-page { max-width: var(--prose); margin: 48px auto; padding: 0 16px; }
+.error-page__code { font-size: 12px; color: var(--faint); margin: 0 0 10px; }
+.error-page__title { margin: 0 0 8px; font-size: 24px; color: var(--ink); }
+.error-page__hint { color: var(--muted); margin: 0 0 18px; }
+.error-page__home { font-size: 12.5px; }
+
+
+/* ------------------------------------------------------------- starred page */
+/* /starred had semantic classes but no rules — default bullets on a bare page. */
+.starred { max-width: var(--prose); }
+.starred__title { margin: 0 0 14px; }
+.starred__empty { color: var(--muted); }
+.starred__thread {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+  box-shadow: var(--shadow); padding: 13px 16px; margin-bottom: 14px;
+}
+.starred__thread-title { margin: 0 0 8px; font-size: 15px; }
+.starred__items { list-style: none; margin: 0; padding: 0; }
+.starred__item { padding: 7px 0; }
+.starred__item + .starred__item { border-top: 1px dotted var(--line-dotted); }
+.starred__quote { display: block; color: var(--ink); }
+.starred__quote:hover { color: var(--link); text-decoration: none; }
+.starred__meta { font-family: var(--mono); font-size: 10.5px; color: var(--faint); margin-top: 2px; }
+
+/* --------------------------------------------------------- persona profile */
+/* /personas/{slug} reuses the OP card chrome; these give its own bits shape (they had none). */
+.persona__abilities { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+.persona__abilities .tag {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  background: var(--sage-2); color: var(--sage-ink);
+  border-radius: 999px; padding: 2px 9px;
+}
+.persona__dials {
+  list-style: none; display: flex; flex-wrap: wrap; gap: 6px 18px;
+  margin: 10px 0 0; padding: 0;
+}
+/* the <li> reuses .dial, which the edit form lays out as a slider column — flatten it back to a row */
+.persona__dials .dial { flex: none; min-width: 0; flex-direction: row; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.persona__prompt {
+  font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--dark-ink);
+  background: var(--dark); border: 1px solid var(--line-node); border-radius: var(--r);
+  padding: 10px 12px; margin: 12px 0 14px; white-space: pre-wrap;
+}
+
+/* ------------------------------------------------------- native file input */
+/* The bare OS control sat unstyled inside the polished composer; dress its button like a ghost .btn. */
+input[type="file"] { font-family: var(--mono); font-size: 11px; color: var(--faint); max-width: 100%; }
+input[type="file"]::file-selector-button {
+  font-family: var(--mono); font-size: 11.5px; cursor: pointer;
+  background: var(--card); color: var(--muted);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 3px 10px; margin-right: 9px;
+}
+input[type="file"]::file-selector-button:hover { background: var(--strip); color: var(--ink); }

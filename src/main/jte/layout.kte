@@ -7,22 +7,73 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>${title}</title>
+    <%-- Resolve theme + layout before first paint to avoid a light flash / layout reflow. We track on
+         <html>: data-theme-mode = the user's theme choice (dark | light | auto), persisted in
+         localStorage; data-theme = the resolved palette (dark | light) the CSS keys off (in "auto",
+         the default, it follows the OS); and data-rail-left / data-rail-right (open | collapsed) =
+         the collapsible-sidebars state the layout CSS keys off (default open). Runs inline (not
+         /app.js) so it executes synchronously in <head> before the body renders. --%>
+    <script>
+        (function () {
+            try {
+                var root = document.documentElement;
+                var mode = localStorage.getItem("theme") || "auto";
+                var theme = mode === "auto"
+                    ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+                    : mode;
+                root.setAttribute("data-theme-mode", mode);
+                root.setAttribute("data-theme", theme);
+                root.setAttribute("data-rail-left", localStorage.getItem("rail-left") === "collapsed" ? "collapsed" : "open");
+                root.setAttribute("data-rail-right", localStorage.getItem("rail-right") === "collapsed" ? "collapsed" : "open");
+            } catch (e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="/app.css">
+    <%-- highlight.js token colours, scoped to the [data-theme] toggle. Derived from the vendored
+         highlightjs webjar themes (see hljs-theme.css header); served as a static asset, no CDN. --%>
+    <link rel="stylesheet" href="/hljs-theme.css">
     <%-- htmx served from the webjar (see build.gradle.kts); version-agnostic path via webjars-locator-lite --%>
     <script src="/webjars/htmx.org/dist/htmx.min.js"></script>
-    <script src="/app.js" defer></script>
+    <%-- Composer affordances (auto-grow, slash/@mention palettes, the note/ask toggle). ES module →
+         deferred by default; imports the unit-tested composer-core decision layer. --%>
+    <script type="module" src="/app.js"></script>
+    <%-- Live generation streaming (plan: AG-UI hybrid SSR + SSE). ES module → deferred; opens an
+         EventSource on each drafting node to append reply text live, then lets the server-rendered
+         fragment swap in on completion. Pure progressive enhancement over the every-1s poll. --%>
+    <script type="module" src="/stream.js"></script>
+    <%-- Vim-style keyboard navigation (plan_docs/keyboard-navigation.md). ES module → deferred by
+         default; activates only where [data-nav-item] exists (thread page for now), no-ops elsewhere. --%>
+    <script type="module" src="/nav.js"></script>
+    <%-- Persona create/edit prompt-staleness guard (plan_docs/persona-prompt-edit-ux.md). ES module →
+         deferred; activates only where [data-persona-form] exists (members/edit pages), no-ops elsewhere. --%>
+    <script type="module" src="/persona-form.js"></script>
+    <%-- "Quote" selection toolbar over comment bodies (plan_docs/comment-quotes.md). ES module →
+         deferred; select text in a comment to float a Quote toolbar that drops it into a reply + records
+         a quote edge (the native right-click menu is left intact). No-ops where there are no comment
+         bodies; with JS off a hand-typed `> ` blockquote still posts. --%>
+    <script type="module" src="/quote.js"></script>
+    <%-- Quote BACKLINKS (plan_docs/comment-quotes.md §6). ES module → deferred; promotes each quoted
+         comment's SSR "quoted by" block into inline <mark>s with a hover "cone" of the quoting comments.
+         No-ops where nothing is quoted; with JS off the SSR list is the fallback. --%>
+    <script type="module" src="/quote-backlinks.js"></script>
+    <%-- Click the bare header chrome to scroll to top (header is sticky on desktop, app.css). ES module
+         → deferred; activates wherever [data-scroll-top] exists, no-ops elsewhere. --%>
+    <script type="module" src="/header.js"></script>
+    <%-- Collapsible side rails + "full screen" reading mode (plan: collapsible-sidebars). ES module →
+         deferred; toggles data-rail-left/right on <html>, event-delegated so it serves the header
+         group and the in-content button alike. Initial state is set by the inline script above. --%>
+    <script type="module" src="/layout.js"></script>
+    <%-- Honest htmx failure handling (T1.4): toast-only. A global listener raises a sticky, dismissible
+         toast on a failed htmx interaction — off the server's app:error HX-Trigger (HtmxErrorAdvice
+         returns the mapped non-2xx status, which htmx does NOT swap, so nothing lands in the compose
+         field) and off htmx:sendError (a network failure). htmx 2.0.6 re-enables disabled controls /
+         clears spinners itself, so this only adds the feedback htmx leaves out; toasts persist across
+         refresh via localStorage until dismissed. ES module, deferred; the wording + toast store
+         (htmx-error-core) are unit-tested. --%>
+    <script type="module" src="/htmx-error.js"></script>
 </head>
 <body>
-    <header class="site-header">
-        <a class="site-header__brand" href="/">
-            <span class="site-header__logo" aria-hidden="true">~/</span>
-            <span class="site-header__wordmark">AI Forum</span>
-        </a>
-        <nav class="site-nav">
-            <a href="/" aria-current="${if (activeNav == "threads") "page" else null}">threads</a>
-            <a href="/personas" aria-current="${if (activeNav == "members") "page" else null}">members</a>
-        </nav>
-    </header>
+    @template.fragments.siteHeader(activeNav = activeNav)
     <main class="container">
     ${content}
     </main>

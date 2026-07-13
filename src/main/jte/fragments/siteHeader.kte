@@ -1,0 +1,34 @@
+@param activeNav: String = ""
+
+<%-- The site chrome header, injected once by layout.kte so every page shares one source (no per-page
+     copies). Sticky on desktop + click-the-bare-chrome-to-scroll-to-top live in app.css / header.js,
+     keyed off the data-scroll-top hook below. activeNav ("threads" | "members" | "github" | "admin")
+     underlines the current section. --%>
+<header class="site-header" data-scroll-top>
+    <a class="site-header__brand" href="/">
+        <span class="site-header__logo" aria-hidden="true">~/</span>
+        <span class="site-header__wordmark">AI Forum</span>
+    </a>
+    <nav class="site-nav">
+        <a href="/" aria-current="${if (activeNav == "threads") "page" else null}">threads</a>
+        <a href="/personas" aria-current="${if (activeNav == "members") "page" else null}">members</a>
+        <a href="/github" aria-current="${if (activeNav == "github") "page" else null}">github</a>
+        <a href="/admin" aria-current="${if (activeNav == "admin") "page" else null}">admin</a>
+    </nav>
+    <%-- Layout controls: collapse either side rail for more reading width, or one-click full-screen
+         (both). aria-pressed reflects collapsed state; layout.js keeps these in sync with the
+         in-content full-screen button. Sticky header keeps them reachable, which is also the reopen
+         path after a rail is hidden. --%>
+    <div class="layout-toggle" role="group" aria-label="Layout">
+        <button type="button" class="layout-toggle__opt" data-toggle-rail="left" aria-pressed="false" title="Hide/show the left sidebar" aria-label="Toggle left sidebar"><span aria-hidden="true">&#x25E7;</span></button>
+        <button type="button" class="layout-toggle__opt" data-toggle-rail="right" aria-pressed="false" title="Hide/show the right sidebar" aria-label="Toggle right sidebar"><span aria-hidden="true">&#x25E8;</span></button>
+        <button type="button" class="layout-toggle__opt" data-toggle-wide aria-pressed="false" title="Full-width (hide both sidebars)" aria-label="Toggle full width"><span aria-hidden="true">&#x2922;</span></button>
+    </div>
+    <div class="theme-toggle" role="group" aria-label="Theme">
+        <button type="button" class="theme-toggle__opt" data-set-theme="dark"><span aria-hidden="true">&#x263E;</span> dark</button>
+        <span class="theme-toggle__sep" aria-hidden="true">/</span>
+        <button type="button" class="theme-toggle__opt" data-set-theme="light"><span aria-hidden="true">&#x2600;</span> light</button>
+        <span class="theme-toggle__sep" aria-hidden="true">/</span>
+        <button type="button" class="theme-toggle__opt" data-set-theme="auto"><span aria-hidden="true">&#x25D1;</span> auto</button>
+    </div>
+</header>

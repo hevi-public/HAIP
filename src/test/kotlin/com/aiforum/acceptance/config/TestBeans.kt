@@ -1,9 +1,23 @@
 package com.aiforum.acceptance.config
 
+import com.aiforum.dto.ReasoningLeak
+import com.aiforum.github.GitHubClient
+import com.aiforum.github.GitHubOverview
+import com.aiforum.github.GitHubResult
+import com.aiforum.github.Issue
+import com.aiforum.github.PullDetail
+import com.aiforum.github.PullRequest
+import com.aiforum.github.PullResult
+import com.aiforum.github.RepoSummary
+import com.aiforum.images.DescribeRequest
+import com.aiforum.images.ImageDescriber
+import com.aiforum.images.VisionUnavailableException
 import com.aiforum.llm.CancellationToken
 import com.aiforum.llm.LlmClient
 import com.aiforum.llm.LlmRequest
 import com.aiforum.llm.LlmResponse
+import com.aiforum.shortcut.ShortcutClient
+import com.aiforum.shortcut.StoryCard
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
@@ -12,7 +26,9 @@ import org.springframework.stereotype.Component
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * The scriptable Tier-1 IO double (see the cucumber-spring-bdd skill). Steps program it per scenario
@@ -27,16 +43,23 @@ import java.util.concurrent.ConcurrentLinkedDeque
 class ScriptableLlmClient : LlmClient {
 
     sealed interface Behavior {
-        data class Respond(val text: String) : Behavior
+        // `leak` mirrors what the real parsers (ReplySanitizer) would attach to a leaked completion, so a
+        // scenario can drive the reasoning-leak badge through the real persist/render path. Null = clean.
+        data class Respond(val text: String, val leak: ReasoningLeak? = null) : Behavior
         data class Fail(val ex: () -> RuntimeException) : Behavior
         /** Block until the cancellation token is tripped, then report cancellation. */
         object HangUntilCancelled : Behavior
+        /** Stream these chunks as individual TextDeltas (the aggregate is their concatenation), driving the
+         *  AG-UI event path. Through the non-streaming generate() it degrades to the aggregate reply. */
+        data class Stream(val deltas: List<String>, val leak: ReasoningLeak? = null) : Behavior
     }
 
     private val script = ConcurrentLinkedDeque<Behavior>()
 
-    /** The spy: every request handed to the client, in order. */
-    val received = mutableListOf<LlmRequest>()
+    /** The spy: every request handed to the client, in order. CopyOnWriteArrayList because the async
+     *  summon path writes from a worker thread while steps read it from the test thread — COW gives
+     *  safe iteration and visibility without locking the readers. */
+    val received = CopyOnWriteArrayList<LlmRequest>()
 
     fun enqueue(behavior: Behavior) = script.addLast(behavior)
 
@@ -46,15 +69,174 @@ class ScriptableLlmClient : LlmClient {
     }
 
     override fun generate(request: LlmRequest, cancellation: CancellationToken): LlmResponse {
-        synchronized(received) { received += request }
-        return when (val behavior = script.pollFirst() ?: Behavior.Respond("default reply")) {
-            is Behavior.Respond -> LlmResponse(behavior.text)
-            is Behavior.Fail -> throw behavior.ex()
-            Behavior.HangUntilCancelled -> {
-                while (!cancellation.isCancelled) Thread.sleep(10)
-                throw com.aiforum.llm.LlmException.Cancelled()
+        received += request
+        return produce(script.pollFirst() ?: Behavior.Respond("default reply"), cancellation)
+    }
+
+    override fun generate(
+        request: LlmRequest,
+        cancellation: CancellationToken,
+        sink: com.aiforum.agui.AguiEventSink,
+    ): LlmResponse {
+        received += request
+        sink.emit(com.aiforum.agui.AguiEvent.RunStarted(request.runId))
+        return try {
+            val behavior = script.pollFirst() ?: Behavior.Respond("default reply")
+            // Stream emits a genuine per-chunk sequence; every other behaviour frames its aggregate as one
+            // delta (matching the LlmClient default), so the SSE path sees the same shape the real backends do.
+            if (behavior is Behavior.Stream) behavior.deltas.forEach { sink.emit(com.aiforum.agui.AguiEvent.TextDelta(request.runId, it)) }
+            val response = produce(behavior, cancellation)
+            if (behavior !is Behavior.Stream && response.text.isNotEmpty()) {
+                sink.emit(com.aiforum.agui.AguiEvent.TextDelta(request.runId, response.text))
             }
+            sink.emit(com.aiforum.agui.AguiEvent.RunFinished(request.runId))
+            response
+        } catch (e: Throwable) {
+            sink.emit(com.aiforum.agui.AguiEvent.RunError(request.runId, e.message ?: "generation failed"))
+            throw e
         }
+    }
+
+    /** The behaviour → response mapping shared by both generate paths (no event emission here). */
+    private fun produce(behavior: Behavior, cancellation: CancellationToken): LlmResponse = when (behavior) {
+        is Behavior.Respond -> LlmResponse(behavior.text, behavior.leak)
+        is Behavior.Stream -> LlmResponse(behavior.deltas.joinToString(""), behavior.leak)
+        is Behavior.Fail -> throw behavior.ex()
+        Behavior.HangUntilCancelled -> {
+            while (!cancellation.isCancelled) Thread.sleep(10)
+            throw com.aiforum.llm.LlmException.Cancelled()
+        }
+    }
+}
+
+/**
+ * The scriptable vision seam ([ImageDescriber]) under test — the sibling of [ScriptableLlmClient]. Steps
+ * program the caption it returns (or make it fail), and it spies on every request so a scenario can assert
+ * the vision model was actually invoked. Reset between scenarios by DatabaseResetHooks.
+ */
+@Component
+@Primary
+@Profile("test")
+class ScriptableImageDescriber : ImageDescriber {
+
+    val received = CopyOnWriteArrayList<DescribeRequest>()
+
+    @Volatile
+    var nextCaption: String = "an attached image"
+
+    @Volatile
+    var failNext: Boolean = false
+
+    override fun describe(request: DescribeRequest): String {
+        received += request
+        if (failNext) throw VisionUnavailableException("scripted vision failure")
+        return nextCaption
+    }
+
+    fun reset() {
+        received.clear()
+        nextCaption = "an attached image"
+        failNext = false
+    }
+}
+
+/**
+ * The scriptable [ShortcutClient] under test — the read-only Shortcut seam's IO double, sibling of
+ * [ScriptableLlmClient]. It does no network IO: steps program the stories a search returns and the
+ * workflow-state names, and it spies on every query it was handed.
+ *
+ * [active] is false by default, so every Shortcut surface stays dark in the scenarios that don't opt in;
+ * a step flips it on. Reset between scenarios by DatabaseResetHooks (which also evicts the service's
+ * workflow-state cache so names can't leak across scenarios).
+ */
+@Component
+@Primary
+@Profile("test")
+class ScriptableShortcutClient : ShortcutClient {
+
+    @Volatile
+    var active: Boolean = false
+
+    @Volatile
+    var failNext: Boolean = false
+
+    @Volatile
+    var states: Map<Long, String> = emptyMap()
+
+    private val stories = CopyOnWriteArrayList<StoryCard>()
+
+    /** The queries searched, in order — so a scenario can assert which feed ran. */
+    val received = CopyOnWriteArrayList<String>()
+
+    fun add(card: StoryCard) {
+        stories += card
+    }
+
+    override fun isActive(): Boolean = active
+
+    override fun searchStories(query: String, pageSize: Int): List<StoryCard> {
+        received += query
+        if (failNext) throw RuntimeException("scripted shortcut failure")
+        return stories.take(pageSize)
+    }
+
+    override fun workflowStates(): Map<Long, String> = states
+
+    fun reset() {
+        active = false
+        failNext = false
+        states = emptyMap()
+        stories.clear()
+        received.clear()
+    }
+}
+
+/**
+ * The scriptable GitHub seam ([GitHubClient]) under test — the sibling of [ScriptableLlmClient]. The real
+ * GhCliGitHubClient is present but inert under test (disabled), so this @Primary fake stands in and steps
+ * program the snapshot the /github page renders: an [overview] (repo + open PRs + open issues) or an
+ * unavailable off-state. Reset between scenarios by DatabaseResetHooks.
+ */
+@Component
+@Primary
+@Profile("test")
+class ScriptableGitHubClient : GitHubClient {
+
+    @Volatile
+    var unavailableReason: String = "GitHub integration is off."
+
+    @Volatile
+    var repo: RepoSummary? = null
+
+    val pulls = CopyOnWriteArrayList<PullRequest>()
+    val issues = CopyOnWriteArrayList<Issue>()
+
+    /** In-depth PR details a scenario programs, keyed by number; drives [pull] (the "Discuss this PR" path). */
+    val pullDetails = ConcurrentHashMap<Int, PullDetail>()
+
+    /** Every number passed to [pull], in order — so a scenario can assert an already-ingested PR isn't re-fetched. */
+    val pullsRequested = CopyOnWriteArrayList<Int>()
+
+    /** A repo present => an Ok snapshot; otherwise the unavailable off-state with the programmed reason. */
+    override fun overview(): GitHubResult {
+        val r = repo
+        return if (r != null) GitHubResult.Ok(GitHubOverview(r, pulls.toList(), issues.toList()))
+        else GitHubResult.Unavailable(unavailableReason)
+    }
+
+    /** A programmed detail => an Ok pull; otherwise the unavailable off-state (no such PR / integration off). */
+    override fun pull(number: Int): PullResult {
+        pullsRequested += number
+        return pullDetails[number]?.let { PullResult.Ok(it) } ?: PullResult.Unavailable(unavailableReason)
+    }
+
+    fun reset() {
+        unavailableReason = "GitHub integration is off."
+        repo = null
+        pulls.clear()
+        issues.clear()
+        pullDetails.clear()
+        pullsRequested.clear()
     }
 }
 

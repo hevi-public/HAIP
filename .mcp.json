@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "gh-readonly": {
+      "command": "node",
+      "args": ["mcp/gh-readonly/server.mjs"]
+    }
+  }
+}

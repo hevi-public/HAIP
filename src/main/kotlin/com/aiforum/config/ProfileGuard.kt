@@ -14,6 +14,7 @@ class ProfileGuard(
     env: Environment,
     @Value("\${spring.datasource.url:}") private val datasourceUrl: String,
     @Value("\${aiforum.backups.enabled:true}") private val backupsEnabled: Boolean,
+    @Value("\${aiforum.images.dir:}") private val imagesDir: String,
 ) {
     init {
         if (env.activeProfiles.contains("test")) {
@@ -21,6 +22,10 @@ class ProfileGuard(
                 "test profile must point at the test database, but datasource is: $datasourceUrl"
             }
             require(!backupsEnabled) { "backups must be disabled under the test profile" }
+            // Image blobs must land under build/, never the real ~/.haip store — same guard as the DB.
+            require("build" in imagesDir) {
+                "test profile must store images under build/, but images.dir is: $imagesDir"
+            }
         }
     }
 }
