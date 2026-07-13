@@ -24,10 +24,17 @@
                     data-attachment-describe="${attachment.id}"
                     hx-post="/attachments/${attachment.id}/describe"
                     hx-target="closest .attachment" hx-swap="outerHTML"
-                    hx-disabled-elt="this">
+                    hx-disabled-elt="this"
+                    hx-indicator="next .describe-spinner">
                 ${if (attachment.described) "Re-describe" else "Describe"}
             </button>
-            <span class="attachment__state" data-attachment-state>${attachment.captionState}</span>
+            <span class="htmx-indicator describe-spinner" aria-live="polite">
+                <span class="spinner" aria-hidden="true"></span>Describing…
+            </span>
+            <%-- "none" is the resting state — saying it aloud just reads as debug output. --%>
+            @if(attachment.captionState != "none")
+                <span class="attachment__state" data-attachment-state>${attachment.captionState}</span>
+            @endif
         </div>
     @endif
 </figure>
